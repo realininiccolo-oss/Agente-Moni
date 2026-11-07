@@ -135,7 +135,7 @@
 
   // ---------- mappa ----------
   const map = L.map('map', { zoomControl: false }).setView([45.583, 10.03], 14);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, attribution: '© OpenStreetMap © CARTO' }).addTo(map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   map.createPane('fatto').style.zIndex = 410; map.createPane('dafare').style.zIndex = 420; map.createPane('prossimo').style.zIndex = 430;
   const lFatto = L.layerGroup().addTo(map), lGiorno = L.layerGroup().addTo(map), lAttivo = L.layerGroup().addTo(map), lCase = L.layerGroup().addTo(map), lIo = L.layerGroup().addTo(map);
   let segui = true;
