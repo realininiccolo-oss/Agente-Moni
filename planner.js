@@ -80,13 +80,17 @@
     }
 
     // ogni tratto OSM viene spezzato in pezzi da ~25 m: così "con case" vale solo dove le case ci sono davvero
-    const EU = [], EV = [], EL = [], ER = [];
+    const EU = [], EV = [], EL = [], ER = [], EN = [], NAMES = [''], nameIdx = new Map([['', 0]]);
+    const GENERIC = { footway: 'sentiero', path: 'sentiero', steps: 'scalinata', cycleway: 'pista ciclabile', track: 'strada sterrata', service: 'stradina', pedestrian: 'zona pedonale', living_street: 'strada senza nome' };
     for (const w of osm.roads.elements) {
       if (w.type !== 'way') continue;
       const t = w.tags || {}, hw = t.highway;
       if (hw === 'service' && t.service && t.service !== 'alley') continue;
       if (t.access === 'private' || t.access === 'no' || t.foot === 'no') continue;
       const conn = CONNECTOR_ONLY.test(hw);
+      const nm = t.name || (t.ref ? 'strada ' + t.ref : '') || GENERIC[hw] || 'strada senza nome';
+      if (!nameIdx.has(nm)) { nameIdx.set(nm, NAMES.length); NAMES.push(nm); }
+      const ni = nameIdx.get(nm);
       for (let i = 1; i < w.nodes.length; i++) {
         const a = idx.get(w.nodes[i - 1]), b = idx.get(w.nodes[i]);
         if (a == null || b == null || a === b) continue;
@@ -96,7 +100,7 @@
           let cur = b;
           if (q < s) { const f = q / s; cur = Xa.length; Xa.push(Xa[a] + (Xa[b] - Xa[a]) * f); Ya.push(Ya[a] + (Ya[b] - Ya[a]) * f); LAT.push(LAT[a] + (LAT[b] - LAT[a]) * f); LON.push(LON[a] + (LON[b] - LON[a]) * f); }
           const req = !conn && nearHouse((Xa[prev] + Xa[cur]) / 2, (Ya[prev] + Ya[cur]) / 2);
-          EU.push(prev); EV.push(cur); EL.push(len / s); ER.push(req);
+          EU.push(prev); EV.push(cur); EL.push(len / s); ER.push(req); EN.push(ni);
           prev = cur;
         }
       }
@@ -157,7 +161,7 @@
       let sx = 0, sy = 0, sl = 0; for (const e of es) { sx += (X[EU[e]] + X[EV[e]]) / 2 * EL[e]; sy += (Y[EU[e]] + Y[EV[e]]) / 2 * EL[e]; sl += EL[e]; }
       carStops.push({ x: sx / sl, y: sy / sl, lat: +(sy / sl / ky).toFixed(5), lon: +(sx / sl / kx).toFixed(5), m: Math.round(sl) });
     }
-    return { n, m, X, Y, LAT, LON, kx, ky, EU, EV, EL, ER, tree, start, adj, comp, main: best, places, parkings, cluster, carStops };
+    return { n, m, X, Y, LAT, LON, kx, ky, EU, EV, EL, ER, EN, NAMES, tree, start, adj, comp, main: best, places, parkings, cluster, carStops };
   }
 
   // ---------- Dijkstra (heap binario) ----------
@@ -218,7 +222,8 @@
   // ---------- giro di una zona (postino rurale euristico) ----------
   function routeLoop(G, edges, startNode, maxLink = Infinity) {
     const MU = [], MV = [], ML = [];
-    const addEdge = e => { MU.push(G.EU[e]); MV.push(G.EV[e]); ML.push(G.EL[e]); };
+    const MI = [];
+    const addEdge = e => { MU.push(G.EU[e]); MV.push(G.EV[e]); ML.push(G.EL[e]); MI.push(e); };
     let reqLen = 0, connLen = 0;
     // 1) componenti delle strade richieste
     const parent = new Map(), find = a => { while (parent.get(a) !== a) { parent.set(a, parent.get(parent.get(a))); a = parent.get(a); } return a; };
@@ -267,19 +272,28 @@
     }
     // 4) circuito euleriano (Hierholzer) dal parcheggio
     const nbr = new Map(); for (let i = 0; i < MU.length; i++) { for (const v of [MU[i], MV[i]]) { if (!nbr.has(v)) nbr.set(v, []); nbr.get(v).push(i); } }
-    const used = new Uint8Array(MU.length), ptr = new Map(), stack = [startNode], path = [];
+    const used = new Uint8Array(MU.length), ptr = new Map(), stack = [startNode], estack = [-1], path = [], pathE = [];
     while (stack.length) {
       const v = stack[stack.length - 1], list = nbr.get(v) || []; let p = ptr.get(v) || 0;
       while (p < list.length && used[list[p]]) p++;
       ptr.set(v, p);
-      if (p === list.length) { path.push(v); stack.pop(); }
-      else { const e = list[p]; used[e] = 1; stack.push(MU[e] === v ? MV[e] : MU[e]); }
+      if (p === list.length) { path.push(v); pathE.push(estack[estack.length - 1]); stack.pop(); estack.pop(); }
+      else { const e = list[p]; used[e] = 1; stack.push(MU[e] === v ? MV[e] : MU[e]); estack.push(e); }
     }
-    path.reverse();
+    path.reverse(); pathE.reverse();
+    // per ogni tratto: nome della via e se è la prima volta su una strada con case ("guarda") o solo passaggio
+    const localNames = [], li = new Map(), seen = new Set(), segName = [], look = [];
+    for (let k = 1; k < path.length; k++) {
+      const e = MI[pathE[k]], g = G.EN[e];
+      if (!li.has(g)) { li.set(g, localNames.length); localNames.push(G.NAMES[g]); }
+      segName.push(li.get(g));
+      look.push(G.ER[e] && !seen.has(e) ? '1' : '0'); seen.add(e);
+    }
     const total = ML.reduce((a, b) => a + b, 0);
     const missed = used.reduce((a, u) => a + (u ? 0 : 1), 0);
     return {
       coords: path.map(v => [+G.LAT[v].toFixed(5), +G.LON[v].toFixed(5)]),
+      names: localNames, n: segName, lk: look.join(''),
       km: +(total / 1000).toFixed(1), reqKm: +(reqLen / 1000).toFixed(1),
       ore: +(reqLen / 1000 / WALK_KMH + (total - reqLen) / 1000 / FAST_KMH).toFixed(1), missedEdges: missed,
       connKm: +(connLen / 1000).toFixed(1), leftover
@@ -342,7 +356,7 @@
       const km = loops.reduce((a, l) => a + l.km, 0), reqKm = loops.reduce((a, l) => a + l.reqKm, 0);
       out.push({ day: i + 1, name: zones[i].name, km: +km.toFixed(1), reqKm: +reqKm.toFixed(1), ore: +loops.reduce((a, l) => a + l.ore, 0).toFixed(1), loops, carStops: zones[i].carStops.concat(carStops) });
     }
-    return { comune, days, created: new Date().toISOString(), walkKmh: WALK_KMH, fastKmh: FAST_KMH, plan: out };
+    return { v: 2, comune, days, created: new Date().toISOString(), walkKmh: WALK_KMH, fastKmh: FAST_KMH, plan: out };
   }
 
   global.Planner = { plan, fetchOSM, build, makeZones, routeLoop, routeDay };

@@ -3,122 +3,290 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f6e56">
-<title>Giri case</title>
+<meta name="theme-color" content="#17262b">
+<title>Agente Moni</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  :root { --verde:#0f6e56; --verde-chiaro:#e1f5ee; --blu:#185fa5; --rosso:#a32d2d; --grigio:#5f5e5a; --sfondo:#fff; }
+  :root {
+    --ardesia: #17262b; --ardesia-2: #4a5a60; --nebbia: #eef2f1; --linea: #d5dcda; --bianco: #ffffff;
+    --vigna: #2e7d4f; --vigna-chiaro: #e3f1e8; --lago: #1d5fd1; --lago-scuro: #0f3f96; --lago-chiaro: #e6efff;
+    --ocra: #f2a900; --ocra-scuro: #8a5d00; --ocra-chiaro: #fff4d6; --cartello: #d23a2e; --cartello-chiaro: #fde8e6;
+    --font: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --r-pannello: 22px; --r-tasto: 16px;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin:0; height:100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:#222; background:#f4f4f2; }
-  #map { position:fixed; inset:0; z-index:0; }
-  .barra-alto { position:fixed; top:0; left:0; right:0; z-index:500; padding: calc(env(safe-area-inset-top) + 8px) 10px 8px; display:flex; gap:8px; align-items:center; }
-  .pillola { background:#fff; border-radius:14px; box-shadow:0 1px 6px rgba(0,0,0,.18); padding:10px 14px; font-size:16px; border:0; }
-  #btnGiorno { flex:1; text-align:left; line-height:1.25; }
-  #btnGiorno small { display:block; color:var(--grigio); font-size:13px; }
-  #gps { width:14px; height:14px; border-radius:50%; background:#bbb; display:inline-block; vertical-align:middle; margin-right:6px; }
-  #gps.ok { background:#1d9e75; } #gps.debole { background:#ef9f27; }
-  .barra-basso { position:fixed; left:0; right:0; bottom:0; z-index:500; padding: 10px 12px calc(env(safe-area-inset-bottom) + 14px); display:flex; gap:10px; align-items:flex-end; justify-content:space-between; pointer-events:none; }
-  .barra-basso > * { pointer-events:auto; }
-  .tondo { width:58px; height:58px; border-radius:50%; background:#fff; border:0; box-shadow:0 1px 6px rgba(0,0,0,.25); font-size:24px; }
-  #btnCasa { flex:1; height:68px; border-radius:34px; border:0; background:var(--verde); color:#fff; font-size:21px; font-weight:600; box-shadow:0 2px 10px rgba(0,0,0,.3); }
-  #btnCasa:active { transform:scale(.98); }
-  #avanzamento { position:fixed; z-index:500; left:10px; right:10px; top: calc(env(safe-area-inset-top) + 76px); font-size:14px; padding:8px 12px; display:none; }
-  .modale { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.45); display:none; align-items:flex-end; justify-content:center; }
-  .modale.aperta { display:flex; }
-  .foglio { background:var(--sfondo); width:100%; max-width:640px; max-height:92vh; overflow-y:auto; border-radius:18px 18px 0 0; padding:18px 16px calc(env(safe-area-inset-bottom) + 18px); }
-  .foglio h2 { margin:0 0 12px; font-size:20px; }
-  label { display:block; font-size:14px; color:var(--grigio); margin:14px 0 6px; }
-  input[type=text], input[type=url], input[type=number], input[type=password], textarea, select { width:100%; font-size:17px; padding:12px; border:1px solid #ccc; border-radius:10px; background:#fff; font-family:inherit; }
-  textarea { min-height:90px; }
-  .riga { display:flex; gap:8px; } .riga > * { flex:1; }
-  .btn { display:block; width:100%; padding:15px; margin-top:12px; border-radius:12px; border:0; font-size:17px; font-weight:600; background:#eee; color:#222; }
-  .btn.primario { background:var(--verde); color:#fff; } .btn.blu { background:var(--blu); color:#fff; } .btn.rosso { background:var(--rosso); color:#fff; }
-  .btn:disabled { opacity:.5; }
-  .miniature { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-  .miniature div { position:relative; } .miniature img { width:84px; height:84px; object-fit:cover; border-radius:8px; }
-  .miniature button { position:absolute; top:-6px; right:-6px; width:26px; height:26px; border-radius:50%; border:0; background:#222; color:#fff; font-size:14px; }
-  .nota { font-size:13px; color:var(--grigio); margin-top:6px; }
-  .giorno { border:1px solid #ddd; border-radius:12px; padding:12px; margin-top:10px; }
-  .giorno.attivo { border-color:var(--verde); background:var(--verde-chiaro); }
-  .giorno b { font-size:17px; } .giorno .nota { margin-top:4px; }
-  #registro { font-family: ui-monospace, monospace; font-size:12px; white-space:pre-wrap; background:#f4f4f2; border-radius:8px; padding:8px; max-height:160px; overflow:auto; display:none; }
-  #toast { position:fixed; left:50%; bottom:110px; transform:translateX(-50%); z-index:2000; background:#222; color:#fff; padding:12px 18px; border-radius:12px; font-size:16px; display:none; max-width:90vw; text-align:center; }
-  .freccia { color:var(--blu); font-size:14px; line-height:14px; text-shadow:0 0 2px #fff, 0 0 2px #fff; }
-  .etichetta-p { background:var(--blu); color:#fff; font-weight:700; border-radius:8px; padding:3px 7px; font-size:13px; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,.3); }
-  .leaflet-popup-content { font-size:15px; }
-  .leaflet-popup-content img { width:100%; border-radius:6px; }
+  html, body { margin: 0; height: 100%; font-family: var(--font); color: var(--ardesia); background: var(--nebbia); font-size: 18px; line-height: 1.4; overscroll-behavior: none; }
+  button { font-family: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--ocra); outline-offset: 2px; }
+  #map { position: fixed; inset: 0; z-index: 0; background: #e9ecea; }
+  .leaflet-control-attribution { font-size: 11px; }
+
+  /* ---------- indicazione in alto: il cuore dell'app ---------- */
+  #guida { position: fixed; z-index: 600; top: calc(env(safe-area-inset-top) + 10px); left: 10px; right: 10px; display: none; }
+  #guida.visibile { display: block; }
+  .guida-card { background: var(--ardesia); color: #fff; border-radius: var(--r-pannello); padding: 14px 16px 14px 14px; display: flex; gap: 14px; align-items: center; box-shadow: 0 6px 24px rgba(23,38,43,.35); }
+  .guida-card.parcheggio { background: var(--ocra); color: var(--ardesia); }
+  .guida-card.fuori { background: var(--cartello); }
+  .guida-card.fatto { background: var(--vigna); }
+  .guida-icona { width: 64px; height: 64px; flex: none; border-radius: 16px; background: rgba(255,255,255,.12); display: grid; place-items: center; }
+  .guida-card.parcheggio .guida-icona { background: rgba(23,38,43,.1); }
+  .guida-icona svg { width: 44px; height: 44px; }
+  .guida-testi { min-width: 0; }
+  .guida-dist { font-size: 30px; font-weight: 700; line-height: 1.05; }
+  .guida-azione { font-size: 21px; font-weight: 700; line-height: 1.2; margin-top: 2px; }
+  .guida-sotto { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 15px; color: rgba(255,255,255,.85); }
+  .guida-card.parcheggio .guida-sotto { color: var(--ardesia-2); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 15px; font-weight: 700; white-space: nowrap; }
+  .badge.guarda { background: var(--ocra); color: var(--ardesia); }
+  .badge.passa { background: rgba(255,255,255,.16); color: #fff; }
+
+  /* ---------- pannello in basso ---------- */
+  #pannello { position: fixed; z-index: 600; left: 0; right: 0; bottom: 0; background: var(--bianco); border-radius: var(--r-pannello) var(--r-pannello) 0 0; padding: 10px 18px calc(env(safe-area-inset-bottom) + 16px); box-shadow: 0 -6px 30px rgba(23,38,43,.18); transition: transform .25s ease; }
+  #pannello .maniglia { width: 44px; height: 5px; border-radius: 3px; background: var(--linea); margin: 0 auto 10px; }
+  #pannello h1 { font-size: 26px; line-height: 1.15; margin: 4px 0 6px; }
+  #pannello p { margin: 0 0 12px; color: var(--ardesia-2); }
+  .tasto { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 60px; padding: 14px 18px; border: 0; border-radius: var(--r-tasto); font-size: 20px; font-weight: 700; background: var(--nebbia); color: var(--ardesia); margin-top: 10px; text-decoration: none; }
+  .tasto svg { width: 26px; height: 26px; flex: none; }
+  .tasto.primario { background: var(--ardesia); color: #fff; }
+  .tasto.verde { background: var(--vigna); color: #fff; }
+  .tasto.ocra { background: var(--ocra); color: var(--ardesia); }
+  .tasto.piccolo { min-height: 48px; font-size: 17px; }
+  .tasto:active { transform: scale(.985); }
+  .tasto:disabled { opacity: .5; }
+  .link { background: none; border: 0; color: var(--lago-scuro); font-size: 17px; font-weight: 700; padding: 12px 4px; text-decoration: underline; text-underline-offset: 3px; }
+  .riga { display: flex; gap: 10px; align-items: stretch; } .riga > * { flex: 1; }
+  .riga .tasto { margin-top: 10px; }
+
+  .avanz { height: 12px; border-radius: 6px; background: var(--nebbia); overflow: hidden; margin: 6px 0 8px; }
+  .avanz > div { height: 100%; background: var(--vigna); border-radius: 6px; transition: width .4s ease; }
+  .avanz-testo { display: flex; justify-content: space-between; font-size: 16px; color: var(--ardesia-2); }
+  .avanz-testo b { color: var(--ardesia); }
+
+  .giorni { display: flex; gap: 8px; margin: 4px 0 6px; }
+  .giorni span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 16px; background: var(--nebbia); color: var(--ardesia-2); }
+  .giorni span.fatto { background: var(--vigna); color: #fff; }
+  .giorni span.oggi { background: var(--ardesia); color: #fff; }
+
+  /* tasti rotondi sulla mappa */
+  .tondi { position: fixed; z-index: 590; right: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .tondo { width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--bianco); box-shadow: 0 2px 10px rgba(23,38,43,.25); display: grid; place-items: center; position: relative; }
+  .tondo svg { width: 28px; height: 28px; }
+  .tondo .num { position: absolute; top: -4px; right: -4px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--ardesia); color: #fff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
+  #invio { position: fixed; z-index: 590; left: 12px; display: none; background: var(--ocra-chiaro); color: var(--ocra-scuro); font-weight: 700; font-size: 15px; padding: 8px 12px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+
+  /* ---------- fogli a tutto schermo (nuova casa, case, menu) ---------- */
+  .foglio { position: fixed; inset: 0; z-index: 900; background: var(--bianco); display: flex; flex-direction: column; transform: translateY(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1); visibility: hidden; }
+  .foglio.aperto { transform: none; visibility: visible; }
+  .foglio-testa { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 10px) 12px 10px 18px; border-bottom: 1px solid var(--linea); }
+  .foglio-testa h2 { flex: 1; margin: 0; font-size: 24px; }
+  .chiudi { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--nebbia); display: grid; place-items: center; }
+  .chiudi svg { width: 24px; height: 24px; }
+  .foglio-corpo { flex: 1; overflow-y: auto; padding: 8px 18px 24px; -webkit-overflow-scrolling: touch; }
+  .foglio-piede { padding: 12px 18px calc(env(safe-area-inset-bottom) + 14px); border-top: 1px solid var(--linea); background: var(--bianco); }
+  .foglio-piede .tasto { margin-top: 0; }
+  .sezione { margin-top: 22px; }
+  .sezione > h3 { font-size: 18px; margin: 0 0 10px; }
+  .aiuto { font-size: 15px; color: var(--ardesia-2); margin: 6px 0 0; }
+
+  /* indirizzo */
+  .indirizzo { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
+  .indirizzo textarea { flex: 1; font-family: inherit; font-size: 22px; font-weight: 700; line-height: 1.25; border: 2px solid var(--linea); border-radius: 14px; padding: 10px 12px; resize: none; color: var(--ardesia); min-height: 64px; }
+  .indirizzo textarea:focus { border-color: var(--ardesia); }
+  .indirizzo .tondo { box-shadow: none; background: var(--nebbia); flex: none; }
+
+  /* foto */
+  .foto-griglia { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .foto-griglia .cella { aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative; background: var(--nebbia); }
+  .foto-griglia img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .foto-griglia .togli { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(23,38,43,.8); color: #fff; display: grid; place-items: center; }
+  .foto-griglia .togli svg { width: 18px; height: 18px; }
+  .aggiungi-foto { border: 2px dashed var(--ardesia-2); background: var(--bianco); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 700; font-size: 16px; width: 100%; height: 100%; border-radius: 14px; }
+  .aggiungi-foto svg { width: 34px; height: 34px; }
+
+  /* nota vocale */
+  .voce { background: var(--nebbia); border-radius: 18px; padding: 16px; display: flex; align-items: center; gap: 16px; }
+  .mic { width: 78px; height: 78px; border-radius: 50%; border: 0; background: var(--ardesia); color: #fff; display: grid; place-items: center; flex: none; position: relative; }
+  .mic svg { width: 36px; height: 36px; }
+  .mic.rec { background: var(--cartello); }
+  .mic.rec::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 4px solid var(--cartello); opacity: .45; animation: pulsa 1.2s ease-out infinite; }
+  @keyframes pulsa { from { transform: scale(.9); opacity: .6; } to { transform: scale(1.18); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .mic.rec::after { animation: none; } .foglio, #pannello, .avanz > div { transition: none; } }
+  .voce-testi { flex: 1; min-width: 0; }
+  .voce-titolo { font-size: 20px; font-weight: 700; }
+  .voce-sotto { font-size: 15px; color: var(--ardesia-2); margin-top: 2px; }
+  .livelli { display: flex; gap: 3px; align-items: center; height: 34px; margin-top: 6px; }
+  .livelli i { flex: 1; background: var(--cartello); border-radius: 2px; height: 4px; transition: height .08s linear; }
+  .ascolta { display: flex; align-items: center; gap: 12px; }
+  .ascolta .play { width: 60px; height: 60px; border-radius: 50%; border: 0; background: var(--vigna); color: #fff; display: grid; place-items: center; flex: none; }
+  .ascolta .play svg { width: 28px; height: 28px; }
+  .barra-audio { flex: 1; height: 8px; border-radius: 4px; background: var(--linea); overflow: hidden; }
+  .barra-audio > div { height: 100%; width: 0; background: var(--vigna); }
+  .voce-azioni { display: flex; gap: 10px; margin-top: 10px; }
+  .voce-azioni .tasto { margin-top: 0; }
+
+  /* scelte a bottoni (stato, tipo) */
+  .scelte { display: flex; flex-wrap: wrap; gap: 10px; }
+  .scelte.griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .scelte.griglia .scelta { min-height: 56px; padding-right: 8px; font-size: 16px; line-height: 1.15; text-align: left; }
+  .scelta { display: inline-flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 14px 8px 10px; border-radius: 14px; border: 2px solid var(--linea); background: var(--bianco); font-size: 17px; font-weight: 700; }
+  .scelta svg { width: 30px; height: 36px; flex: none; }
+  .scelta[aria-pressed="true"] { border-color: var(--ardesia); background: var(--ardesia); color: #fff; }
+  .scelta.senza-icona { padding-left: 14px; }
+  textarea.note { width: 100%; font-family: inherit; font-size: 18px; border: 2px solid var(--linea); border-radius: 14px; padding: 12px; min-height: 90px; resize: vertical; }
+
+  /* lista case */
+  .filtri { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px; }
+  .filtri .scelta { min-height: 44px; font-size: 15px; white-space: nowrap; }
+  .casa-riga { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 12px 0; border-bottom: 1px solid var(--linea); }
+  .casa-riga svg { width: 34px; height: 42px; flex: none; }
+  .casa-riga b { display: block; font-size: 18px; }
+  .casa-riga span { font-size: 15px; color: var(--ardesia-2); }
+  .casa-riga img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; margin-left: auto; flex: none; }
+  .vuoto { text-align: center; color: var(--ardesia-2); padding: 40px 10px; }
+
+  /* menu e impostazioni */
+  .voce-menu { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 62px; border: 0; background: none; border-bottom: 1px solid var(--linea); font-size: 19px; font-weight: 700; text-align: left; padding: 8px 2px; }
+  .voce-menu svg { width: 28px; height: 28px; flex: none; color: var(--ardesia-2); }
+  .voce-menu small { display: block; font-weight: 400; font-size: 15px; color: var(--ardesia-2); }
+  label.campo { display: block; font-size: 16px; font-weight: 700; margin: 16px 0 6px; }
+  input.campo { width: 100%; font-family: inherit; font-size: 17px; padding: 12px; border: 2px solid var(--linea); border-radius: 12px; }
+  #registro { font-size: 14px; white-space: pre-wrap; background: var(--nebbia); border-radius: 12px; padding: 10px; margin-top: 10px; display: none; max-height: 220px; overflow: auto; }
+  .giorno-scelta { display: block; width: 100%; text-align: left; border: 2px solid var(--linea); background: var(--bianco); border-radius: 16px; padding: 14px; margin-top: 10px; }
+  .giorno-scelta b { font-size: 19px; display: block; }
+  .giorno-scelta span { font-size: 16px; color: var(--ardesia-2); }
+  .giorno-scelta.oggi { border-color: var(--ardesia); }
+  .giorno-scelta.fatto b::after { content: "  ✓ fatto"; color: var(--vigna); }
+
+  /* popup casa sulla mappa */
+  .leaflet-popup-content-wrapper { border-radius: 16px; }
+  .leaflet-popup-content { margin: 14px 16px; font-family: var(--font); font-size: 16px; min-width: 230px; }
+  .pop b { font-size: 18px; display: block; margin-bottom: 2px; }
+  .pop img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; margin-top: 8px; display: block; }
+  .pop .cambia { font-size: 14px; font-weight: 700; color: var(--ardesia-2); margin: 10px 0 6px; }
+  .pop .scelte.griglia { gap: 6px; }
+  .pop .scelte.griglia .scelta { min-height: 40px; font-size: 13px; padding: 4px 6px 4px 4px; border-width: 1.5px; border-radius: 10px; }
+  .pop .scelta svg { width: 20px; height: 26px; }
+  .pop a { color: var(--lago-scuro); font-weight: 700; }
+
+  /* segnaposti e frecce */
+  .pin { filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
+  .pin.nuovo { animation: cade .45s cubic-bezier(.3,1.6,.5,1); }
+  .pin.in-invio { opacity: .6; }
+  @keyframes cade { from { transform: translateY(-30px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .freccia { width: 18px; height: 18px; }
+  .etichetta-p { width: 40px; height: 40px; border-radius: 12px; background: var(--ocra); color: var(--ardesia); font-weight: 700; font-size: 22px; display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+  .etichetta-p.altro { background: #fff; color: var(--ardesia-2); border-color: var(--linea); width: 34px; height: 34px; font-size: 17px; }
+  .io { width: 26px; height: 26px; border-radius: 50%; background: var(--lago); border: 4px solid #fff; box-shadow: 0 0 0 2px rgba(29,95,209,.35), 0 2px 6px rgba(0,0,0,.35); }
+
+  /* avvisi */
+  #toast { position: fixed; z-index: 2000; left: 16px; right: 84px; bottom: 200px; background: var(--ardesia); color: #fff; padding: 16px 18px; border-radius: 16px; font-size: 18px; font-weight: 700; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+  #toast.ok { background: var(--vigna); }
+  #toast.errore { background: var(--cartello); }
+  #festa { position: fixed; inset: 0; z-index: 1500; background: rgba(23,38,43,.55); display: none; align-items: center; justify-content: center; padding: 24px; }
+  #festa.aperto { display: flex; }
+  #festa .scheda { background: var(--bianco); border-radius: 24px; padding: 26px 22px 20px; text-align: center; max-width: 420px; width: 100%; }
+  #festa .scheda svg.grande { width: 86px; height: 86px; }
+  #festa h2 { font-size: 26px; margin: 10px 0 6px; }
+  #festa p { color: var(--ardesia-2); margin: 0 0 8px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
 <body>
-<div id="map"></div>
+<div id="map" aria-label="Mappa"></div>
 
-<div class="barra-alto">
-  <button id="btnGiorno" class="pillola"><span id="gps"></span><span id="titoloGiorno">Giri case</span><small id="sottotitolo">Tocca per scegliere il giorno</small></button>
+<div id="guida" role="status" aria-live="polite"></div>
+<div id="invio"></div>
+
+<div class="tondi" id="tondi">
+  <button class="tondo" id="tCase" aria-label="Le mie case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span class="num" id="numCase" hidden>0</span></button>
+  <button class="tondo" id="tCentra" aria-label="Centra sulla mia posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+  <button class="tondo" id="tMenu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 </div>
-<div id="avanzamento" class="pillola"></div>
 
-<div class="barra-basso">
-  <button id="btnCentra" class="tondo" aria-label="Centra sulla mia posizione">◎</button>
-  <button id="btnCasa">🏠 Casa trovata</button>
-  <button id="btnMenu" class="tondo" aria-label="Impostazioni">⚙</button>
+<section id="pannello" aria-live="polite"><div class="maniglia"></div><div id="pannelloCorpo"></div></section>
+
+<!-- Nuova casa -->
+<div class="foglio" id="fCasa" role="dialog" aria-labelledby="tCasaTitolo">
+  <div class="foglio-testa"><h2 id="tCasaTitolo">Nuova casa</h2><button class="chiudi" data-chiudi aria-label="Chiudi senza salvare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo">
+    <div class="sezione" style="margin-top:12px">
+      <h3>Indirizzo</h3>
+      <div class="indirizzo">
+        <textarea id="indirizzo" rows="1" placeholder="Cerco l'indirizzo…" aria-label="Indirizzo"></textarea>
+        <button class="tondo" id="riprovaIndirizzo" aria-label="Cerca di nuovo l'indirizzo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+      </div>
+      <p class="aiuto" id="aiutoIndirizzo">Trovato con il GPS: controlla il numero civico.</p>
+    </div>
+    <div class="sezione">
+      <h3>Foto</h3>
+      <div class="foto-griglia" id="fotoGriglia"></div>
+      <input type="file" id="inputFoto" accept="image/*" capture="environment" hidden>
+    </div>
+    <div class="sezione">
+      <h3>Nota vocale</h3>
+      <div id="voce"></div>
+    </div>
+    <div class="sezione">
+      <h3>Com'è la situazione?</h3>
+      <div class="scelte griglia" id="sceltaStato"></div>
+    </div>
+    <div class="sezione">
+      <h3>Che tipo di casa?</h3>
+      <div class="scelte" id="sceltaTipo"></div>
+    </div>
+    <div class="sezione">
+      <h3>Note scritte</h3>
+      <textarea class="note" id="note" placeholder="Facoltativo. Puoi dettare con il microfono della tastiera."></textarea>
+    </div>
+  </div>
+  <div class="foglio-piede"><button class="tasto verde" id="salvaCasa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>Salva la casa</button></div>
+</div>
+
+<!-- Le mie case -->
+<div class="foglio" id="fCase" role="dialog" aria-labelledby="tCaseTitolo">
+  <div class="foglio-testa"><h2 id="tCaseTitolo">Le mie case</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo"><div class="filtri" id="filtri"></div><div id="listaCase"></div></div>
+</div>
+
+<!-- Menu -->
+<div class="foglio" id="fMenu" role="dialog" aria-labelledby="tMenuTitolo">
+  <div class="foglio-testa"><h2 id="tMenuTitolo">Menu</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="menuCorpo"></div>
 </div>
 
 <!-- Scelta del giorno -->
-<div id="mGiorni" class="modale"><div class="foglio">
-  <h2>Quale giorno fai oggi?</h2>
-  <div id="listaGiorni"></div>
-  <button class="btn" data-chiudi>Chiudi</button>
-</div></div>
-
-<!-- Nuova casa -->
-<div id="mCasa" class="modale"><div class="foglio">
-  <h2>Nuova casa</h2>
-  <label for="indirizzo">Indirizzo</label>
-  <div class="riga"><input type="text" id="indirizzo" placeholder="Sto cercando l'indirizzo…" style="flex:5"><button class="btn" id="btnRicarica" style="flex:1;margin:0" aria-label="Ricarica indirizzo">↻</button></div>
-  <div class="nota" id="notaGps"></div>
-
-  <label>Foto</label>
-  <button class="btn blu" id="btnFoto">📷 Scatta una foto</button>
-  <input type="file" id="inputFoto" accept="image/*" capture="environment" hidden>
-  <div class="miniature" id="miniature"></div>
-
-  <label>Nota vocale</label>
-  <button class="btn blu" id="btnAudio">🎙 Registra nota vocale</button>
-  <audio id="playerAudio" controls style="width:100%;margin-top:8px;display:none"></audio>
-
-  <label for="note">Note scritte</label>
-  <textarea id="note" placeholder="Puoi anche dettare col microfono della tastiera"></textarea>
-
-  <div class="riga">
-    <div><label for="stato">Stato</label><select id="stato"><option>Da valutare</option><option>Cartello vendita</option><option>Cartello affitto</option><option>Interessante</option><option>Da ricontattare</option><option>Scartata</option></select></div>
-    <div><label for="tipo">Tipo</label><select id="tipo"><option>Villa</option><option>Villetta a schiera</option><option>Appartamento</option><option>Rustico / cascina</option><option>Terreno</option><option>Altro</option></select></div>
-  </div>
-  <button class="btn primario" id="btnSalva">Salva casa</button>
-  <button class="btn" data-chiudi>Annulla</button>
-</div></div>
+<div class="foglio" id="fGiorni" role="dialog" aria-labelledby="tGiorniTitolo">
+  <div class="foglio-testa"><h2 id="tGiorniTitolo">Scegli il giorno</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="giorniCorpo"></div>
+</div>
 
 <!-- Impostazioni -->
-<div id="mImpostazioni" class="modale"><div class="foglio">
-  <h2>Impostazioni</h2>
-  <label for="cfgUrl">Indirizzo dello script Google (finisce con /exec)</label>
-  <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
-  <label for="cfgKey">Chiave segreta</label>
-  <input type="password" id="cfgKey">
-  <div class="riga">
-    <div><label for="cfgComune">Comune</label><input type="text" id="cfgComune" value="Cazzago San Martino"></div>
-    <div style="flex:.5"><label for="cfgGiorni">Giorni</label><input type="number" id="cfgGiorni" value="5" min="1" max="15"></div>
+<div class="foglio" id="fImpost" role="dialog" aria-labelledby="tImpostTitolo">
+  <div class="foglio-testa"><h2 id="tImpostTitolo">Impostazioni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo">
+    <p class="aiuto">Da compilare una volta sola, poi non serve più toccarle.</p>
+    <label class="campo" for="cfgUrl">Indirizzo dello script Google (finisce con /exec)</label>
+    <input class="campo" type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
+    <label class="campo" for="cfgKey">Chiave segreta</label>
+    <input class="campo" type="password" id="cfgKey">
+    <div class="riga">
+      <div><label class="campo" for="cfgComune">Comune</label><input class="campo" type="text" id="cfgComune"></div>
+      <div style="flex:.45"><label class="campo" for="cfgGiorni">Giorni</label><input class="campo" type="number" id="cfgGiorni" min="1" max="15"></div>
+    </div>
+    <button class="tasto primario" id="salvaCfg">Salva e prova il collegamento</button>
+    <button class="tasto" id="calcola">Calcola i percorsi del comune</button>
+    <p class="aiuto">Serve una volta per comune e dura 1-3 minuti. Ricalcola se cambi comune o numero di giorni.</p>
+    <div id="registro"></div>
   </div>
-  <button class="btn primario" id="btnSalvaCfg">Salva e prova il collegamento</button>
-  <button class="btn blu" id="btnCalcola">Calcola i percorsi del comune</button>
-  <div class="nota">Serve una volta per comune: 1-3 minuti. Se cambi comune o numero di giorni, ricalcola.</div>
-  <div id="registro"></div>
-  <button class="btn" id="btnFoglio">Apri il foglio con le case</button>
-  <button class="btn" data-chiudi>Chiudi</button>
-</div></div>
+</div>
 
-<div id="toast"></div>
+<div id="festa" role="dialog" aria-live="assertive"><div class="scheda" id="festaScheda"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="planner.js"></script>
