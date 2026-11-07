@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f6e56">
+<title>Giri case</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --verde:#0f6e56; --verde-chiaro:#e1f5ee; --blu:#185fa5; --rosso:#a32d2d; --grigio:#5f5e5a; --sfondo:#fff; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; height:100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:#222; background:#f4f4f2; }
+  #map { position:fixed; inset:0; z-index:0; }
+  .barra-alto { position:fixed; top:0; left:0; right:0; z-index:500; padding: calc(env(safe-area-inset-top) + 8px) 10px 8px; display:flex; gap:8px; align-items:center; }
+  .pillola { background:#fff; border-radius:14px; box-shadow:0 1px 6px rgba(0,0,0,.18); padding:10px 14px; font-size:16px; border:0; }
+  #btnGiorno { flex:1; text-align:left; line-height:1.25; }
+  #btnGiorno small { display:block; color:var(--grigio); font-size:13px; }
+  #gps { width:14px; height:14px; border-radius:50%; background:#bbb; display:inline-block; vertical-align:middle; margin-right:6px; }
+  #gps.ok { background:#1d9e75; } #gps.debole { background:#ef9f27; }
+  .barra-basso { position:fixed; left:0; right:0; bottom:0; z-index:500; padding: 10px 12px calc(env(safe-area-inset-bottom) + 14px); display:flex; gap:10px; align-items:flex-end; justify-content:space-between; pointer-events:none; }
+  .barra-basso > * { pointer-events:auto; }
+  .tondo { width:58px; height:58px; border-radius:50%; background:#fff; border:0; box-shadow:0 1px 6px rgba(0,0,0,.25); font-size:24px; }
+  #btnCasa { flex:1; height:68px; border-radius:34px; border:0; background:var(--verde); color:#fff; font-size:21px; font-weight:600; box-shadow:0 2px 10px rgba(0,0,0,.3); }
+  #btnCasa:active { transform:scale(.98); }
+  #avanzamento { position:fixed; z-index:500; left:10px; right:10px; top: calc(env(safe-area-inset-top) + 76px); font-size:14px; padding:8px 12px; display:none; }
+  .modale { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.45); display:none; align-items:flex-end; justify-content:center; }
+  .modale.aperta { display:flex; }
+  .foglio { background:var(--sfondo); width:100%; max-width:640px; max-height:92vh; overflow-y:auto; border-radius:18px 18px 0 0; padding:18px 16px calc(env(safe-area-inset-bottom) + 18px); }
+  .foglio h2 { margin:0 0 12px; font-size:20px; }
+  label { display:block; font-size:14px; color:var(--grigio); margin:14px 0 6px; }
+  input[type=text], input[type=url], input[type=number], input[type=password], textarea, select { width:100%; font-size:17px; padding:12px; border:1px solid #ccc; border-radius:10px; background:#fff; font-family:inherit; }
+  textarea { min-height:90px; }
+  .riga { display:flex; gap:8px; } .riga > * { flex:1; }
+  .btn { display:block; width:100%; padding:15px; margin-top:12px; border-radius:12px; border:0; font-size:17px; font-weight:600; background:#eee; color:#222; }
+  .btn.primario { background:var(--verde); color:#fff; } .btn.blu { background:var(--blu); color:#fff; } .btn.rosso { background:var(--rosso); color:#fff; }
+  .btn:disabled { opacity:.5; }
+  .miniature { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  .miniature div { position:relative; } .miniature img { width:84px; height:84px; object-fit:cover; border-radius:8px; }
+  .miniature button { position:absolute; top:-6px; right:-6px; width:26px; height:26px; border-radius:50%; border:0; background:#222; color:#fff; font-size:14px; }
+  .nota { font-size:13px; color:var(--grigio); margin-top:6px; }
+  .giorno { border:1px solid #ddd; border-radius:12px; padding:12px; margin-top:10px; }
+  .giorno.attivo { border-color:var(--verde); background:var(--verde-chiaro); }
+  .giorno b { font-size:17px; } .giorno .nota { margin-top:4px; }
+  #registro { font-family: ui-monospace, monospace; font-size:12px; white-space:pre-wrap; background:#f4f4f2; border-radius:8px; padding:8px; max-height:160px; overflow:auto; display:none; }
+  #toast { position:fixed; left:50%; bottom:110px; transform:translateX(-50%); z-index:2000; background:#222; color:#fff; padding:12px 18px; border-radius:12px; font-size:16px; display:none; max-width:90vw; text-align:center; }
+  .freccia { color:var(--blu); font-size:14px; line-height:14px; text-shadow:0 0 2px #fff, 0 0 2px #fff; }
+  .etichetta-p { background:var(--blu); color:#fff; font-weight:700; border-radius:8px; padding:3px 7px; font-size:13px; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  .leaflet-popup-content { font-size:15px; }
+  .leaflet-popup-content img { width:100%; border-radius:6px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="barra-alto">
+  <button id="btnGiorno" class="pillola"><span id="gps"></span><span id="titoloGiorno">Giri case</span><small id="sottotitolo">Tocca per scegliere il giorno</small></button>
+</div>
+<div id="avanzamento" class="pillola"></div>
+
+<div class="barra-basso">
+  <button id="btnCentra" class="tondo" aria-label="Centra sulla mia posizione">◎</button>
+  <button id="btnCasa">🏠 Casa trovata</button>
+  <button id="btnMenu" class="tondo" aria-label="Impostazioni">⚙</button>
+</div>
+
+<!-- Scelta del giorno -->
+<div id="mGiorni" class="modale"><div class="foglio">
+  <h2>Quale giorno fai oggi?</h2>
+  <div id="listaGiorni"></div>
+  <button class="btn" data-chiudi>Chiudi</button>
+</div></div>
+
+<!-- Nuova casa -->
+<div id="mCasa" class="modale"><div class="foglio">
+  <h2>Nuova casa</h2>
+  <label for="indirizzo">Indirizzo</label>
+  <div class="riga"><input type="text" id="indirizzo" placeholder="Sto cercando l'indirizzo…" style="flex:5"><button class="btn" id="btnRicarica" style="flex:1;margin:0" aria-label="Ricarica indirizzo">↻</button></div>
+  <div class="nota" id="notaGps"></div>
+
+  <label>Foto</label>
+  <button class="btn blu" id="btnFoto">📷 Scatta una foto</button>
+  <input type="file" id="inputFoto" accept="image/*" capture="environment" hidden>
+  <div class="miniature" id="miniature"></div>
+
+  <label>Nota vocale</label>
+  <button class="btn blu" id="btnAudio">🎙 Registra nota vocale</button>
+  <audio id="playerAudio" controls style="width:100%;margin-top:8px;display:none"></audio>
+
+  <label for="note">Note scritte</label>
+  <textarea id="note" placeholder="Puoi anche dettare col microfono della tastiera"></textarea>
+
+  <div class="riga">
+    <div><label for="stato">Stato</label><select id="stato"><option>Da valutare</option><option>Cartello vendita</option><option>Cartello affitto</option><option>Interessante</option><option>Da ricontattare</option><option>Scartata</option></select></div>
+    <div><label for="tipo">Tipo</label><select id="tipo"><option>Villa</option><option>Villetta a schiera</option><option>Appartamento</option><option>Rustico / cascina</option><option>Terreno</option><option>Altro</option></select></div>
+  </div>
+  <button class="btn primario" id="btnSalva">Salva casa</button>
+  <button class="btn" data-chiudi>Annulla</button>
+</div></div>
+
+<!-- Impostazioni -->
+<div id="mImpostazioni" class="modale"><div class="foglio">
+  <h2>Impostazioni</h2>
+  <label for="cfgUrl">Indirizzo dello script Google (finisce con /exec)</label>
+  <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
+  <label for="cfgKey">Chiave segreta</label>
+  <input type="password" id="cfgKey">
+  <div class="riga">
+    <div><label for="cfgComune">Comune</label><input type="text" id="cfgComune" value="Cazzago San Martino"></div>
+    <div style="flex:.5"><label for="cfgGiorni">Giorni</label><input type="number" id="cfgGiorni" value="5" min="1" max="15"></div>
+  </div>
+  <button class="btn primario" id="btnSalvaCfg">Salva e prova il collegamento</button>
+  <button class="btn blu" id="btnCalcola">Calcola i percorsi del comune</button>
+  <div class="nota">Serve una volta per comune: 1-3 minuti. Se cambi comune o numero di giorni, ricalcola.</div>
+  <div id="registro"></div>
+  <button class="btn" id="btnFoglio">Apri il foglio con le case</button>
+  <button class="btn" data-chiudi>Chiudi</button>
+</div></div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="planner.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
