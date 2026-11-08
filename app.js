@@ -233,7 +233,7 @@
       L.marker([g.start.lat, g.start.lon], { icon: pEtichetta('P'), zIndexOffset: 500 }).addTo(lAttivo);
       bounds = S.fase === 'parcheggio' ? L.latLngBounds(c) : L.latLngBounds(c.slice(p, Math.min(c.length, p + 40)));
     }
-    if (centra && bounds && bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [20, S.fase === 'home' ? 30 : 150], paddingBottomRight: [70, Math.min(420, $('pannello').offsetHeight + 20)], maxZoom: 18 });
+    if (centra && bounds && bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [20, S.fase === 'home' ? 30 : 150], paddingBottomRight: [70, Math.min(420, altezzaPannello() + 20)], maxZoom: 18 });
   }
 
   // ---------- indicazione in alto ----------
@@ -300,6 +300,7 @@
   }
   function pannello() {
     const box = $('pannelloCorpo');
+    if (S.fase !== ultimaFase) { if (ultimaFase !== null && panChiuso) chiudiPannello(false); ultimaFase = S.fase; } // nuova fase: comandi nuovi, si riapre
     const comuneChip = `<button class="chip-comune" id="bComune">${ICO.mappa}<span>${esc(cfg.comune)}</span><span aria-hidden="true">▾</span></button>`;
     if (!cfg.url || !cfg.key) {
       box.innerHTML = `<h1>Benvenuta in Agente Moni</h1><p>Prima di iniziare servono le impostazioni. Le prepara Niccolò una volta sola.</p><button class="tasto primario" id="bImpost">${ICO.ingranaggio}Apri le impostazioni</button>`;
@@ -401,7 +402,68 @@
   }
 
   function aggiorna(centra) { pannello(); guida(); posizionaTondi(); disegna(centra); }
-  function posizionaTondi() { const h = $('pannello').offsetHeight; $('tondi').style.bottom = (h + 12) + 'px'; $('invio').style.bottom = (h + 12) + 'px'; $('toast').style.bottom = (h + 12) + 'px'; }
+  // parte del pannello che si vede davvero (conta anche quando è abbassato o lo si sta trascinando)
+  function altezzaPannello() { return Math.max(0, Math.round(window.innerHeight - $('pannello').getBoundingClientRect().top)); }
+  function posizionaTondi() { const h = altezzaPannello(); $('tondi').style.bottom = (h + 12) + 'px'; $('invio').style.bottom = (h + 12) + 'px'; $('toast').style.bottom = (h + 12) + 'px'; }
+
+  // ---------- pannello trascinabile: giù per abbassarlo, su dalla linguetta per riaprirlo ----------
+  const PAN = $('pannello'), ZONA = $('maniglia'), CORPO = $('pannelloCorpo'), SBIRCIA = 58;
+  let panChiuso = false, ultimaFase = null, tr = null, bloccaClick = 0;
+  const margineSotto = () => Math.max(0, (parseFloat(getComputedStyle(PAN).paddingBottom) || 16) - 16); // zona dei gesti di Android
+  const corsaChiuso = () => Math.max(0, PAN.offsetHeight - SBIRCIA - margineSotto());
+  function seguiPannello() { const fine = performance.now() + 380; const passo = () => { posizionaTondi(); if (performance.now() < fine) requestAnimationFrame(passo); }; requestAnimationFrame(passo); }
+  function chiudiPannello(v) {
+    panChiuso = v; PAN.classList.toggle('chiuso', v);
+    ZONA.setAttribute('aria-expanded', String(!v)); CORPO.setAttribute('aria-hidden', String(v));
+    seguiPannello();
+  }
+  function trInizio(y, target) { tr = { y0: y, yUlt: y, tUlt: performance.now(), v: 0, daZona: panChiuso || ZONA.contains(target), attivo: false, scorre: false }; }
+  function trMuovi(y, ev) {
+    if (!tr || tr.scorre) return;
+    const dy = y - tr.y0;
+    if (!tr.attivo) {
+      if (Math.abs(dy) < 3) return;
+      if (!tr.daZona) {
+        const scorribile = CORPO.scrollHeight > CORPO.clientHeight + 1;
+        // dentro il contenuto: verso l'alto (o verso il basso se non è in cima) si scorre la lista, non il pannello
+        if ((dy < 0 && scorribile) || (dy > 0 && CORPO.scrollTop > 0)) { tr.scorre = true; return; }
+        if (dy < 0) { if (ev && ev.cancelable) ev.preventDefault(); return; }
+      }
+      if (Math.abs(dy) < 8) { if (ev && ev.cancelable) ev.preventDefault(); return; }
+      tr.attivo = true; tr.max = corsaChiuso(); tr.base = panChiuso ? tr.max : 0; PAN.classList.add('trascina');
+    }
+    if (ev && ev.cancelable) ev.preventDefault();
+    let off = tr.base + dy;
+    if (off < 0) off = off / 4; // un po' di resistenza oltre il tutto aperto
+    off = Math.min(tr.max, Math.max(-20, off));
+    PAN.style.transform = `translateY(${off}px)`;
+    const ora = performance.now(); if (ora > tr.tUlt) { tr.v = (y - tr.yUlt) / (ora - tr.tUlt); tr.yUlt = y; tr.tUlt = ora; }
+    tr.off = off; posizionaTondi();
+  }
+  function trFine() {
+    if (!tr) return;
+    const t = tr; tr = null;
+    if (!t.attivo) return;
+    bloccaClick = Date.now();
+    const chiudi = t.v > 0.35 ? true : t.v < -0.35 ? false : t.off > t.max / 2;
+    PAN.classList.remove('trascina'); PAN.style.transform = '';
+    chiudiPannello(chiudi);
+  }
+  PAN.addEventListener('touchstart', e => { if (e.touches.length === 1) trInizio(e.touches[0].clientY, e.target); else tr = null; }, { passive: true });
+  PAN.addEventListener('touchmove', e => { if (e.touches.length === 1) trMuovi(e.touches[0].clientY, e); }, { passive: false });
+  PAN.addEventListener('touchend', trFine); PAN.addEventListener('touchcancel', trFine);
+  // col mouse (per provarla dal computer): si trascina dalla linguetta
+  ZONA.addEventListener('mousedown', e => { trInizio(e.clientY, e.target); e.preventDefault(); });
+  window.addEventListener('mousemove', e => { if (tr) trMuovi(e.clientY, null); });
+  window.addEventListener('mouseup', trFine);
+  // dopo un trascinamento non deve partire per sbaglio un tasto; da abbassato, un tocco lo riapre
+  PAN.addEventListener('click', e => {
+    if (Date.now() - bloccaClick < 450) { e.preventDefault(); e.stopPropagation(); return; }
+    if (panChiuso) { e.preventDefault(); e.stopPropagation(); chiudiPannello(false); return; }
+    if (ZONA.contains(e.target)) chiudiPannello(true);
+  }, true);
+  ZONA.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); chiudiPannello(!panChiuso); } });
+  PAN.addEventListener('transitionend', e => { if (e.target === PAN) posizionaTondi(); });
 
   // ---------- fine di un giro ----------
   function festa(titolo, testo, bottoni) {
