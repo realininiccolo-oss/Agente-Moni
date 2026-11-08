@@ -40,12 +40,35 @@
   }
 
   async function fetchOSM(comune, log) {
-    const area = `area["boundary"="administrative"]["admin_level"="8"]["name"="${comune}"]->.a;`;
+    const nome = comune.replace(/"/g, '\\"');
+    const area = `area["boundary"="administrative"]["admin_level"="8"]["name"="${nome}"]->.a;`;
     log('Scarico le strade di ' + comune + '…');
-    const roads = await overpass(`[out:json][timeout:180];${area}way(area.a)["highway"~"${ROAD_RE}"];out body;>;out skel qt;`, log);
+    let roads = await overpass(`[out:json][timeout:180];${area}way(area.a)["highway"~"${ROAD_RE}"];out body;>;out skel qt;`, log);
+    if (roads.elements.length) {
+      log('Scarico edifici, frazioni e parcheggi…');
+      const extra = await overpass(`[out:json][timeout:180];${area}(way(area.a)["building"];relation(area.a)["building"];node(area.a)["place"~"^(town|village|suburb|hamlet)$"];nwr(area.a)["amenity"="parking"];);out bb;`, log);
+      return { roads, extra };
+    }
+    // Piano B: la "zona" del comune a volte manca nell'archivio del server anche se il confine esiste.
+    // Scarico il confine, prendo tutto nel riquadro e tengo solo ciò che sta dentro.
+    log('Cerco il confine del comune in un altro modo…');
+    const rel = await overpass(`[out:json][timeout:120];rel["boundary"="administrative"]["admin_level"="8"]["name"="${nome}"];out geom;`, log);
+    const r = rel.elements.find(e => e.type === 'relation' && e.bounds);
+    if (!r) throw new Error('Comune "' + comune + '" non trovato su OpenStreetMap: controlla che il nome sia scritto esattamente come quello ufficiale');
+    const segs = [];
+    for (const mb of r.members || []) if (mb.type === 'way' && mb.geometry) for (let i = 1; i < mb.geometry.length; i++) segs.push([mb.geometry[i - 1], mb.geometry[i]]);
+    const dentro = (lat, lon) => { let c = false; for (const [p, q] of segs) if ((p.lat > lat) !== (q.lat > lat) && lon < (q.lon - p.lon) * (lat - p.lat) / (q.lat - p.lat) + p.lon) c = !c; return c; };
+    const B = r.bounds, bb = `${B.minlat},${B.minlon},${B.maxlat},${B.maxlon}`;
+    log('Scarico le strade di ' + comune + '…');
+    roads = await overpass(`[out:json][timeout:180];way["highway"~"${ROAD_RE}"](${bb});out body;>;out skel qt;`, log);
     log('Scarico edifici, frazioni e parcheggi…');
-    const extra = await overpass(`[out:json][timeout:180];${area}(way(area.a)["building"];relation(area.a)["building"];node(area.a)["place"~"^(town|village|suburb|hamlet)$"];nwr(area.a)["amenity"="parking"];);out bb;`, log);
-    if (!roads.elements.length) throw new Error('Comune "' + comune + '" non trovato su OpenStreetMap');
+    const extra = await overpass(`[out:json][timeout:180];(way["building"](${bb});relation["building"](${bb});node["place"~"^(town|village|suburb|hamlet)$"](${bb});nwr["amenity"="parking"](${bb}););out bb;`, log);
+    const nodi = new Map(); for (const e of roads.elements) if (e.type === 'node') nodi.set(e.id, e);
+    const vie = roads.elements.filter(e => e.type === 'way' && e.nodes.some(id => { const n = nodi.get(id); return n && dentro(n.lat, n.lon); }));
+    const usati = new Set(vie.flatMap(w => w.nodes));
+    roads = { elements: [...vie, ...roads.elements.filter(e => e.type === 'node' && usati.has(e.id))] };
+    extra.elements = extra.elements.filter(e => { const lat = e.lat != null ? e.lat : e.bounds && (e.bounds.minlat + e.bounds.maxlat) / 2, lon = e.lon != null ? e.lon : e.bounds && (e.bounds.minlon + e.bounds.maxlon) / 2; return lat != null && dentro(lat, lon); });
+    if (!vie.length) throw new Error('Le mappe sono arrivate vuote: i server sono probabilmente occupati. Riprova tra qualche minuto');
     return { roads, extra };
   }
 
