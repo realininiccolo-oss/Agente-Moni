@@ -307,7 +307,13 @@
       return;
     }
     if (!pianoOk()) {
-      box.innerHTML = `${comuneChip}<h1>Prepariamo i giri</h1><p>Calcolo i giri a piedi di ${esc(cfg.comune)}. Serve una volta sola e ci vogliono 1-3 minuti.</p><button class="tasto primario" id="bCalcola">${ICO.mappa}Calcola i giri</button><div id="regPannello" class="aiuto"></div>`;
+      box.innerHTML = `${comuneChip}<h1>Giri di ${esc(cfg.comune)}</h1><p>Se sono già stati calcolati dal computer, scaricali. Altrimenti calcolali qui: serve una volta sola e ci vogliono 1-3 minuti.</p><button class="tasto primario" id="bScarica">${ICO.rifai}Scarica i giri già pronti</button><button class="tasto" id="bCalcola">${ICO.mappa}Calcola i giri qui</button><div id="regPannello" class="aiuto"></div>`;
+      $('bScarica').onclick = async () => {
+        const b = $('bScarica'); b.disabled = true; b.textContent = 'Scarico…';
+        try { const p = await api('getRoutes', { comune: cfg.comune }); if (p && p.v === 3) { plan = p; LS.set('plan_' + cfg.comune, plan); toast('Giri scaricati', 'ok'); aggiorna(true); return; } $('regPannello').textContent = p ? 'I giri salvati sono nel formato vecchio: vanno ricalcolati (dal computer o qui).' : 'Per questo comune non ci sono ancora giri salvati: vanno calcolati.'; }
+        catch (e) { $('regPannello').textContent = 'Non riesco a scaricarli: ' + e.message; }
+        b.disabled = false; b.innerHTML = ICO.rifai + 'Scarica i giri già pronti';
+      };
       $('bCalcola').onclick = () => calcolaPercorsi($('regPannello'), $('bCalcola'));
       $('bComune').onclick = apriComuni;
       return;
@@ -807,8 +813,10 @@
   async function calcolaPercorsi(reg, btn) {
     reg.style.display = 'block'; reg.textContent = ''; btn.disabled = true;
     const log = m => { reg.textContent += m + '\n'; reg.scrollTop = 1e9; };
+    if (!window.Planner || Planner.versione !== 3) { log('Su GitHub c\'è ancora il file planner.js vecchio: va caricato quello nuovo insieme agli altri file.'); btn.disabled = false; return; }
     try {
       const p = await Planner.plan(cfg.comune, cfg.durata, log);
+      if (!p || p.v !== 3) throw new Error('il file planner.js su GitHub non è aggiornato');
       plan = p; LS.set('plan_' + cfg.comune, plan);
       S = Object.assign(S, { prog: {}, fatti: {}, autoViste: {}, fase: 'home', attivo: null, coda: [], sessione: null, proposta: null }); salvaStato();
       log(`${p.giri.length} giri, in tutto circa ${oreTesto(p.giri.reduce((a, g) => a + g.ore, 0))} a piedi.`);

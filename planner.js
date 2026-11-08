@@ -22,9 +22,14 @@
     for (let round = 0; round < 4; round++) {
       for (const url of OVERPASS) {
         try {
-          const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q) });
-          if (r.ok) return await r.json();
-          lastErr = new Error('Server mappe: errore ' + r.status);
+          const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 150000); // server che non risponde: passo al successivo
+          const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), signal: ctl.signal }).finally(() => clearTimeout(timer));
+          if (r.ok) {
+            const j = await r.json();
+            // il server sovraccarico a volte risponde "ok" ma con dati tagliati: in quel caso riprovo
+            if (!j.remark || !/error|timeout|out of memory|runtime/i.test(j.remark)) return j;
+            lastErr = new Error('Server mappe sovraccarico');
+          } else lastErr = new Error('Server mappe: errore ' + r.status);
         } catch (e) { lastErr = e; }
       }
       const wait = 15 * Math.pow(2, round);
@@ -289,11 +294,15 @@
       segName.push(li.get(g));
       look.push(G.ER[e] && !seen.has(e) ? '1' : '0'); seen.add(e);
     }
+    const perVia = new Map();
+    for (let k = 0; k < segName.length; k++) if (look[k] === '1') { const nm = localNames[segName[k]]; perVia.set(nm, (perVia.get(nm) || 0) + ML[pathE[k + 1]]); }
+    const vie = [...perVia.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
+    const via = vie.find(v => !/^(strada senza nome|stradina|sentiero|strada sterrata|scalinata|pista ciclabile|zona pedonale|strada [A-Z]+ ?\d*)$/.test(v)) || vie[0] || '';
     const total = ML.reduce((a, b) => a + b, 0);
     const missed = used.reduce((a, u) => a + (u ? 0 : 1), 0);
     return {
       coords: path.map(v => [+G.LAT[v].toFixed(5), +G.LON[v].toFixed(5)]),
-      names: localNames, n: segName, lk: look.join(''),
+      names: localNames, n: segName, lk: look.join(''), via,
       km: +(total / 1000).toFixed(1), reqKm: +(reqLen / 1000).toFixed(1),
       ore: +(reqLen / 1000 / WALK_KMH + (total - reqLen) / 1000 / FAST_KMH).toFixed(1), missedEdges: missed,
       connKm: +(connLen / 1000).toFixed(1), leftover
@@ -342,22 +351,35 @@
     return { loops: loops.length ? ord : [], carStops };
   }
 
-  async function plan(comune, days, log = () => {}) {
+  // Piano a giri brevi: il comune viene diviso in tanti giri ad anello da circa `durataMin` minuti.
+  // L'agente sceglie ogni volta quanti e quali farne, in base al tempo che ha.
+  async function plan(comune, durataMin = 75, log = () => {}) {
     const osm = await fetchOSM(comune, log);
     log('Costruisco la rete stradale…');
     const G = build(osm);
-    log('Divido il comune in ' + days + ' giorni…');
-    const zones = makeZones(G, days, comune);
-    const out = [];
+    let w = 0; for (let e = 0; e < G.m; e++) if (G.ER[e] && G.comp[G.EU[e]] === G.main) w += G.EL[e] * (G.tree[e] ? 2 : 1);
+    const stimaOre = w / 1000 * 0.58;                    // ore stimate per tutto il comune (taratura su Cazzago)
+    const k = Math.max(1, Math.round(stimaOre / (durataMin / 60)));
+    log('Divido il comune in circa ' + k + ' giri…');
+    await new Promise(r => setTimeout(r, 0));
+    const zones = makeZones(G, k, comune);
+    const vicino = (lat, lon) => { const x = lon * G.kx, y = lat * G.ky; let b = null, bd = Infinity; for (const p of G.places) { const d = (p.x - x) ** 2 + (p.y - y) ** 2 * 1 + (p.hamlet ? 1e5 : 0); if (d < bd) { bd = d; b = p.name; } } return b || comune; };
+    const giri = [], auto = G.carStops.map(c => ({ lat: c.lat, lon: c.lon, m: c.m }));
     for (let i = 0; i < zones.length; i++) {
-      log('Calcolo il giro del giorno ' + (i + 1) + ' (' + zones[i].name + ')…');
-      await new Promise(r => setTimeout(r, 0));
+      if (i % 4 === 0) { log('Calcolo i percorsi… ' + Math.round(100 * i / zones.length) + '%'); await new Promise(r => setTimeout(r, 0)); }
       const { loops, carStops } = routeDay(G, zones[i]);
-      const km = loops.reduce((a, l) => a + l.km, 0), reqKm = loops.reduce((a, l) => a + l.reqKm, 0);
-      out.push({ day: i + 1, name: zones[i].name, km: +km.toFixed(1), reqKm: +reqKm.toFixed(1), ore: +loops.reduce((a, l) => a + l.ore, 0).toFixed(1), loops, carStops: zones[i].carStops.concat(carStops) });
+      auto.push(...carStops);
+      for (const l of loops) giri.push({ ...l, frazione: vicino(l.start.lat, l.start.lon) });
     }
-    return { v: 2, comune, days, created: new Date().toISOString(), walkKmh: WALK_KMH, fastKmh: FAST_KMH, plan: out };
+    // ordine: per frazione (la più grande prima), poi da nord a sud
+    const peso = new Map(); giri.forEach(g => peso.set(g.frazione, (peso.get(g.frazione) || 0) + g.reqKm));
+    giri.sort((a, b) => (peso.get(b.frazione) - peso.get(a.frazione)) || (b.start.lat - a.start.lat));
+    giri.forEach((g, i) => { g.id = 'g' + (i + 1); delete g.missedEdges; delete g.connKm; });
+    auto.forEach(c => { c.frazione = vicino(c.lat, c.lon); });
+    if (!giri.length) throw new Error('Le mappe sono arrivate incomplete (nessuna casa trovata). Riprova tra qualche minuto');
+    log('Fatto: ' + giri.length + ' giri.');
+    return { v: 3, comune, durataMin, created: new Date().toISOString(), walkKmh: WALK_KMH, fastKmh: FAST_KMH, giri, auto };
   }
 
-  global.Planner = { plan, fetchOSM, build, makeZones, routeLoop, routeDay };
+  global.Planner = { versione: 3, plan, fetchOSM, build, makeZones, routeLoop, routeDay };
 })(typeof window !== 'undefined' ? window : globalThis);
