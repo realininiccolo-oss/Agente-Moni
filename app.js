@@ -6,7 +6,9 @@
     get: (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
     set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
   };
-  const cfg = Object.assign({ url: '', key: '', comune: 'Cazzago San Martino', giorni: 5 }, LS.get('cfg', {}));
+  const cfg = Object.assign({ url: '', key: '', comune: 'Cazzago San Martino', durata: 75, comuni: [] }, LS.get('cfg', {}));
+  ['Cazzago San Martino', 'Monticelli Brusati', 'Paderno Franciacorta', 'Ome', 'Passirano'].forEach(c => { if (!cfg.comuni.includes(c)) cfg.comuni.push(c); });
+  if (!cfg.comuni.includes(cfg.comune)) cfg.comuni.push(cfg.comune);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   // ---------- icone ----------
@@ -88,16 +90,23 @@
   })();
 
   // ---------- stato ----------
-  let plan = LS.get('plan_' + cfg.comune, null);
-  let S = caricaStato();
-  function caricaStato() { return Object.assign({ giorno: 0, fase: 'inizio', giro: 0, prog: {}, fatti: {}, voce: false }, LS.get('stato_' + cfg.comune, {})); }
-  const salvaStato = () => LS.set('stato_' + cfg.comune, S);
-  const pianoOk = () => plan && plan.v === 2 && plan.plan && plan.plan.length;
-  const oggi = () => pianoOk() ? plan.plan[Math.min(S.giorno, plan.plan.length - 1)] : null;
-  const giroAttivo = () => { const g = oggi(); return g ? g.loops[Math.min(S.giro, g.loops.length - 1)] : null; };
-  const chiave = (g, l) => g + '-' + l;
-  const progDi = (g, l) => S.prog[chiave(g, l)] || 0;
-  const giroFatto = (g, l, loop) => progDi(g, l) >= loop.coords.length - 3;
+  // Il piano è un insieme di giri brevi; l'agente decide ogni volta quanti e quali farne.
+  let plan = null, S = null;
+  function caricaComune() {
+    plan = LS.get('plan_' + cfg.comune, null);
+    if (plan && plan.v !== 3) plan = null;
+    S = Object.assign({ prog: {}, fatti: {}, autoViste: {}, fase: 'home', attivo: null, coda: [], sessione: null, proposta: null, tempo: null, ultima: null, voce: false }, LS.get('stato3_' + cfg.comune, {}));
+    S.voce = LS.get('voce', false);
+  }
+  caricaComune();
+  const salvaStato = () => { LS.set('stato3_' + cfg.comune, S); LS.set('voce', S.voce); };
+  const pianoOk = () => plan && plan.v === 3 && plan.giri && plan.giri.length;
+  const giro = id => pianoOk() ? plan.giri.find(g => g.id === id) : null;
+  const giroAttivo = () => S.attivo ? giro(S.attivo) : null;
+  const progDi = g => S.prog[g.id] || 0;
+  const fatto = g => !!S.fatti[g.id] || progDi(g) >= g.coords.length - 3;
+  const iniziato = g => !fatto(g) && progDi(g) > 0;
+  const etichetta = g => g.frazione + (g.via ? ', ' + g.via : '');
 
   // dati derivati per ogni giro: distanze cumulate, tempi, passi
   const cache = new WeakMap();
@@ -112,7 +121,6 @@
       if (n[i] !== cur.nome || Math.abs(d) > 150) { cur.i1 = i; steps.push(cur); cur = { i0: i, nome: n[i], svolta: d }; }
     }
     cur.i1 = c.length - 1; steps.push(cur);
-    // attraversamenti cortissimi di un'altra via: li ignoro
     for (let k = steps.length - 2; k > 0; k--) {
       const s = steps[k], a = steps[k - 1], b = steps[k + 1];
       if (cc[s.i1] - cc[s.i0] < 15 && Math.abs(s.svolta) <= 150 && Math.abs(b.svolta) <= 150 && a.nome === b.nome) { a.i1 = b.i1; steps.splice(k, 2); }
@@ -121,6 +129,8 @@
     cache.set(loop, v);
     return v;
   }
+  const restoOre = g => { const I = info(g); return I.tt[I.tt.length - 1] - I.tt[progDi(g)]; };
+  const restoKm = g => { const I = info(g); return (I.cc[I.cc.length - 1] - I.cc[progDi(g)]) / 1000; };
   const nomeVia = (loop, idx) => (loop.names && loop.names[idx]) || 'strada senza nome';
   const GENERICI = { 'sentiero': 'nel sentiero', 'scalinata': 'nella scalinata', 'pista ciclabile': 'nella pista ciclabile', 'strada sterrata': 'nella strada sterrata', 'stradina': 'nella stradina', 'zona pedonale': 'nella zona pedonale', 'strada senza nome': 'nella strada senza nome' };
   const inVia = nome => GENERICI[nome] || 'in ' + nome;
@@ -133,6 +143,30 @@
     return 'gira a ' + lato + ' ' + inVia(nome);
   }
 
+  // ---------- proposta dei giri in base al tempo disponibile ----------
+  function puntoDiPartenza() {
+    const da = plan.giri.map(g => [g.start.lat, g.start.lon]);
+    if (posizione && da.some(p => dist(p, [posizione.lat, posizione.lng]) < 6000)) return [posizione.lat, posizione.lng];
+    const ultimo = plan.giri.filter(g => S.fatti[g.id]).pop();
+    return ultimo ? [ultimo.start.lat, ultimo.start.lon] : da[0];
+  }
+  function proponi(minuti) {
+    const budget = minuti / 60, scelti = [];
+    let disp = plan.giri.filter(g => !fatto(g)), pos = puntoDiPartenza(), t = 0;
+    // prima l'eventuale giro lasciato a metà
+    const meta = disp.filter(iniziato).sort((a, b) => dist(pos, [a.start.lat, a.start.lon]) - dist(pos, [b.start.lat, b.start.lon]))[0];
+    if (meta) { scelti.push(meta); t += restoOre(meta); pos = [meta.start.lat, meta.start.lon]; disp = disp.filter(g => g !== meta); }
+    while (disp.length) {
+      const ord = disp.map(g => ({ g, d: dist(pos, [g.start.lat, g.start.lon]) })).sort((a, b) => a.d - b.d);
+      const ok = ord.find(o => !scelti.length || (t + restoOre(o.g) <= budget * 1.1 && o.d < 4000));
+      if (!ok) break;
+      scelti.push(ok.g); t += restoOre(ok.g); pos = [ok.g.start.lat, ok.g.start.lon]; disp = disp.filter(g => g !== ok.g);
+      if (t >= budget * 0.95) break;
+    }
+    return scelti.map(g => g.id);
+  }
+  const oreDi = ids => ids.reduce((a, id) => a + restoOre(giro(id)), 0);
+
   // ---------- mappa ----------
   const map = L.map('map', { zoomControl: false }).setView([45.583, 10.03], 14);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
@@ -144,40 +178,49 @@
   map.on('popupclose', () => { $('tondi').style.visibility = ''; });
   const VERDE = '#2e7d4f', BLU = '#1d5fd1', OCRA = '#f2a900';
   const pEtichetta = (testo, altro) => L.divIcon({ className: '', html: `<div class="etichetta-p${altro ? ' altro' : ''}">${testo}</div>`, iconSize: altro ? [34, 34] : [40, 40], iconAnchor: altro ? [17, 17] : [20, 20] });
+  const iconaAuto = () => L.divIcon({ className: '', html: `<div class="etichetta-p altro" style="width:36px;height:36px">${ICO.auto.replace('<svg', '<svg width="22" height="22"')}</div>`, iconSize: [36, 36], iconAnchor: [18, 18] });
+  let inquadra = 'adatta';
 
   function disegna(centra) {
     lFatto.clearLayers(); lGiorno.clearLayers(); lAttivo.clearLayers();
     if (!pianoOk()) return;
-    // tutto ciò che è già stato fatto, in tutti i giorni: verde
-    plan.plan.forEach((g, gi) => g.loops.forEach((loop, li) => {
-      const p = progDi(gi, li); if (p < 1) return;
-      L.polyline(loop.coords.slice(0, p + 1), { pane: 'fatto', color: '#fff', weight: 11, opacity: .9 }).addTo(lFatto);
-      L.polyline(loop.coords.slice(0, p + 1), { pane: 'fatto', color: VERDE, weight: 7, opacity: .95 }).addTo(lFatto);
-    }));
-    const g = oggi(), gi = S.giorno;
-    // gli altri giri di oggi: grigio tratteggiato
-    g.loops.forEach((loop, li) => {
-      if (li === S.giro && S.fase !== 'inizio') return;
-      const p = progDi(gi, li);
-      if (p < loop.coords.length - 3) L.polyline(loop.coords.slice(p), { pane: 'dafare', color: '#4a5a60', weight: 4, opacity: .55, dashArray: '2 9', lineCap: 'round' }).addTo(lGiorno);
-      L.marker([loop.start.lat, loop.start.lon], { icon: pEtichetta('P' + (g.loops.length > 1 ? li + 1 : ''), true), keyboard: false }).addTo(lGiorno);
+    // già fatto, in tutti i giri: verde
+    plan.giri.forEach(g => {
+      const p = fatto(g) ? g.coords.length - 1 : progDi(g); if (p < 1) return;
+      L.polyline(g.coords.slice(0, p + 1), { pane: 'fatto', color: '#fff', weight: 11, opacity: .9, interactive: false }).addTo(lFatto);
+      L.polyline(g.coords.slice(0, p + 1), { pane: 'fatto', color: VERDE, weight: 7, opacity: .95, interactive: false }).addTo(lFatto);
     });
-    (g.carStops || []).forEach(s => L.marker([s.lat, s.lon], { icon: L.divIcon({ className: '', html: `<div class="etichetta-p altro" style="width:36px;height:36px">${ICO.auto.replace('<svg', '<svg width="22" height="22"')}</div>`, iconSize: [36, 36], iconAnchor: [18, 18] }) })
-      .bindPopup('<div class="pop"><b>Case isolate</b>Guardale passando in macchina.<br><a target="_blank" href="https://www.google.com/maps/dir/?api=1&destination=' + s.lat + ',' + s.lon + '">Portami qui</a></div>').addTo(lGiorno));
-    let bounds = L.latLngBounds(g.loops.flatMap(l => [[l.start.lat, l.start.lon]]));
-    if (S.fase === 'parcheggio' || S.fase === 'cammino') {
-      const loop = giroAttivo(), c = loop.coords, p = progDi(gi, S.giro), I = info(loop);
-      // da fare: blu pieno dove si guardano le case, blu tratteggiato dove si passa e basta
+    let bounds = null;
+    if (S.fase === 'home' || S.fase === 'macchina') {
+      const scelta = S.fase === 'home' ? (S.proposta || []) : [];
+      // tutti i giri ancora da fare, leggeri e toccabili
+      plan.giri.forEach(g => {
+        if (fatto(g) || scelta.includes(g.id)) return;
+        L.polyline(g.coords.slice(progDi(g)), { pane: 'dafare', color: BLU, weight: 4, opacity: .35 }).bindTooltip(etichetta(g) + ', ' + oreTesto(restoOre(g)), { sticky: true }).on('click', () => { if (S.fase === 'home') { S.proposta = (S.proposta || []).concat(g.id); salvaStato(); aggiorna(false); } }).addTo(lGiorno);
+      });
+      scelta.forEach((id, i) => { const g = giro(id); if (!g) return;
+        L.polyline(g.coords.slice(progDi(g)), { pane: 'dafare', color: '#fff', weight: 9, opacity: .9 }).addTo(lGiorno);
+        L.polyline(g.coords.slice(progDi(g)), { pane: 'dafare', color: BLU, weight: 5, opacity: .95 }).addTo(lGiorno);
+        L.marker([g.start.lat, g.start.lon], { icon: pEtichetta(i + 1), zIndexOffset: 400 }).addTo(lGiorno); });
+      if (S.fase === 'macchina') (plan.auto || []).forEach((s, i) => { if (!S.autoViste[i]) L.marker([s.lat, s.lon], { icon: iconaAuto() }).addTo(lGiorno); });
+      const pts = scelta.length ? scelta.flatMap(id => giro(id) ? giro(id).coords : []) : S.fase === 'macchina' ? (plan.auto || []).filter((_, i) => !S.autoViste[i]).map(s => [s.lat, s.lon]) : plan.giri.flatMap(g => [[g.start.lat, g.start.lon]]);
+      if (pts.length) bounds = L.latLngBounds(pts);
+    } else {
+      const g = giroAttivo(); if (!g) return;
+      const c = g.coords, p = progDi(g), I = info(g);
+      // gli altri giri in programma oggi: grigio tratteggiato con numero
+      S.coda.forEach((id, i) => { if (id === g.id) return; const o = giro(id); if (!o) return;
+        L.polyline(o.coords.slice(progDi(o)), { pane: 'dafare', color: '#4a5a60', weight: 4, opacity: .5, dashArray: '2 9', lineCap: 'round' }).addTo(lGiorno);
+        L.marker([o.start.lat, o.start.lon], { icon: pEtichetta('P' + (i + 1), true) }).addTo(lGiorno); });
       L.polyline(c.slice(p), { pane: 'dafare', color: '#fff', weight: 11, opacity: .9 }).addTo(lAttivo);
       let i = p;
       while (i < c.length - 1) {
-        const tipo = loop.lk ? loop.lk[i] : '1'; let j = i;
-        while (j < c.length - 1 && (loop.lk ? loop.lk[j] : '1') === tipo) j++;
+        const tipo = g.lk ? g.lk[i] : '1'; let j = i;
+        while (j < c.length - 1 && (g.lk ? g.lk[j] : '1') === tipo) j++;
         L.polyline(c.slice(i, j + 1), tipo === '1' ? { pane: 'dafare', color: BLU, weight: 7, opacity: .9 } : { pane: 'dafare', color: BLU, weight: 5, opacity: .7, dashArray: '1 10', lineCap: 'round' }).addTo(lAttivo);
         i = j;
       }
       if (S.fase === 'cammino') {
-        // i prossimi 300 m: ocra, con frecce
         let j = p; while (j < c.length - 1 && I.cc[j] - I.cc[p] < 300) j++;
         L.polyline(c.slice(p, j + 1), { pane: 'prossimo', color: OCRA, weight: 9, opacity: 1 }).addTo(lAttivo);
         let ultimo = -1e9;
@@ -187,33 +230,30 @@
           L.marker(c[k], { interactive: false, keyboard: false, pane: 'prossimo', icon: L.divIcon({ className: '', html: `<svg class="freccia" viewBox="0 0 18 18" style="transform:rotate(${ang}deg)"><path d="M4 12l5-6 5 6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`, iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(lAttivo);
         }
       }
-      L.marker([loop.start.lat, loop.start.lon], { icon: pEtichetta('P'), zIndexOffset: 500 }).addTo(lAttivo);
+      L.marker([g.start.lat, g.start.lon], { icon: pEtichetta('P'), zIndexOffset: 500 }).addTo(lAttivo);
       bounds = S.fase === 'parcheggio' ? L.latLngBounds(c) : L.latLngBounds(c.slice(p, Math.min(c.length, p + 40)));
-    } else if (S.fase === 'inizio') {
-      bounds = L.latLngBounds(g.loops.flatMap(l => l.coords));
-      g.loops.forEach(l => L.polyline(l.coords, { pane: 'dafare', color: BLU, weight: 4, opacity: .5 }).addTo(lGiorno));
     }
-    if (centra && bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40], paddingTopLeft: [20, 150], paddingBottomRight: [20, 260], maxZoom: 18 });
+    if (centra && bounds && bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [20, S.fase === 'home' ? 30 : 150], paddingBottomRight: [70, Math.min(420, $('pannello').offsetHeight + 20)], maxZoom: 18 });
   }
 
   // ---------- indicazione in alto ----------
   let fuori = 0, giaDetto = {};
   function guida() {
     const box = $('guida');
-    if (!pianoOk() || S.fase === 'inizio' || S.fase === 'fine') { box.className = ''; box.innerHTML = ''; return; }
-    const loop = giroAttivo();
-    if (S.fase === 'parcheggio') {
-      const ind = indirizzoP(loop);
-      box.className = 'visibile';
-      box.innerHTML = `<div class="guida-card parcheggio"><div class="guida-icona">${FRECCIA.arrivo}</div><div class="guida-testi"><div class="guida-azione">Parcheggia ${ind ? 'in ' + esc(ind.via) : 'al punto P'}</div><div class="guida-sotto">${ind && ind.paese ? esc(ind.paese) + '. ' : ''}${loop.start.name === 'Lascia la macchina qui' ? 'Lascia la macchina dove trovi posto.' : 'C\'è un parcheggio.'}</div></div></div>`;
-      return;
-    }
+    if (!pianoOk() || S.fase === 'home') { box.className = ''; box.innerHTML = ''; return; }
     if (S.fase === 'macchina') {
       box.className = 'visibile';
-      box.innerHTML = `<div class="guida-card fatto"><div class="guida-icona">${ICO.auto.replace('<svg', '<svg style="color:#fff"')}</div><div class="guida-testi"><div class="guida-azione">Giri a piedi finiti</div><div class="guida-sotto">Restano le case isolate da vedere in macchina.</div></div></div>`;
+      box.innerHTML = `<div class="guida-card fatto"><div class="guida-icona">${ICO.auto.replace('<svg', '<svg style="color:#fff"')}</div><div class="guida-testi"><div class="guida-azione">Case isolate</div><div class="guida-sotto">Guardale passando in macchina, quando vuoi.</div></div></div>`;
       return;
     }
-    const c = loop.coords, p = progDi(S.giorno, S.giro), I = info(loop);
+    const g = giroAttivo(); if (!g) { box.className = ''; return; }
+    if (S.fase === 'parcheggio') {
+      const ind = indirizzoP(g);
+      box.className = 'visibile';
+      box.innerHTML = `<div class="guida-card parcheggio"><div class="guida-icona">${FRECCIA.arrivo}</div><div class="guida-testi"><div class="guida-azione">Parcheggia ${ind ? 'in ' + esc(ind.via) : 'al punto P'}</div><div class="guida-sotto">${ind && ind.paese ? esc(ind.paese) + '. ' : ''}${g.start.name === 'Lascia la macchina qui' ? 'Lascia la macchina dove trovi posto.' : 'C\'è un parcheggio.'}</div></div></div>`;
+      return;
+    }
+    const c = g.coords, p = progDi(g), I = info(g);
     if (fuori >= 3) {
       let d = Infinity; for (let i = p; i < Math.min(c.length, p + 40); i++) d = Math.min(d, posizione ? dist([posizione.lat, posizione.lng], c[i]) : Infinity);
       box.className = 'visibile';
@@ -222,15 +262,14 @@
     }
     const k = Math.max(0, I.steps.findIndex(s => p >= s.i0 && p < s.i1));
     const s = I.steps[k], dopo = I.steps[k + 1], d = I.cc[s.i1] - I.cc[p];
-    const qui = nomeVia(loop, loop.n ? loop.n[Math.min(p, loop.n.length - 1)] : -1);
+    const qui = nomeVia(g, g.n ? g.n[Math.min(p, g.n.length - 1)] : -1);
     let icona, azione;
     if (!dopo) { icona = FRECCIA.arrivo; azione = 'sei di nuovo alla macchina'; }
-    else { const nome = nomeVia(loop, dopo.nome); icona = FRECCIA[tipoSvolta(dopo.svolta)]; azione = testoSvolta(dopo.svolta, nome, dopo.nome === s.nome); }
-    const guarda = !loop.lk || loop.lk[Math.min(p, loop.lk.length - 1)] === '1';
+    else { const nome = nomeVia(g, dopo.nome); icona = FRECCIA[tipoSvolta(dopo.svolta)]; azione = testoSvolta(dopo.svolta, nome, dopo.nome === s.nome); }
+    const guarda = !g.lk || g.lk[Math.min(p, g.lk.length - 1)] === '1';
     box.className = 'visibile';
     box.innerHTML = `<div class="guida-card"><div class="guida-icona">${icona}</div><div class="guida-testi"><div class="guida-dist">${metriTesto(d)}</div><div class="guida-azione">${esc(azione)}</div><div class="guida-sotto">${guarda ? '<span class="badge guarda">Guarda le case</span>' : '<span class="badge passa">Solo passaggio</span>'}<span>${esc(qui === 'strada senza nome' ? 'Strada senza nome' : qui)}</span></div></div></div>`;
-    // voce e vibrazione vicino alla svolta
-    const id = S.giorno + '-' + S.giro + '-' + k;
+    const id = g.id + '-' + k;
     if (dopo && d < 60 && d >= 20 && !giaDetto[id + 'a']) { giaDetto[id + 'a'] = 1; parla(metriTesto(d) + ', ' + azione); }
     if (dopo && d < 20 && !giaDetto[id + 'b']) { giaDetto[id + 'b'] = 1; parla('Adesso ' + azione); try { navigator.vibrate && navigator.vibrate([120, 80, 120]); } catch (e) { } }
   }
@@ -244,102 +283,152 @@
     const paese = iCap >= 0 ? parti[iCap].replace(/^\d{5}\s*/, '').replace(/\s+[A-Z]{2}$/, '') : '';
     return { via, paese };
   }
-  function indirizzoP(loop) {
-    const k = loop.start.lat + ',' + loop.start.lon;
+  function indirizzoP(g) {
+    const k = g.start.lat + ',' + g.start.lon;
     if (indirizzi[k]) return indirizzi[k];
     if (!indirizzoP.inCorso) {
       indirizzoP.inCorso = true;
-      api('geocode', { lat: loop.start.lat, lng: loop.start.lon }).then(r => { if (r.address) { indirizzi[k] = accorcia(r.address); LS.set('indirizzi', indirizzi); guida(); pannello(); } }).catch(() => { }).finally(() => { indirizzoP.inCorso = false; });
+      api('geocode', { lat: g.start.lat, lng: g.start.lon }).then(r => { if (r.address) { indirizzi[k] = accorcia(r.address); LS.set('indirizzi', indirizzi); guida(); } }).catch(() => { }).finally(() => { indirizzoP.inCorso = false; });
     }
     return null;
   }
 
   // ---------- pannello in basso ----------
-  function puntini() {
-    return '<div class="giorni" aria-label="Giorni">' + plan.plan.map((g, i) => `<span class="${S.fatti[i] ? 'fatto' : ''}${i === S.giorno ? ' oggi' : ''}" aria-label="Giorno ${i + 1}${S.fatti[i] ? ' fatto' : ''}">${S.fatti[i] ? '✓' : i + 1}</span>`).join('') + '</div>';
+  const TEMPI = [{ m: 60, t: '1 ora' }, { m: 120, t: '2 ore' }, { m: 180, t: '3 ore' }, { m: 240, t: '4 ore' }, { m: 360, t: 'Tutto il giorno' }];
+  function rigaGiro(g, i, togli) {
+    return `<div class="giro-riga"><span class="num-giro">${i + 1}</span><div><b>${esc(etichetta(g))}</b><span>${iniziato(g) ? 'Da finire: mancano ' : ''}${oreTesto(restoOre(g))}, ${kmTesto(restoKm(g) * 1000)}</span></div>${togli ? `<button class="togli-giro" data-togli="${g.id}" aria-label="Togli questo giro">${ICO.x}</button>` : ''}</div>`;
   }
-  const nomeBreve = g => g.name.split(',')[0];
   function pannello() {
     const box = $('pannelloCorpo');
+    const comuneChip = `<button class="chip-comune" id="bComune">${ICO.mappa}<span>${esc(cfg.comune)}</span><span aria-hidden="true">▾</span></button>`;
     if (!cfg.url || !cfg.key) {
       box.innerHTML = `<h1>Benvenuta in Agente Moni</h1><p>Prima di iniziare servono le impostazioni. Le prepara Niccolò una volta sola.</p><button class="tasto primario" id="bImpost">${ICO.ingranaggio}Apri le impostazioni</button>`;
-      $('bImpost').onclick = () => apri('fImpost');
+      $('bImpost').onclick = () => { riempiCfg(); apri('fImpost'); };
       return;
     }
     if (!pianoOk()) {
-      box.innerHTML = `<h1>Prepariamo i percorsi</h1><p>Calcolo i giri a piedi di ${esc(cfg.comune)}. Serve una volta sola, ci vogliono 1-3 minuti.</p><button class="tasto primario" id="bCalcola">${ICO.mappa}Calcola i percorsi</button><div id="regPannello" class="aiuto"></div>`;
+      box.innerHTML = `${comuneChip}<h1>Prepariamo i giri</h1><p>Calcolo i giri a piedi di ${esc(cfg.comune)}. Serve una volta sola e ci vogliono 1-3 minuti.</p><button class="tasto primario" id="bCalcola">${ICO.mappa}Calcola i giri</button><div id="regPannello" class="aiuto"></div>`;
       $('bCalcola').onclick = () => calcolaPercorsi($('regPannello'), $('bCalcola'));
+      $('bComune').onclick = apriComuni;
       return;
     }
-    const g = oggi(), n = S.giorno + 1, loops = g.loops;
-    if (S.fase === 'inizio') {
-      const tutti = plan.plan.every((_, i) => S.fatti[i]);
-      if (tutti) { box.innerHTML = `${puntini()}<h1>Hai girato tutto ${esc(cfg.comune)}</h1><p>Tutti i ${plan.plan.length} giorni sono fatti. Puoi rivedere le case salvate o passare a un altro comune dal menu.</p><button class="tasto primario" id="bCase">${ICO.casa}Le mie case</button>`; $('bCase').onclick = apriCase; return; }
-      const giri = loops.length > 1 ? ` Sono ${loops.length} giri: tra un giro e l'altro sposti la macchina.` : '';
-      const auto = g.carStops && g.carStops.length ? ` Alla fine passi in macchina da ${g.carStops.length === 1 ? 'una casa isolata' : g.carStops.length + ' gruppi di case isolate'}.` : '';
-      const ripresa = loops.some((l, li) => progDi(S.giorno, li) > 0);
-      box.innerHTML = `${puntini()}<h1>Giorno ${n}: ${esc(nomeBreve(g))}</h1><p>${kmTesto(g.km * 1000)} a piedi, circa ${oreTesto(g.ore)}.${giri}${auto}</p><button class="tasto primario" id="bInizia">${ripresa ? 'Riprendi il giorno ' + n : 'Inizia il giorno ' + n}</button><button class="link" id="bAltro">Scegli un altro giorno</button>`;
-      $('bInizia').onclick = () => { const primo = loops.findIndex((l, li) => !giroFatto(S.giorno, li, l)); S.giro = primo < 0 ? 0 : primo; S.fase = 'parcheggio'; salvaStato(); aggiorna(true); };
-      $('bAltro').onclick = apriGiorni;
+    const tot = plan.giri.length, nFatti = plan.giri.filter(fatto).length;
+    if (S.fase === 'home') {
+      const perc = Math.round(100 * nFatti / tot);
+      let html = `${comuneChip}<div class="avanz-testo" style="margin-top:8px"><span><b>${nFatti}</b> ${nFatti === 1 ? 'giro fatto' : 'giri fatti'} su ${tot}</span><span>${perc}% del comune</span></div><div class="avanz"><div style="width:${perc}%"></div></div>`;
+      if (S.ultima && Date.now() - S.ultima.quando < 12 * 3600e3) html += `<p class="nota-ok">Ultima uscita: ${S.ultima.giri === 1 ? '1 giro fatto' : S.ultima.giri + ' giri fatti'}, ${S.ultima.case === 1 ? '1 casa salvata' : S.ultima.case + ' case salvate'}.</p>`;
+      if (nFatti === tot) { box.innerHTML = html + `<h1>Hai girato tutto ${esc(cfg.comune)}</h1><p>Puoi passare a un altro comune toccando il nome qui sopra.</p>`; $('bComune').onclick = apriComuni; return; }
+      if (S.proposta && S.proposta.length) {
+        const ore = oreDi(S.proposta);
+        html += `<h1>Ecco i giri di oggi</h1><p>${S.proposta.length === 1 ? '1 giro' : S.proposta.length + ' giri'}, circa ${oreTesto(ore)} a piedi, più gli spostamenti in macchina.${S.tempo && ore > S.tempo / 60 * 1.1 ? ' È un po\' più del tempo che hai: puoi togliere un giro.' : ''}</p>
+          <div class="lista-giri">${S.proposta.map((id, i) => giro(id) ? rigaGiro(giro(id), i, true) : '').join('')}</div>
+          <button class="tasto primario" id="bVia">Inizia</button>
+          <div class="riga"><button class="tasto piccolo" id="bCambia">${ICO.piu}Cambia giri</button><button class="tasto piccolo" id="bAnnulla">Indietro</button></div>`;
+        box.innerHTML = html;
+        box.querySelectorAll('[data-togli]').forEach(b => b.onclick = () => { S.proposta = S.proposta.filter(x => x !== b.dataset.togli); salvaStato(); aggiorna(true); });
+        $('bVia').onclick = iniziaSessione;
+        $('bCambia').onclick = apriGiri;
+        $('bAnnulla').onclick = () => { S.proposta = null; S.tempo = null; salvaStato(); aggiorna(true); };
+      } else {
+        const meta = plan.giri.find(iniziato);
+        if (meta) html += `<div class="riprendi"><div><b>Hai un giro a metà</b><span>${esc(etichetta(meta))}: mancano ${kmTesto(restoKm(meta) * 1000)}, circa ${oreTesto(restoOre(meta))}.</span></div><button class="tasto verde piccolo" id="bRiprendi">Riprendi</button></div>`;
+        const nAuto = (plan.auto || []).filter((_, i) => !S.autoViste[i]).length;
+        html += `<h1>Quanto tempo hai oggi?</h1><div class="tempi">${TEMPI.map(t => `<button class="tempo" data-min="${t.m}">${t.t}</button>`).join('')}</div>
+          <div class="riga"><button class="link" id="bScegli">Scegli tu i giri</button>${nAuto ? `<button class="link" id="bAuto">Case isolate (${nAuto})</button>` : ''}</div>`;
+        box.innerHTML = html;
+        box.querySelectorAll('.tempo').forEach(b => b.onclick = () => { S.tempo = +b.dataset.min; S.proposta = proponi(S.tempo); salvaStato(); aggiorna(true); });
+        if (meta) $('bRiprendi').onclick = () => { S.proposta = [meta.id]; S.tempo = null; iniziaSessione(); };
+        $('bScegli').onclick = () => { S.proposta = S.proposta || []; apriGiri(); };
+        if (nAuto) $('bAuto').onclick = () => { S.fase = 'macchina'; salvaStato(); aggiorna(true); };
+      }
+      $('bComune').onclick = apriComuni;
       return;
     }
     if (S.fase === 'parcheggio') {
-      const loop = giroAttivo(), vicino = posizione && dist([posizione.lat, posizione.lng], [loop.start.lat, loop.start.lon]) < 80;
-      const maps = `https://www.google.com/maps/dir/?api=1&destination=${loop.start.lat},${loop.start.lon}&travelmode=driving`;
-      box.innerHTML = `<h1>${vicino ? 'Sei arrivata' : 'Vai a parcheggiare'}</h1><p>Giro ${S.giro + 1} di ${loops.length}: ${kmTesto(loop.km * 1000)} a piedi, circa ${oreTesto(loop.ore)}.</p>
+      const g = giroAttivo(), vicino = posizione && dist([posizione.lat, posizione.lng], [g.start.lat, g.start.lon]) < 80;
+      const maps = `https://www.google.com/maps/dir/?api=1&destination=${g.start.lat},${g.start.lon}&travelmode=driving`;
+      const n = S.coda.indexOf(g.id);
+      box.innerHTML = `<h1>${vicino ? 'Sei arrivata' : 'Vai a parcheggiare'}</h1><p>${S.coda.length > 1 ? 'Giro ' + (n + 1) + ' di ' + S.coda.length + ': ' : ''}${esc(etichetta(g))}. ${kmTesto(restoKm(g) * 1000)} a piedi, circa ${oreTesto(restoOre(g))}.</p>
         ${vicino ? '' : `<a class="tasto ocra" href="${maps}" target="_blank" rel="noopener">${ICO.auto}Portami lì con Google Maps</a>`}
-        <button class="tasto ${vicino ? 'verde' : 'primario'}" id="bCammina">${vicino ? 'Inizia a camminare' : 'Sono arrivata, inizio'}</button>`;
+        <button class="tasto ${vicino ? 'verde' : 'primario'}" id="bCammina">${vicino ? 'Inizia a camminare' : 'Sono arrivata, inizio'}</button>
+        <div class="riga"><button class="link" id="bAltroGiro">Fai un altro giro</button><button class="link" id="bStop">Basta per oggi</button></div>`;
       $('bCammina').onclick = () => { S.fase = 'cammino'; fuori = 0; salvaStato(); segui = true; aggiorna(true); if (posizione) map.setView([posizione.lat, posizione.lng], 18); parla('Si parte. Segui la linea gialla.'); };
+      $('bAltroGiro').onclick = apriGiri;
+      $('bStop').onclick = bastaPerOggi;
       return;
     }
     if (S.fase === 'cammino') {
-      const loop = giroAttivo(), I = info(loop), p = progDi(S.giorno, S.giro), tot = I.cc[I.cc.length - 1];
-      const perc = Math.round(100 * I.cc[p] / tot), resto = I.tt[I.tt.length - 1] - I.tt[p];
-      box.innerHTML = `<div class="avanz-testo"><span>Giro <b>${S.giro + 1}</b> di ${loops.length}</span><span>Mancano <b>${kmTesto(tot - I.cc[p])}</b>, circa ${oreTesto(resto)}</span></div>
+      const g = giroAttivo(), I = info(g), p = progDi(g), totM = I.cc[I.cc.length - 1];
+      const perc = Math.round(100 * I.cc[p] / totM), n = S.coda.indexOf(g.id);
+      box.innerHTML = `<div class="avanz-testo"><span>${S.coda.length > 1 ? 'Giro <b>' + (n + 1) + '</b> di ' + S.coda.length : '<b>' + esc(g.frazione) + '</b>'}</span><span>Mancano <b>${kmTesto(totM - I.cc[p])}</b>, circa ${oreTesto(restoOre(g))}</span></div>
         <div class="avanz" role="progressbar" aria-valuenow="${perc}" aria-valuemin="0" aria-valuemax="100"><div style="width:${perc}%"></div></div>
-        <button class="tasto verde" id="bNuova">${ICO.piu}Nuova casa</button>`;
+        <button class="tasto verde" id="bNuova">${ICO.piu}Nuova casa</button>
+        <button class="link" id="bPausa">Mi fermo qui, riprendo un'altra volta</button>`;
       $('bNuova').onclick = apriNuovaCasa;
+      $('bPausa').onclick = () => { if (confirm('Ti fermi qui? Il giro resta a metà e lo riprendi quando vuoi.')) bastaPerOggi(); };
       return;
     }
     if (S.fase === 'macchina') {
-      box.innerHTML = `<h1>Ultimo passaggio in macchina</h1><p>${g.carStops.length === 1 ? 'C\'è una casa isolata' : 'Ci sono ' + g.carStops.length + ' gruppi di case isolate'}: guardale passando in macchina.</p>` +
-        g.carStops.map((s, i) => `<a class="tasto piccolo" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=driving">${ICO.auto}Portami alle case isolate ${g.carStops.length > 1 ? i + 1 : ''}</a>`).join('') +
-        `<button class="tasto primario" id="bFine">Ho finito il giorno ${n}</button>`;
-      $('bFine').onclick = finisciGiorno;
-      return;
-    }
-    if (S.fase === 'fine') {
-      const quante = [...case_.values()].filter(h => h.comune === cfg.comune && h.day === n).length;
-      const prossimo = plan.plan.findIndex((_, i) => !S.fatti[i]);
-      box.innerHTML = `${puntini()}<h1>Giorno ${n} finito</h1><p>${quante === 0 ? 'Oggi non hai salvato case.' : quante === 1 ? 'Oggi hai salvato 1 casa.' : 'Oggi hai salvato ' + quante + ' case.'}</p>
-        ${prossimo >= 0 ? `<button class="tasto primario" id="bProssimo">Prepara il giorno ${prossimo + 1}</button>` : ''}<button class="tasto" id="bCase">${ICO.casa}Le mie case</button>`;
-      if (prossimo >= 0) $('bProssimo').onclick = () => { S.giorno = prossimo; S.giro = 0; S.fase = 'inizio'; salvaStato(); aggiorna(true); };
-      $('bCase').onclick = apriCase;
+      const lista = (plan.auto || []).map((s, i) => ({ s, i })).filter(o => !S.autoViste[o.i]);
+      const da = posizione ? [posizione.lat, posizione.lng] : puntoDiPartenza();
+      lista.sort((a, b) => dist(da, [a.s.lat, a.s.lon]) - dist(da, [b.s.lat, b.s.lon]));
+      box.innerHTML = `<h1>Case isolate</h1><p>${lista.length ? 'Guardale passando in macchina. Segna quelle viste.' : 'Le hai viste tutte.'}</p><div class="lista-auto">` +
+        lista.slice(0, 30).map(o => `<div class="giro-riga"><span class="num-giro">${ICO.auto}</span><div><b>${esc(o.s.frazione || '')}</b><span>${dist(da, [o.s.lat, o.s.lon]) < 1000 ? Math.round(dist(da, [o.s.lat, o.s.lon]) / 10) * 10 + ' m' : kmTesto(dist(da, [o.s.lat, o.s.lon]))} da qui</span></div><a class="tasto piccolo" style="width:auto;margin:0" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${o.s.lat},${o.s.lon}&travelmode=driving">Portami</a><button class="togli-giro" data-vista="${o.i}" aria-label="Segna come vista">${ICO.ok}</button></div>`).join('') +
+        `</div><button class="tasto primario" id="bFineAuto">Ho finito</button>`;
+      box.querySelectorAll('[data-vista]').forEach(b => b.onclick = () => { S.autoViste[b.dataset.vista] = true; salvaStato(); aggiorna(false); });
+      $('bFineAuto').onclick = () => { S.fase = 'home'; salvaStato(); aggiorna(true); };
     }
   }
-  function finisciGiorno() { S.fatti[S.giorno] = true; S.fase = 'fine'; salvaStato(); aggiorna(true); }
 
-  function aggiorna(centra) { disegna(centra); guida(); pannello(); posizionaTondi(); }
-  function posizionaTondi() { requestAnimationFrame(() => { const h = $('pannello').offsetHeight; $('tondi').style.bottom = (h + 12) + 'px'; $('invio').style.bottom = (h + 12) + 'px'; $('toast').style.bottom = (h + 12) + 'px'; }); }
+  function iniziaSessione() {
+    S.coda = (S.proposta || []).filter(id => giro(id) && !fatto(giro(id)));
+    if (!S.coda.length) { toast('Scegli almeno un giro.', 'errore'); return; }
+    S.sessione = { inizio: Date.now(), minuti: S.tempo || null, giri: 0 };
+    S.attivo = S.coda[0]; S.fase = 'parcheggio'; S.proposta = null;
+    salvaStato(); aggiorna(true);
+  }
+  function bastaPerOggi() {
+    const da = S.sessione ? S.sessione.inizio : Date.now();
+    S.ultima = { quando: Date.now(), giri: S.sessione ? S.sessione.giri : 0, case: [...case_.values()].filter(h => h.comune === cfg.comune && h.ts >= da).length };
+    S.fase = 'home'; S.coda = []; S.sessione = null; S.proposta = null; S.tempo = null; S.attivo = null;
+    salvaStato(); aggiorna(true);
+  }
+
+  function aggiorna(centra) { pannello(); guida(); posizionaTondi(); disegna(centra); }
+  function posizionaTondi() { const h = $('pannello').offsetHeight; $('tondi').style.bottom = (h + 12) + 'px'; $('invio').style.bottom = (h + 12) + 'px'; $('toast').style.bottom = (h + 12) + 'px'; }
 
   // ---------- fine di un giro ----------
-  function festa(titolo, testo, bottone, azione) {
-    $('festaScheda').innerHTML = `${ICO.festa}<h2>${titolo}</h2><p>${testo}</p><button class="tasto primario" id="bFesta">${bottone}</button>`;
+  function festa(titolo, testo, bottoni) {
+    $('festaScheda').innerHTML = `${ICO.festa}<h2>${titolo}</h2><p>${testo}</p>` + bottoni.map((b, i) => `<button class="tasto ${i === 0 ? 'primario' : ''}" data-i="${i}">${b.t}</button>`).join('');
     $('festa').classList.add('aperto');
-    $('bFesta').onclick = () => { $('festa').classList.remove('aperto'); azione(); };
+    $('festaScheda').querySelectorAll('[data-i]').forEach(el => el.onclick = () => { $('festa').classList.remove('aperto'); bottoni[+el.dataset.i].f(); });
     parla(titolo + '. ' + testo);
   }
   function giroCompletato() {
-    const g = oggi(), resto = g.loops.findIndex((l, li) => li !== S.giro && !giroFatto(S.giorno, li, l));
-    if (resto >= 0) festa(`Giro ${S.giro + 1} fatto`, `Ora sposta la macchina per il giro ${resto + 1}.`, 'Avanti', () => { S.giro = resto; S.fase = 'parcheggio'; salvaStato(); aggiorna(true); });
-    else if (g.carStops && g.carStops.length) festa('Giri a piedi finiti', 'Manca solo un passaggio in macchina dalle case isolate.', 'Avanti', () => { S.fase = 'macchina'; salvaStato(); aggiorna(true); });
-    else festa(`Giorno ${S.giorno + 1} finito`, 'Hai fatto tutti i giri di oggi.', 'Avanti', finisciGiorno);
+    const g = giroAttivo();
+    S.fatti[g.id] = true; S.coda = S.coda.filter(id => id !== g.id && giro(id) && !fatto(giro(id)));
+    if (S.sessione) S.sessione.giri++;
+    salvaStato();
+    const usate = S.sessione ? (Date.now() - S.sessione.inizio) / 3600e3 : 0, budget = S.sessione && S.sessione.minuti ? S.sessione.minuti / 60 : null;
+    const finitoTempo = budget && usate >= budget * 0.95;
+    const vaiA = id => { S.attivo = id; S.fase = 'parcheggio'; if (!S.coda.includes(id)) S.coda.unshift(id); salvaStato(); aggiorna(true); };
+    if (S.coda.length) {
+      const n = giro(S.coda[0]);
+      const testo = `Prossimo: ${etichetta(n)}, circa ${oreTesto(restoOre(n))}.` + (finitoTempo ? ' Il tempo che avevi è finito.' : '');
+      const bot = [{ t: 'Vai al prossimo giro', f: () => vaiA(n.id) }, { t: 'Basta per oggi', f: bastaPerOggi }];
+      festa('Giro fatto', testo, finitoTempo ? bot.reverse() : bot);
+    } else {
+      S.proposta = []; const altro = proponi(60)[0]; S.proposta = null;
+      const n = altro && giro(altro);
+      if (n && !finitoTempo) festa('Giri di oggi finiti', `Se hai ancora tempo, il più vicino è ${etichetta(n)}: circa ${oreTesto(restoOre(n))}.`, [{ t: 'Basta per oggi', f: bastaPerOggi }, { t: 'Fai anche questo', f: () => vaiA(n.id) }]);
+      else festa(plan.giri.every(fatto) ? 'Comune finito' : 'Giri di oggi finiti', plan.giri.every(fatto) ? 'Hai girato tutto ' + cfg.comune + '.' : 'Ottimo lavoro.', [{ t: 'Fine', f: bastaPerOggi }]);
+    }
   }
 
   // ---------- avanzamento lungo il percorso ----------
   function avanza(pt) {
     const loop = giroAttivo(); if (!loop) return;
-    const c = loop.coords, k = chiave(S.giorno, S.giro), p = S.prog[k] || 0;
+    const c = loop.coords, k = loop.id, p = S.prog[k] || 0;
     let vicinoMin = Infinity; for (let i = p; i < Math.min(c.length, p + 40); i++) vicinoMin = Math.min(vicinoMin, dist(pt, c[i]));
     const eraFuori = fuori >= 3;
     if (vicinoMin > 45) fuori++; else if (vicinoMin < 25) fuori = 0;
@@ -371,9 +460,9 @@
     const primaVolta = !posizione;
     posizione = { lat, lng, acc, ts: p.timestamp || Date.now() };
     io.setLatLng([lat, lng]); cerchio.setLatLng([lat, lng]).setRadius(acc);
-    if (primaVolta) { lIo.addLayer(cerchio); lIo.addLayer(io); if (S.fase === 'cammino') map.setView([lat, lng], 18); }
+    if (primaVolta) { lIo.addLayer(cerchio); lIo.addLayer(io); if (S.fase === 'cammino') map.setView([lat, lng], 18); else if (S.fase === 'home') pannello(); }
     else if (segui && S.fase === 'cammino') map.panTo([lat, lng], { animate: true });
-    if (S.fase === 'parcheggio') { const v = dist([lat, lng], [giroAttivo().start.lat, giroAttivo().start.lon]) < 80; if (v !== suPosizione.vicino) { suPosizione.vicino = v; pannello(); posizionaTondi(); } }
+    if (S.fase === 'parcheggio' && giroAttivo()) { const v = dist([lat, lng], [giroAttivo().start.lat, giroAttivo().start.lon]) < 80; if (v !== suPosizione.vicino) { suPosizione.vicino = v; pannello(); posizionaTondi(); } }
     if (acc > 35) return;
     const pt = [lat, lng];
     if (!ultimoPunto || dist(ultimoPunto, pt) >= 8) {
@@ -392,7 +481,7 @@
   async function inviaTraccia() {
     if (!bufferTraccia.length || !cfg.url) return;
     const pezzo = bufferTraccia.slice(0, 300);
-    try { await api('saveTrack', { comune: cfg.comune, day: S.giorno + 1, points: pezzo }); bufferTraccia = bufferTraccia.slice(pezzo.length); LS.set('buffer_traccia', bufferTraccia); } catch (e) { }
+    try { await api('saveTrack', { comune: cfg.comune, day: giroAttivo() ? etichetta(giroAttivo()) : '', points: pezzo }); bufferTraccia = bufferTraccia.slice(pezzo.length); LS.set('buffer_traccia', bufferTraccia); } catch (e) { }
   }
   setInterval(inviaTraccia, 60000);
 
@@ -582,7 +671,7 @@
     const p = nc.pos || posizione, address = $('indirizzo').value.trim();
     if (!p && !address) { toast('Scrivi almeno l\'indirizzo.', 'errore'); return; }
     const h = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: Date.now(), comune: cfg.comune, day: S.giorno + 1, address,
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: Date.now(), comune: cfg.comune, day: giroAttivo() ? etichetta(giroAttivo()) : '', address,
       lat: p ? +p.lat.toFixed(6) : '', lng: p ? +p.lng.toFixed(6) : '', acc: p ? p.acc : null,
       stato: nc.stato, tipo: nc.tipo, note: $('note').value.trim(), fotoLocali: nc.foto.slice(), audioBlob: nc.audio
     };
@@ -618,68 +707,124 @@
   // ---------- menu ----------
   function apriMenu() {
     const c = $('menuCorpo'), voci = [];
-    if (pianoOk()) voci.push({ i: ICO.calendario, t: 'Scegli il giorno', s: 'Giorno ' + (S.giorno + 1) + ' di ' + plan.plan.length, f: () => { chiudi('fMenu'); apriGiorni(); } });
-    if (pianoOk() && (S.fase === 'cammino' || S.fase === 'parcheggio')) {
-      voci.push({ i: ICO.rifai, t: 'Ricomincia questo giro', s: 'Il giro torna tutto da fare', f: () => { if (!confirm('Ricominciare da capo il giro ' + (S.giro + 1) + '? Le case salvate restano.')) return; S.prog[chiave(S.giorno, S.giro)] = 0; S.fase = 'parcheggio'; salvaStato(); chiudi('fMenu'); aggiorna(true); } });
-      voci.push({ i: ICO.salta, t: 'Salta questo giro', s: 'Passa al giro successivo', f: () => { chiudi('fMenu'); const loop = giroAttivo(); S.prog[chiave(S.giorno, S.giro)] = loop.coords.length - 1; salvaStato(); aggiorna(false); giroCompletato(); } });
+    if (pianoOk()) voci.push({ i: ICO.calendario, t: 'Tutti i giri', s: plan.giri.filter(fatto).length + ' fatti su ' + plan.giri.length + ', scegli quelli da fare', f: () => { chiudi('fMenu'); S.proposta = S.proposta || (S.fase === 'home' ? [] : null); apriGiri(); } });
+    voci.push({ i: ICO.mappa, t: 'Cambia comune', s: cfg.comune, f: () => { chiudi('fMenu'); apriComuni(); } });
+    const g = giroAttivo();
+    if (g && (S.fase === 'cammino' || S.fase === 'parcheggio')) {
+      voci.push({ i: ICO.salta, t: 'Salta questo giro', s: 'Lo trovi ancora da fare la prossima volta', f: () => { chiudi('fMenu'); S.coda = S.coda.filter(id => id !== g.id); if (S.coda.length) { S.attivo = S.coda[0]; S.fase = 'parcheggio'; salvaStato(); aggiorna(true); } else bastaPerOggi(); } });
+      voci.push({ i: ICO.ok, t: 'Segna questo giro come fatto', s: 'Se lo hai già girato per conto tuo', f: () => { chiudi('fMenu'); if (confirm('Segno come fatto il giro ' + etichetta(g) + '?')) giroCompletato(); } });
+      voci.push({ i: ICO.rifai, t: 'Ricomincia questo giro', s: 'Il giro torna tutto da fare', f: () => { if (!confirm('Ricominciare da capo questo giro? Le case salvate restano.')) return; S.prog[g.id] = 0; S.fase = 'parcheggio'; salvaStato(); chiudi('fMenu'); aggiorna(true); } });
     }
+    if (pianoOk() && (plan.auto || []).length) voci.push({ i: ICO.auto, t: 'Case isolate in macchina', s: (plan.auto.length - Object.keys(S.autoViste).length) + ' da vedere', f: () => { chiudi('fMenu'); if (S.fase === 'cammino' && !confirm('Interrompo il giro a piedi? Resta a metà e lo riprendi dopo.')) return; S.fase = 'macchina'; salvaStato(); aggiorna(true); } });
     voci.push({ i: ICO.voce, t: 'Indicazioni a voce: ' + (S.voce ? 'sì' : 'no'), s: S.voce ? 'Tocca per spegnerle' : 'Il telefono ti dice dove girare', f: () => { S.voce = !S.voce; salvaStato(); if (S.voce) parla('Indicazioni a voce accese.'); apriMenu(); } });
     voci.push({ i: ICO.foglio, t: 'Apri il foglio delle case', s: 'Tutte le case in Google Fogli', f: () => { const u = LS.get('sheetUrl', ''); if (u) window.open(u, '_blank'); else toast('Prima vanno salvate le impostazioni.', 'errore'); } });
-    voci.push({ i: ICO.ingranaggio, t: 'Impostazioni', s: 'Collegamento, comune, calcolo percorsi', f: () => { chiudi('fMenu'); riempiCfg(); apri('fImpost'); } });
+    voci.push({ i: ICO.ingranaggio, t: 'Impostazioni', s: 'Collegamento, durata dei giri, ricalcolo', f: () => { chiudi('fMenu'); riempiCfg(); apri('fImpost'); } });
     c.innerHTML = '';
     voci.forEach(v => { const b = document.createElement('button'); b.className = 'voce-menu'; b.innerHTML = `${v.i}<span>${esc(v.t)}<small>${esc(v.s)}</small></span>`; b.onclick = v.f; c.appendChild(b); });
-    const ver = document.createElement('p'); ver.className = 'aiuto'; ver.textContent = 'Agente Moni, ' + cfg.comune; c.appendChild(ver);
     apri('fMenu');
   }
   $('tMenu').onclick = apriMenu;
 
-  function apriGiorni() {
-    const c = $('giorniCorpo'); c.innerHTML = '';
-    if (!pianoOk()) { c.innerHTML = '<p class="vuoto">Prima vanno calcolati i percorsi.</p>'; apri('fGiorni'); return; }
-    plan.plan.forEach((g, i) => {
-      const b = document.createElement('button'); b.className = 'giorno-scelta' + (i === S.giorno ? ' oggi' : '') + (S.fatti[i] ? ' fatto' : '');
-      b.innerHTML = `<b>Giorno ${i + 1}: ${esc(g.name)}</b><span>${kmTesto(g.km * 1000)} a piedi, circa ${oreTesto(g.ore)}. ${g.loops.length === 1 ? '1 giro' : g.loops.length + ' giri'}.</span>`;
-      b.onclick = () => { S.giorno = i; S.giro = 0; S.fase = 'inizio'; salvaStato(); chiudi('fGiorni'); aggiorna(true); };
+  // ---------- tutti i giri: scelta libera ----------
+  function apriGiri() {
+    const c = $('giriCorpo');
+    if (!pianoOk()) { c.innerHTML = '<p class="vuoto">Prima vanno calcolati i giri.</p>'; apri('fGiri'); return; }
+    const inSessione = S.fase !== 'home' && S.fase !== 'macchina';
+    const scelti = new Set(inSessione ? S.coda : (S.proposta || []));
+    const da = posizione ? [posizione.lat, posizione.lng] : puntoDiPartenza();
+    const disegnaGiri = () => {
+      const per = new Map(); plan.giri.forEach(g => { if (!per.has(g.frazione)) per.set(g.frazione, []); per.get(g.frazione).push(g); });
+      let html = `<p class="aiuto">Tocca i giri che vuoi fare. Quelli più vicini a te sono in alto in ogni zona.</p>`;
+      for (const [fraz, lista] of per) {
+        const f = lista.filter(fatto).length;
+        html += `<h3 class="gruppo">${esc(fraz)} <span>${f} su ${lista.length} fatti</span></h3>`;
+        lista.slice().sort((a, b) => (fatto(a) - fatto(b)) || (dist(da, [a.start.lat, a.start.lon]) - dist(da, [b.start.lat, b.start.lon]))).forEach(g => {
+          const stato = fatto(g) ? 'fatto' : iniziato(g) ? 'meta' : 'dafare';
+          html += `<button class="giro-scelta ${stato}" data-id="${g.id}" aria-pressed="${scelti.has(g.id)}"><span class="spunta" aria-hidden="true">${scelti.has(g.id) ? ICO.ok : ''}</span><span class="testi"><b>${esc(g.via || g.frazione)}</b><span>${stato === 'fatto' ? 'Fatto' : (stato === 'meta' ? 'A metà, mancano ' : '') + oreTesto(restoOre(g)) + ', ' + kmTesto(restoKm(g) * 1000)}</span></span><span class="distanza">${kmTesto(dist(da, [g.start.lat, g.start.lon]))}</span></button>`;
+        });
+      }
+      c.innerHTML = html;
+      c.querySelectorAll('.giro-scelta').forEach(b => b.onclick = () => {
+        const g = giro(b.dataset.id);
+        if (fatto(g)) { if (!confirm('Questo giro è già fatto. Vuoi rifarlo da capo?')) return; delete S.fatti[g.id]; S.prog[g.id] = 0; }
+        scelti.has(g.id) ? scelti.delete(g.id) : scelti.add(g.id); disegnaGiri(); piede();
+      });
+    };
+    const piede = () => {
+      const ore = [...scelti].reduce((a, id) => a + restoOre(giro(id)), 0);
+      $('giriPiede').innerHTML = `<button class="tasto primario" id="bUsaGiri" ${scelti.size ? '' : 'disabled'}>${scelti.size ? (scelti.size === 1 ? 'Usa 1 giro' : 'Usa ' + scelti.size + ' giri') + ', circa ' + oreTesto(ore) : 'Scegli almeno un giro'}</button>`;
+      $('bUsaGiri').onclick = () => {
+        // ordino i giri scelti per vicinanza, partendo da dove sono
+        let pos = da; const resto = [...scelti], ord = [];
+        while (resto.length) { resto.sort((a, b) => dist(pos, [giro(a).start.lat, giro(a).start.lon]) - dist(pos, [giro(b).start.lat, giro(b).start.lon])); const id = resto.shift(); ord.push(id); pos = [giro(id).start.lat, giro(id).start.lon]; }
+        chiudi('fGiri');
+        if (inSessione) {
+          const att = S.attivo;
+          S.coda = ord.includes(att) ? [att, ...ord.filter(x => x !== att)] : ord;
+          if (!S.coda.includes(att)) { S.attivo = S.coda[0]; S.fase = 'parcheggio'; }
+          salvaStato(); aggiorna(true);
+        } else { S.fase = 'home'; S.proposta = ord; salvaStato(); aggiorna(true); }
+      };
+    };
+    disegnaGiri(); piede(); apri('fGiri');
+  }
+
+  // ---------- comuni ----------
+  function apriComuni() {
+    const c = $('comuniCorpo'); c.innerHTML = '';
+    cfg.comuni.forEach(nome => {
+      const p = LS.get('plan_' + nome, null), st = LS.get('stato3_' + nome, {});
+      const n = p && p.v === 3 ? p.giri.length : 0, f = p && p.v === 3 ? p.giri.filter(g => (st.fatti || {})[g.id]).length : 0;
+      const b = document.createElement('button'); b.className = 'giorno-scelta' + (nome === cfg.comune ? ' oggi' : '');
+      b.innerHTML = `<b>${esc(nome)}</b><span>${n ? f + (f === 1 ? ' giro fatto' : ' giri fatti') + ' su ' + n : 'Giri ancora da calcolare'}</span>`;
+      b.onclick = () => { chiudi('fComuni'); cambiaComune(nome); };
       c.appendChild(b);
     });
-    apri('fGiorni');
+    const add = document.createElement('div');
+    add.innerHTML = `<label class="campo" for="nuovoComune">Aggiungi un comune</label><input class="campo" id="nuovoComune" placeholder="Nome esatto, per esempio Provaglio d'Iseo"><button class="tasto" id="bAggiungi">${ICO.piu}Aggiungi</button>`;
+    c.appendChild(add);
+    $('bAggiungi').onclick = () => { const nome = $('nuovoComune').value.trim(); if (!nome) return; if (!cfg.comuni.includes(nome)) cfg.comuni.push(nome); LS.set('cfg', cfg); chiudi('fComuni'); cambiaComune(nome); };
+    apri('fComuni');
+  }
+  async function cambiaComune(nome) {
+    if (S.fase === 'cammino' && !confirm('Interrompo il giro in corso? Resta a metà e lo riprendi dopo.')) return;
+    if (S.fase !== 'home') { S.fase = 'home'; S.coda = []; S.sessione = null; S.attivo = null; salvaStato(); }
+    cfg.comune = nome; LS.set('cfg', cfg);
+    caricaComune(); case_.clear(); marcatori.clear(); lCase.clearLayers(); contaCase();
+    await avvia();
+    if (pianoOk()) toast(nome, 'ok');
   }
 
   // ---------- impostazioni e calcolo ----------
-  function riempiCfg() { $('cfgUrl').value = cfg.url; $('cfgKey').value = cfg.key; $('cfgComune').value = cfg.comune; $('cfgGiorni').value = cfg.giorni; }
-  function leggiCfg() {
-    const comune = $('cfgComune').value.trim() || 'Cazzago San Martino';
-    Object.assign(cfg, { url: $('cfgUrl').value.trim(), key: $('cfgKey').value.trim(), giorni: Math.max(1, Math.min(15, +$('cfgGiorni').value || 5)) });
-    if (comune !== cfg.comune) { cfg.comune = comune; plan = LS.get('plan_' + comune, null); S = caricaStato(); case_.clear(); marcatori.clear(); lCase.clearLayers(); }
-    LS.set('cfg', cfg);
-  }
+  function riempiCfg() { $('cfgUrl').value = cfg.url; $('cfgKey').value = cfg.key; $('cfgDurata').value = cfg.durata; }
+  function leggiCfg() { Object.assign(cfg, { url: $('cfgUrl').value.trim(), key: $('cfgKey').value.trim(), durata: Math.max(30, Math.min(180, +$('cfgDurata').value || 75)) }); LS.set('cfg', cfg); }
   $('salvaCfg').onclick = async () => {
     leggiCfg();
     try { const r = await api('ping'); LS.set('sheetUrl', r.sheet); toast('Collegamento riuscito', 'ok'); avvia(); }
     catch (e) { toast('Collegamento non riuscito: ' + e.message, 'errore', 7000); }
   };
-  $('calcola').onclick = () => { leggiCfg(); calcolaPercorsi($('registro'), $('calcola')); };
+  $('calcola').onclick = () => { leggiCfg(); if (pianoOk() && !confirm('Ricalcolo i giri di ' + cfg.comune + '? L\'avanzamento dei giri riparte da zero (le case salvate restano).')) return; calcolaPercorsi($('registro'), $('calcola')); };
   async function calcolaPercorsi(reg, btn) {
     reg.style.display = 'block'; reg.textContent = ''; btn.disabled = true;
     const log = m => { reg.textContent += m + '\n'; reg.scrollTop = 1e9; };
     try {
-      const p = await Planner.plan(cfg.comune, cfg.giorni, log);
+      const p = await Planner.plan(cfg.comune, cfg.durata, log);
       plan = p; LS.set('plan_' + cfg.comune, plan);
-      S = Object.assign(caricaStato(), { giorno: 0, fase: 'inizio', giro: 0, prog: {}, fatti: {} }); salvaStato();
-      p.plan.forEach(g => log(`Giorno ${g.day}, ${g.name}: ${kmTesto(g.km * 1000)}, circa ${oreTesto(g.ore)}`));
-      try { await api('saveRoutes', { comune: cfg.comune, plan: p }); log('Percorsi salvati anche su Google Drive.'); } catch (e) { log('Percorsi salvati solo su questo telefono.'); }
-      chiudi('fImpost'); aggiorna(true); toast('Percorsi pronti', 'ok');
+      S = Object.assign(S, { prog: {}, fatti: {}, autoViste: {}, fase: 'home', attivo: null, coda: [], sessione: null, proposta: null }); salvaStato();
+      log(`${p.giri.length} giri, in tutto circa ${oreTesto(p.giri.reduce((a, g) => a + g.ore, 0))} a piedi.`);
+      try { await api('saveRoutes', { comune: cfg.comune, plan: p }); log('Giri salvati anche su Google Drive: li ritrovi su ogni telefono.'); } catch (e) { log('Giri salvati solo su questo dispositivo.'); }
+      chiudi('fImpost'); aggiorna(true); toast('Giri pronti', 'ok');
     } catch (e) { log('Errore: ' + e.message + '. Riprova tra qualche minuto.'); }
     finally { btn.disabled = false; }
   }
 
   // ---------- avvio ----------
   async function avvia() {
-    if (!pianoOk() && cfg.url) { try { const p = await api('getRoutes', { comune: cfg.comune }); if (p && p.v === 2) { plan = p; LS.set('plan_' + cfg.comune, plan); } } catch (e) { } }
+    if (!pianoOk() && cfg.url) { try { const p = await api('getRoutes', { comune: cfg.comune }); if (p && p.v === 3) { plan = p; LS.set('plan_' + cfg.comune, plan); } } catch (e) { } }
     aggiorna(true); caricaCase(); svuotaCoda(); inviaTraccia();
   }
   aggiorna(true);
   window.addEventListener('resize', posizionaTondi);
-  if (!cfg.url || !cfg.key) { riempiCfg(); } else avvia();
+  if (cfg.url && cfg.key) avvia();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
 })();
