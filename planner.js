@@ -1,4 +1,4 @@
-/* planner.js v4 — rete stradale del comune e percorsi a piedi calcolati dal vivo.
+/* planner.js v5 — rete stradale di un comune, di un quartiere o di una zona disegnata, e percorsi a piedi calcolati dal vivo.
    Dati: OpenStreetMap (Overpass), scaricati una volta per comune e salvati sul telefono.
    Ogni strada con case è divisa in pezzi da 25 m: un pezzo diventa "visto" quando ci si passa a piedi.
    Il percorso parte sempre dalla posizione attuale e copre le strade non ancora viste più vicine,
@@ -52,10 +52,100 @@
     return a ? a.tags.name : null;
   }
 
-  async function scaricaOSM(comune, log) {
+  // comune e (se c'è sulle mappe) quartiere in cui si trova un punto
+  async function trovaAree(lat, lon) {
+    const j = await overpass(`[out:json][timeout:25];is_in(${(+lat).toFixed(6)},${(+lon).toFixed(6)})->.a;(area.a["boundary"="administrative"]["admin_level"~"^(8|9|10)$"];area.a["place"~"^(suburb|quarter|neighbourhood)$"];);out tags;`, () => { }, 2);
+    const el = (j.elements || []).filter(e => e.tags && e.tags.name);
+    const com = el.find(e => e.tags.admin_level === '8');
+    const sub = el.filter(e => e.tags.admin_level !== '8').sort((a, b) => (+a.tags.admin_level || 11) - (+b.tags.admin_level || 11))[0];
+    return { comune: com ? com.tags.name : null, quartiere: sub ? sub.tags.name : null };
+  }
+  // nomi dei quartieri di una città (confini amministrativi o zone "place" disegnate sulle mappe)
+  async function quartieri(citta) {
+    const c = citta.replace(/"/g, '\\"');
+    const j = await overpass(`[out:json][timeout:60];area["boundary"="administrative"]["admin_level"="8"]["name"="${c}"]->.c;(rel(area.c)["boundary"="administrative"]["admin_level"~"^(9|10)$"];rel(area.c)["place"~"^(suburb|quarter|neighbourhood)$"];way(area.c)["place"~"^(suburb|quarter|neighbourhood)$"];);out tags;`, () => { }, 2);
+    return [...new Set((j.elements || []).map(e => e.tags && e.tags.name).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+  }
+  // confine di un quartiere come poligono [[lat, lon], ...]
+  async function confineQuartiere(citta, nome, log = () => { }) {
+    const c = citta.replace(/"/g, '\\"'), n = nome.replace(/"/g, '\\"');
+    log('Cerco il confine di ' + nome + '…');
+    const j = await overpass(`[out:json][timeout:90];area["boundary"="administrative"]["admin_level"="8"]["name"="${c}"]->.c;(rel(area.c)["name"="${n}"]["boundary"="administrative"];rel(area.c)["name"="${n}"]["place"];way(area.c)["name"="${n}"]["place"];);out geom;`, log);
+    let best = null;
+    for (const e of j.elements || []) {
+      let anelli = [];
+      if (e.type === 'way' && e.geometry) anelli = [e.geometry.map(p => [p.lat, p.lon])];
+      else if (e.type === 'relation') anelli = unisciAnelli((e.members || []).filter(m => m.type === 'way' && m.geometry && m.role !== 'inner').map(m => m.geometry.map(p => [p.lat, p.lon])));
+      for (const a of anelli) if (a.length >= 4 && (!best || areaKm2(a) > areaKm2(best))) best = a;
+    }
+    if (!best) throw new Error('Quartiere "' + nome + '" non trovato sulle mappe di ' + citta + ': disegnalo tu sulla mappa');
+    return semplifica(best, 8);
+  }
+  // unisce i pezzi di confine in anelli chiusi
+  function unisciAnelli(pezzi) {
+    const ug = (a, b) => Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7;
+    const resto = pezzi.filter(p => p.length > 1).map(p => p.slice()), out = [];
+    while (resto.length) {
+      let a = resto.shift(), cambiato = true;
+      while (cambiato && !(a.length > 3 && ug(a[0], a[a.length - 1]))) {
+        cambiato = false;
+        for (let i = 0; i < resto.length; i++) {
+          const s = resto[i], fine = a[a.length - 1];
+          if (ug(fine, s[0])) a = a.concat(s.slice(1));
+          else if (ug(fine, s[s.length - 1])) a = a.concat(s.slice().reverse().slice(1));
+          else if (ug(a[0], s[s.length - 1])) a = s.slice(0, -1).concat(a);
+          else if (ug(a[0], s[0])) a = s.slice().reverse().slice(0, -1).concat(a);
+          else continue;
+          resto.splice(i, 1); cambiato = true; break;
+        }
+      }
+      out.push(a);
+    }
+    return out;
+  }
+  // geometria dei poligoni (in gradi, con conversione locale in metri)
+  const kxDi = lat => 111320 * Math.cos(lat * Math.PI / 180);
+  function areaKm2(poly) {
+    const k = kxDi(poly[0][0]); let s = 0;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) s += (poly[j][1] * k) * (poly[i][0] * 110540) - (poly[i][1] * k) * (poly[j][0] * 110540);
+    return Math.abs(s / 2) / 1e6;
+  }
+  function dentroPoligono(poly, lat, lon) {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[0] > lat) !== (b[0] > lat) && lon < (b[1] - a[1]) * (lat - a[0]) / (b[0] - a[0]) + a[1]) c = !c; }
+    return c;
+  }
+  // Douglas-Peucker: meno punti, stessa forma (toll in metri)
+  function semplifica(poly, toll = 8) {
+    const k = kxDi(poly[0][0]), P = poly.map(p => [p[1] * k, p[0] * 110540]);
+    if (P.length < 5) return poly.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]);
+    const tieni = new Uint8Array(P.length); tieni[0] = tieni[P.length - 1] = 1;
+    const st = [[0, P.length - 1]];
+    while (st.length) {
+      const [i, j] = st.pop(); let md = 0, mi = -1;
+      for (let q = i + 1; q < j; q++) { const d = distSeg(P[q][0], P[q][1], P[i][0], P[i][1], P[j][0], P[j][1]); if (d > md) { md = d; mi = q; } }
+      if (md > toll && mi > 0) { tieni[mi] = 1; st.push([i, mi], [mi, j]); }
+    }
+    let out = poly.filter((_, i) => tieni[i]).map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]);
+    if (out.length > 400) return semplifica(poly, toll * 2);
+    return out;
+  }
+  const polyOSM = poly => poly.map(p => p[0].toFixed(5) + ' ' + p[1].toFixed(5)).join(' ');
+
+  // spec: { poly: [[lat, lon], ...] } per un quartiere o una zona disegnata; altrimenti il comune con quel nome
+  async function scaricaOSM(comune, log, spec) {
+    const extraQ = sel => `[out:json][timeout:180];${sel}(way${'%'}["building"];relation${'%'}["building"];node${'%'}["place"~"^(town|village|suburb|hamlet|neighbourhood)$"];nwr${'%'}["amenity"="parking"];node${'%'}["addr:housenumber"];);out bb;`;
+    if (spec && spec.poly && spec.poly.length >= 3) {
+      const f = `(poly:"${polyOSM(spec.poly)}")`;
+      log('Scarico le strade di ' + comune + '…');
+      const roads = await overpass(`[out:json][timeout:180];way${f}["highway"~"${ROAD_RE}"];out body;>;out skel qt;`, log);
+      if (!roads.elements.length) throw new Error('Nessuna strada dentro la zona: allargala un po\'');
+      log('Scarico case, frazioni e parcheggi…');
+      const extra = await overpass(extraQ('').split('%').join(f), log);
+      return { roads, extra };
+    }
     const nome = comune.replace(/"/g, '\\"');
     const area = `area["boundary"="administrative"]["admin_level"="8"]["name"="${nome}"]->.a;`;
-    const extraQ = sel => `[out:json][timeout:180];${sel}(way${'%'}["building"];relation${'%'}["building"];node${'%'}["place"~"^(town|village|suburb|hamlet|neighbourhood)$"];nwr${'%'}["amenity"="parking"];node${'%'}["addr:housenumber"];);out bb;`;
     log('Scarico le strade di ' + comune + '…');
     let roads = await overpass(`[out:json][timeout:180];${area}way(area.a)["highway"~"${ROAD_RE}"];out body;>;out skel qt;`, log);
     if (roads.elements.length) {
@@ -86,7 +176,7 @@
   }
 
   // ---------- costruzione della rete (da OSM a dati compatti da salvare) ----------
-  function costruisciRete(osm, comune) {
+  function costruisciRete(osm, comune, poly) {
     const idx = new Map(), LAT = [], LON = [];
     for (const el of osm.roads.elements) if (el.type === 'node') { idx.set(el.id, LAT.length); LAT.push(el.lat); LON.push(el.lon); }
     if (!LAT.length) throw new Error('Nessuna strada trovata');
@@ -141,7 +231,9 @@
         for (let q = 1; q <= s; q++) {
           let cur = b;
           if (q < s) { const f = q / s; cur = X.length; X.push(X[a] + (X[b] - X[a]) * f); Y.push(Y[a] + (Y[b] - Y[a]) * f); LAT.push(LAT[a] + (LAT[b] - LAT[a]) * f); LON.push(LON[a] + (LON[b] - LON[a]) * f); }
-          EU.push(prev); EV.push(cur); EL.push(len / s); ER.push(!conn && nearHouse((X[prev] + X[cur]) / 2, (Y[prev] + Y[cur]) / 2)); EN.push(ni);
+          // in una zona disegnata o in un quartiere, le strade appena fuori servono solo per passare
+          const dentro = !poly || dentroPoligono(poly, (LAT[prev] + LAT[cur]) / 2, (LON[prev] + LON[cur]) / 2);
+          EU.push(prev); EV.push(cur); EL.push(len / s); ER.push(!conn && dentro && nearHouse((X[prev] + X[cur]) / 2, (Y[prev] + Y[cur]) / 2)); EN.push(ni);
           prev = cur;
         }
       }
@@ -223,7 +315,7 @@
       eu.push(nuovo[EU[e]]); ev.push(nuovo[EV[e]]); el.push(Math.round(EL[e] * 10) / 10); er.push(ER[e] ? '1' : '0'); en.push(EN[e]);
     }
     if (!er.includes('1')) throw new Error('Le mappe sono arrivate incomplete (nessuna casa trovata). Riprova tra qualche minuto');
-    return { v: 4, id: Date.now().toString(36), comune, creata: new Date().toISOString(), lat, lon, eu, ev, el, er: er.join(''), en, nomi: NOMI, luoghi, parcheggi, isolate, civici };
+    return { v: 4, id: Date.now().toString(36), comune, creata: new Date().toISOString(), lat, lon, eu, ev, el, er: er.join(''), en, nomi: NOMI, luoghi, parcheggi, isolate, civici, poly: poly || null };
   }
 
   // ---------- rete pronta per i calcoli ----------
@@ -242,7 +334,12 @@
     // griglie: nodi (per agganciare una posizione) e pezzi con case (per segnarli visti)
     const CS = 60, gN = new Map(), gE = new Map(), key = (x, y) => Math.floor(x / CS) + ',' + Math.floor(y / CS);
     for (let i = 0; i < n; i++) { const k = key(X[i], Y[i]); let a = gN.get(k); if (!a) gN.set(k, a = []); a.push(i); }
-    for (let e = 0; e < m; e++) if (ER[e]) { const k = key((X[EU[e]] + X[EV[e]]) / 2, (Y[EU[e]] + Y[EV[e]]) / 2); let a = gE.get(k); if (!a) gE.set(k, a = []); a.push(e); }
+    const gA = new Map(); // tutti i pezzi (anche senza case): per il segno delle strade percorse
+    for (let e = 0; e < m; e++) {
+      const k = key((X[EU[e]] + X[EV[e]]) / 2, (Y[EU[e]] + Y[EV[e]]) / 2);
+      let b = gA.get(k); if (!b) gA.set(k, b = []); b.push(e);
+      if (ER[e]) { let a = gE.get(k); if (!a) gE.set(k, a = []); a.push(e); }
+    }
     let reqTot = 0; for (let e = 0; e < m; e++) if (ER[e]) reqTot += EL[e];
     // tratti: pezzi di strada tra due incroci (si sceglie sempre un tratto intero, così non si torna indietro a metà via)
     const tp = new Int32Array(m); for (let e = 0; e < m; e++) tp[e] = e;
@@ -253,7 +350,7 @@
     for (let i = 0; i < nt; i++) tStart[i + 1] += tStart[i];
     const tFill = tStart.slice(0, nt), tEdges = new Int32Array(m); for (let e = 0; e < m; e++) tEdges[tFill[T[e]]++] = e;
     const luoghi = (R.luoghi || []).map(p => ({ ...p, x: p.lon * kx, y: p.lat * ky }));
-    return { R, id: R.id, comune: R.comune, n, m, X, Y, kx, ky, EU, EV, EL, ER, EN, NOMI: R.nomi, start, adj, CS, gN, gE, reqTot, luoghi, T, nt, tStart, tEdges };
+    return { R, id: R.id, comune: R.comune, n, m, X, Y, kx, ky, EU, EV, EL, ER, EN, NOMI: R.nomi, start, adj, CS, gN, gE, gA, reqTot, luoghi, T, nt, tStart, tEdges };
   }
 
   const xy = (G, lat, lon) => [lon * G.kx, lat * G.ky];
@@ -292,12 +389,24 @@
     return nuovi;
   }
   // stessa cosa lungo il tratto tra due posizioni (riempie i buchi tra un segnale GPS e l'altro)
-  function copriTratto(G, visti, a, b, raggio = 20) {
-    const d = Math.hypot((b[1] - a[1]) * G.kx, (b[0] - a[0]) * G.ky), passi = Math.max(1, Math.ceil(d / 10));
+  function copriTratto(G, visti, a, b, raggio = 20, tutti = false) {
+    const d = Math.hypot((b[1] - a[1]) * G.kx, (b[0] - a[0]) * G.ky), passi = Math.max(1, Math.ceil(d / 10)), f0 = tutti ? segna : copri;
     let nuovi = 0;
-    for (let i = 1; i <= passi; i++) { const f = i / passi; nuovi += copri(G, visti, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, raggio); }
+    for (let i = 1; i <= passi; i++) { const f = i / passi; nuovi += f0(G, visti, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, raggio); }
     return nuovi;
   }
+  // segno delle strade percorse (tutte, anche senza case): giorno dell'ultimo passaggio. Restituisce quanti pezzi sono cambiati
+  function segna(G, arr, lat, lon, raggio = 15, giorno = oggi()) {
+    const [x, y] = xy(G, lat, lon), cx = Math.floor(x / G.CS), cy = Math.floor(y / G.CS);
+    let n = 0;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const e of (G.gA.get((cx + i) + ',' + (cy + j)) || [])) {
+      if (arr[e] >= giorno) continue;
+      const a = G.EU[e], b = G.EV[e];
+      if (distSeg(x, y, G.X[a], G.Y[a], G.X[b], G.Y[b]) <= raggio) { arr[e] = giorno; n++; }
+    }
+    return n;
+  }
+  const segnaTratto = (G, arr, a, b, raggio = 15) => copriTratto(G, arr, a, b, raggio, true);
 
   // ---------- Dijkstra (heap binario) ----------
   function dijkstra(G, sources, stopFn, maxDist = Infinity) {
@@ -528,8 +637,10 @@
   // quanto del comune è stato visto
   function avanzamento(G, visti, rivedi = 0) {
     const daVedere = daVedereFn(G, visti, rivedi); let fatto = 0;
-    for (let e = 0; e < G.m; e++) if (G.ER[e] && !daVedere(e)) fatto += G.EL[e];
-    return { kmFatti: fatto / 1000, kmTot: G.reqTot / 1000, perc: G.reqTot ? fatto / G.reqTot : 0 };
+    const o = oggi(); let recenti = 0, vecchi = 0;
+    for (let e = 0; e < G.m; e++) if (G.ER[e] && !daVedere(e)) { fatto += G.EL[e]; if (o - visti[e] <= 90) recenti += G.EL[e]; else if (o - visti[e] > 180) vecchi += G.EL[e]; }
+    // recenti: viste negli ultimi 3 mesi; vecchi: viste da più di 6 mesi (da ripassare presto)
+    return { kmFatti: fatto / 1000, kmTot: G.reqTot / 1000, perc: G.reqTot ? fatto / G.reqTot : 0, kmRecenti: recenti / 1000, kmVecchi: vecchi / 1000 };
   }
 
   // progressi della versione precedente (giri v3) riportati sulla nuova rete
@@ -555,12 +666,16 @@
     return n;
   }
 
-  async function scaricaRete(comune, log = () => { }) {
-    const osm = await scaricaOSM(comune, log);
+  async function scaricaRete(comune, log = () => { }, spec) {
+    const osm = await scaricaOSM(comune, log, spec);
     log('Preparo la rete stradale…');
     await new Promise(r => setTimeout(r, 0));
-    return costruisciRete(osm, comune);
+    return costruisciRete(osm, comune, spec && spec.poly && spec.poly.length >= 3 ? spec.poly : null);
+  }
+  // segno delle strade percorse da una rete vecchia a una nuova
+  function rimappaSegno(Gv, av, Gn, an) {
+    for (let e = 0; e < Gv.m; e++) if (av[e]) { const a = Gv.EU[e], b = Gv.EV[e]; segna(Gn, an, (Gv.R.lat[a] + Gv.R.lat[b]) / 2, (Gv.R.lon[a] + Gv.R.lon[b]) / 2, 8, av[e]); }
   }
 
-  global.Planner = { versione: 4, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
+  global.Planner = { versione: 5, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, trovaAree, quartieri, confineQuartiere, areaKm2, dentroPoligono, semplifica, segna, segnaTratto, rimappaSegno, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
 })(typeof window !== 'undefined' ? window : globalThis);

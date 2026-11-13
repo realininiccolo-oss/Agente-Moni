@@ -1,55 +1,54 @@
-# Agente Moni — versione 10
+# Zona — versione 11
 
-App per agenti immobiliari che girano i paesi a piedi. Funziona in qualsiasi comune italiano presente su OpenStreetMap, senza account e senza configurazione.
+L'app per il **farming immobiliare**: l'agente lavora sempre la stessa zona (alcuni comuni, oppure un quartiere in città), la gira a piedi, conosce le case e raccoglie notizie dalle persone del posto. Zona tiene tutto in ordine. Funziona in qualsiasi zona italiana presente su OpenStreetMap; i dati restano sul telefono.
 
-## Cosa fa
-- **Percorso dal vivo**: si sceglie quanto tempo si ha (30 min … 6 ore, o senza limite) e l'app calcola un giro a piedi, partendo da dove si è, sulle strade con case non ancora viste. Si torna alla macchina in orario.
-- **Si aggiorna da solo**: se si prende un'altra strada, il percorso viene ricalcolato dalla posizione attuale. Se si va piano lo accorcia, se si va veloce aggiunge strade.
-- **Strade viste**: ogni strada diventa verde quando ci si passa a piedi, anche fuori dal percorso. In macchina (sopra i 10 km/h) non si segna niente. Facoltativo: dopo 6 mesi o 1 anno le strade tornano "da rivedere".
-- **Da lontano**: propone le zone più vicine con case da vedere e porta al parcheggio con Google Maps.
-- **Schede casa**: indirizzo automatico (anche senza internet), foto, nota vocale, stato, tipo, telefono del cartello con tasto Chiama, note. Avvisa se in quel punto c'è già una casa salvata.
-- **Condivisione**: una casa si manda su WhatsApp con foto e posizione; l'elenco si esporta in Excel; il backup completo serve per cambiare telefono.
-- **Notifiche**: anche con il telefono in tasca avvisa quando mancano 10 minuti, quando il tempo è finito, quando il giro cambia (strada diversa, giro accorciato o allungato) e all'arrivo al parcheggio. Il permesso viene chiesto alla prima partenza; si spengono in Impostazioni → Avvisi.
-- **Promemoria per richiamare**: nella scheda casa si sceglie il giorno; quel giorno l'app lo ricorda (notifica e avviso in alto), e con "Metti il promemoria nel calendario" arriva l'avviso di Google Calendar anche ad app chiusa.
-- **Case isolate**: cascine e case lontane dal paese, da vedere in macchina; si segnano da sole passandoci vicino.
-- **Google (facoltativo)**: con lo script Google già fatto, le case vanno anche nel foglio condiviso e mappa e strade viste passano da un dispositivo all'altro.
+## Cosa c'è di nuovo nella 11 (prima "Agente Moni")
+- **Profilo dell'agente**: al primo avvio nome, agenzia, telefono, zona e obiettivi della settimana. "Buongiorno, Laura" in apertura; il telefono e l'agenzia finiscono in fondo alle schede condivise.
+- **La zona**: uno o più comuni, un **quartiere** di una città (dai confini di OpenStreetMap) oppure una **zona disegnata** a mano sulla mappa. "Tutta la zona" mostra tutte le aree insieme. Se si è in un'altra area della zona, l'app propone di aprirla.
+- **Il mio pannello**: cose da fare oggi (richiami, notizie da verificare, persone da risentire, promemoria propri), la settimana rispetto agli obiettivi, km a piedi delle ultime 8 settimane, calendario delle uscite (12 settimane), copertura di ogni area, case per stato, cartelli delle altre agenzie in zona.
+- **Taccuino**: notizie raccolte al bar, nei negozi, dai vicini (chi vende, eredita, trasloca…), con fonte, luogo, casa collegata, data di verifica e stato. **Persone della zona** con telefono e promemoria per ripassare a trovarle (ogni 15/30/60 giorni). Esportazione in Excel.
+- **Navigazione più chiara**: durante il giro la rete è sbiadita; il percorso da fare è blu con frecce, i prossimi 300 m gialli con frecce scure, il tratto già fatto grigio tratteggiato, la freccia blu sul pallino indica dove si sta andando. Legenda con il tasto "strati".
+- **Segno delle strade percorse**: ogni strada fatta a piedi (anche senza case) resta verde scuro per 3 mesi, poi verde chiaro.
+- **Volantini**: interruttore durante il giro; le strade volantinate si vedono sulla mappa (strato "Strade con volantini") e nel pannello.
+- **Uscite**: "Basta per oggi" salva l'uscita (durata, km, case, volantini) nel pannello.
+- **Più agenti sullo stesso telefono** e **PIN** facoltativo (Profilo).
+- **Agenzia sul cartello** nella scheda casa.
 
-## Aggiornare il telefono di mamma (dalla versione 8 o 9)
-Tempo: 5 minuti. Lo script Google **non** va toccato.
+## Aggiornare il telefono (da Agente Moni 8, 9 o 10)
+Niente da fare: l'app si aggiorna da sola dal collegamento di GitHub Pages. Aprila, chiudila del tutto e riaprila. Le case, le mappe e le strade viste restano; le strade viste diventano subito il "segno" dei 3 mesi. Al primo avvio compare il benvenuto con la zona già pronta: basta scrivere il nome e premere Avanti.
 
-1. Su GitHub, nel repository: **Add file → Upload files**, trascina tutti i file dello zip (index.html, app.js, planner.js, sw.js, manifest.webmanifest, icon-192.png, icon-512.png, ISTRUZIONI.md) e premi **Commit changes**. Vanno caricati tutti insieme.
-2. Dopo 2 minuti, sul telefono apri l'app, chiudila del tutto e riaprila.
-3. Al primo avvio l'app scarica la mappa del comune (1-3 minuti, una volta sola per comune). Le strade dei giri già fatti con la versione 8 vengono segnate come viste e compare la spiegazione "Come si usa".
-4. Se i server delle mappe sono occupati, apri l'app dal computer con lo stesso collegamento Google e scegli il comune: la mappa finisce su Drive e il telefono la prende da lì.
+Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e l'icona nuovi bisogna toglierlo e rimetterlo (Chrome ⋮ → Aggiungi a schermata Home).
 
-## Installarla a un collega (senza Google)
+## Installarla a un collega
 1. Mandagli il link dell'app (quello di GitHub Pages).
 2. Lo apre con **Chrome** su Android, menu ⋮ → **Aggiungi a schermata Home**.
-3. Tocca **Usa il comune dove sono** (oppure scrive il nome) e aspetta che la mappa sia pronta.
+3. Segue il benvenuto: nome, zona (comune, quartiere o disegnata), obiettivi.
 4. Consente posizione, fotocamera e microfono quando li chiede.
-
-I suoi dati restano sul suo telefono. Per non perderli conviene fare ogni tanto **Menu → Impostazioni → Salva backup**.
 
 ## Colori sulla mappa
 - **blu**: strade con case da vedere
-- **verde**: già viste
-- **giallo con frecce**: i prossimi 300 m del percorso
-- **blu a puntini**: solo passaggio (già visto o senza case)
-- **P**: dove è la macchina
+- **verde scuro**: percorse a piedi negli ultimi 3 mesi
+- **verde chiaro**: viste più di 3 mesi fa
+- **giallo con frecce**: i prossimi 300 m del giro; **blu con frecce**: il resto del giro
+- **grigio tratteggiato**: il pezzo di giro già fatto oggi
+- **arancione a puntini**: volantini (se lo strato è acceso)
+- **fumetto giallo**: notizia del taccuino; **P**: la macchina
 
 ## Problemi comuni
 | Problema | Soluzione |
 |---|---|
 | "Mappa non scaricata" | server delle mappe occupati: riprova tra qualche minuto, oppure scaricala dal computer (con Google collegato) |
-| "Comune non trovato" | scrivi il nome ufficiale completo (per esempio "Paderno Franciacorta", non "Paderno") |
-| Il GPS non si muove | Android: Posizione attiva e precisione elevata; permesso posizione a Chrome |
-| Le strade non diventano verdi | si segnano solo a piedi e con un buon segnale GPS (sotto i 30 m di errore) |
-| Non arrivano le notifiche | Chrome ⋮ → Impostazioni → Impostazioni sito → Notifiche: consenti; poi Impostazioni dell'app → Avvisi |
-| Il microfono non funziona | Chrome ⋮ → Impostazioni → Impostazioni sito → Microfono: consenti |
+| "Comune non trovato" | scrivi il nome ufficiale completo (per esempio "Paderno Franciacorta") |
+| Quartiere non trovato | non tutte le città hanno i quartieri sulle mappe: disegna la zona |
+| Le strade non diventano verdi | si segnano solo a piedi, durante un giro, con un buon segnale GPS |
+| PIN dimenticato | senza backup i dati di quel profilo non si recuperano: fai ogni tanto Impostazioni → Salva backup |
+| Non arrivano le notifiche | Chrome ⋮ → Impostazioni → Impostazioni sito → Notifiche: consenti |
 
 ## Note tecniche
-- File: `index.html` (interfaccia), `app.js` (app), `planner.js` (mappe, strade viste, calcolo dei percorsi), `sw.js` (funzionamento con poca rete).
-- A ogni modifica alzare `?v=N` in index.html e `agente-moni-vN` in sw.js, e caricare sempre tutti i file insieme.
-- Dati sul telefono (IndexedDB `agente-moni`): `reti` (mappa del comune), `visti` (giorno in cui ogni pezzo di strada è stato visto), `case` (case con foto e audio).
-- Su Drive (solo con Google): `percorsi_<comune> (rete v4).json` e `percorsi_<comune> (copertura).json`, salvati con le azioni già esistenti dello script.
+- File: `index.html` (interfaccia), `app.js` (app), `planner.js` (mappe, strade, percorsi, quartieri e zone disegnate), `sw.js`.
+- A ogni modifica alzare `?v=N` in index.html e `zona-vN` in sw.js, e caricare tutti i file insieme.
+- Profili in `localStorage.zona_profili`. Il primo profilo usa i dati di prima (IndexedDB `agente-moni`, ora versione 3); gli altri `zona-<id>` e chiavi con prefisso `<id>_`.
+- Archivio: `reti`, `visti` (`v` strade con case viste, `p` tutte le strade percorse, `f` volantini: giorno dell'ultimo passaggio), `case`, `note`, `persone`, `agenda`, `uscite`.
+- Il PIN è salvato come impronta SHA-256: tiene lontani i curiosi, non è una cifratura dei dati.
+- Script Google invariato: taccuino, persone e uscite non vanno nel foglio; stanno nel backup.
 - Mappe © OpenStreetMap (licenza ODbL): l'attribuzione resta visibile sulla mappa.

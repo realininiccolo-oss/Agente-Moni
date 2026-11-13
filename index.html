@@ -4,8 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#17262b">
-<meta name="description" content="Giri a piedi guidati per agenti immobiliari: percorso dal vivo, strade già viste, schede delle case con foto e note vocali.">
-<title>Agente Moni</title>
+<meta name="description" content="Zona: l'app per il farming immobiliare. La tua zona sulla mappa, giri a piedi guidati, case con foto e note vocali, taccuino delle notizie e pannello dell'attività.">
+<title>Zona</title>
+<meta name="apple-mobile-web-app-title" content="Zona">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -273,6 +274,79 @@
   .sceglimappa.visibile { display: flex; gap: 10px; align-items: center; } .sceglimappa span { flex: 1; }
   .sceglimappa button { border: 0; background: rgba(23,38,43,.12); border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 16px; }
   #fScheda { z-index: 950; } #fCasa { z-index: 960; }
+
+  /* ---------- v11: Zona ---------- */
+  .ciao { margin: 2px 0 6px !important; font-size: 17px; font-weight: 700; color: var(--ardesia) !important; }
+  .scorciatoie { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 2px; }
+  .scorciatoie button { border: 0; background: var(--nebbia); border-radius: 14px; min-height: 50px; padding: 6px 4px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 15px; font-weight: 700; line-height: 1.1; }
+  .scorciatoie svg { width: 22px; height: 22px; flex: none; }
+  .tondi.in-alto { top: calc(env(safe-area-inset-top) + 10px); flex-direction: row; }
+  .tondi.in-alto .tondo { width: 52px; height: 52px; }
+  .io-box { width: 60px; height: 60px; position: relative; display: grid; place-items: center; }
+  .io-box .io { position: relative; z-index: 1; }
+  .io-dir { position: absolute; inset: 0; width: 60px; height: 60px; opacity: 0; transition: transform .4s ease, opacity .3s; }
+  .arrivo-giro { background: var(--ardesia); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; padding: 3px 0; text-align: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  .etichetta-area { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; background: rgba(255,255,255,.94); border: 2px solid var(--ardesia); color: var(--ardesia); font-weight: 700; font-size: 15px; padding: 5px 10px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+  .pin-nota { width: 30px; height: 30px; border-radius: 10px 10px 10px 2px; background: var(--ocra); color: var(--ardesia); display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,.35); }
+  .pin-nota svg { width: 18px; height: 18px; }
+  .pin-nota.chiusa { background: #fff; color: var(--ardesia-2); }
+  #strati { position: fixed; z-index: 640; right: 78px; width: min(300px, calc(100% - 96px)); background: var(--bianco); border-radius: 18px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(23,38,43,.3); display: none; }
+  #strati.aperto { display: block; }
+  .legenda div { display: flex; align-items: center; gap: 10px; font-size: 15px; padding: 3px 0; }
+  .legenda i { width: 28px; height: 7px; border-radius: 4px; flex: none; }
+  .legenda i.tratteggio { height: 0; border-top: 4px dashed; border-radius: 0; }
+  #strati .interruttore { margin-top: 8px; font-size: 16px; }
+  .sceglimappa#disegna { flex-wrap: wrap; }
+  .sceglimappa#disegna span { flex-basis: 100%; }
+  .sceglimappa#disegna button:disabled { opacity: .45; }
+  .sceglimappa#disegna #disegnaFatto { background: var(--ardesia); color: #fff; margin-left: auto; }
+  /* pannello dell'agente */
+  .profilo-testa { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .profilo-testa > div:nth-child(2) { flex: 1; min-width: 0; } .profilo-testa b { display: block; font-size: 21px; } .profilo-testa span { font-size: 15px; color: var(--ardesia-2); }
+  .avatar { width: 54px; height: 54px; border-radius: 50%; background: var(--vigna); color: #fff; font-weight: 700; font-size: 21px; display: grid; place-items: center; flex: none; }
+  .tondo.piccolo { width: 48px; height: 48px; box-shadow: none; background: var(--nebbia); }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tile { background: var(--nebbia); border-radius: 14px; padding: 10px 12px; }
+  .tile b { display: block; font-size: 24px; line-height: 1.1; } .tile span { font-size: 15px; color: var(--ardesia-2); } .tile small { display: block; font-size: 13px; color: var(--ardesia-2); margin-top: 2px; }
+  .mini-barra { height: 7px; border-radius: 4px; background: #fff; overflow: hidden; margin-top: 8px; } .mini-barra > div { height: 100%; background: var(--ocra); border-radius: 4px; } .mini-barra.fatto > div { background: var(--vigna); }
+  .grafico { width: 100%; height: auto; display: block; font-family: var(--font); }
+  .grafico .barra, .grafico .cella-cal { cursor: pointer; }
+  .agenda-riga { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--linea); }
+  .agenda-ico { width: 46px; height: 46px; border-radius: 12px; border: 0; background: var(--nebbia); display: grid; place-items: center; flex: none; }
+  .agenda-ico svg { width: 24px; height: 24px; }
+  .spunta-vuota { width: 24px; height: 24px; border-radius: 7px; border: 2.5px solid var(--ardesia-2); display: block; }
+  .agenda-testo { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 10px 0; }
+  .agenda-testo b { display: block; font-size: 17px; line-height: 1.25; } .agenda-testo span { font-size: 14px; color: var(--ardesia-2); }
+  .agenda-riga.ritardo .agenda-testo span { color: var(--cartello); font-weight: 700; }
+  .piega summary { font-weight: 700; padding: 12px 0; cursor: pointer; color: var(--lago-scuro); }
+  .aggiungi-compito { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
+  .aggiungi-compito .campo:first-child { flex: 2; } .aggiungi-compito input[type=date] { flex: 1.1; min-width: 0; padding: 8px; font-size: 15px; }
+  .aggiungi-compito .tasto { width: 52px; flex: none; margin: 0; padding: 0; }
+  .uscita { padding: 8px 0; border-bottom: 1px solid var(--linea); } .uscita b { display: block; font-size: 16px; text-transform: capitalize; } .uscita span { font-size: 14px; color: var(--ardesia-2); }
+  .area-riga { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 10px 0; border-bottom: 1px solid var(--linea); }
+  .area-nome { display: flex; justify-content: space-between; } .area-nome b { font-size: 17px; } .area-nome span { font-weight: 700; }
+  .area-sotto { font-size: 14px; color: var(--ardesia-2); }
+  .scelta.conteggio { min-height: 44px; font-size: 15px; } .scelta.conteggio b { margin-left: 4px; }
+  /* taccuino */
+  .schede { display: flex; gap: 8px; padding: 10px 18px 0; } .schede .scelta { flex: 1; justify-content: center; }
+  .cerca { padding: 8px 18px 0; }
+  .nota-riga { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 12px 0; border-bottom: 1px solid var(--linea); }
+  .nota-riga b { display: block; font-size: 17px; line-height: 1.3; margin: 2px 0; } .nota-riga > span { display: block; font-size: 14px; color: var(--ardesia-2); }
+  .nota-riga .nota-tipo { display: inline-block; font-size: 13px; font-weight: 700; color: var(--ocra-scuro); background: var(--ocra-chiaro); padding: 2px 8px; border-radius: 999px; }
+  .nota-riga .nota-stato { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 700; color: var(--vigna); background: var(--vigna-chiaro); padding: 2px 8px; border-radius: 999px; }
+  .nota-riga .nota-stato.attesa { color: var(--lago-scuro); background: var(--lago-chiaro); }
+  .interruttore[hidden], .tasto[hidden] { display: none; }
+  /* benvenuto e blocco */
+  .passi { display: flex; gap: 6px; justify-content: center; margin: 14px 0 6px; } .passi span { width: 34px; height: 6px; border-radius: 3px; background: var(--linea); } .passi span.ora { background: var(--ardesia); } .passi span.fatto { background: var(--vigna); }
+  .benv-titolo { font-size: 28px; margin: 10px 0 4px; }
+  .logo-zona svg { width: 64px; height: 64px; display: block; } .logo-zona.grande { margin-top: 12px; } .logo-zona.grande svg { width: 76px; height: 76px; }
+  #blocco { position: fixed; inset: 0; z-index: 3000; background: var(--nebbia); display: none; align-items: center; justify-content: center; padding: 24px; }
+  #blocco.aperto { display: flex; }
+  .blocco-scheda { background: var(--bianco); border-radius: 24px; padding: 24px 20px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 6px 30px rgba(23,38,43,.15); }
+  .blocco-scheda .logo-zona svg { margin: 0 auto; }
+  .blocco-scheda h2 { margin: 12px 0 6px; font-size: 26px; }
+  input.pin { text-align: center; font-size: 30px; letter-spacing: 10px; }
+  #fPannello { z-index: 905; } #fTaccuino { z-index: 910; } #fComuni { z-index: 915; } #fPersona { z-index: 930; } #fNota { z-index: 940; } #fProfilo { z-index: 945; } #fBenvenuto { z-index: 970; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -281,11 +355,14 @@
 
 <div id="guida" role="status" aria-live="polite"></div>
 <div class="sceglimappa" id="scegliMappa"><span>Tocca la mappa dove vuoi partire</span><button id="annullaScelta">Annulla</button></div>
+<div class="sceglimappa" id="disegna"><span id="disegnaTesto">Tocca il confine della zona</span><button id="disegnaTogli">Togli l'ultimo</button><button id="disegnaAnnulla">Annulla</button><button id="disegnaFatto">Fatto</button></div>
+<div id="strati" role="dialog" aria-label="Legenda e strati della mappa"></div>
 <div id="invio"></div>
 
 <div class="tondi" id="tondi">
   <button class="tondo" id="tCase" aria-label="Le mie case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span class="num" id="numCase" hidden>0</span></button>
   <button class="tondo" id="tCentra" aria-label="Centra sulla mia posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+  <button class="tondo" id="tStrati" aria-label="Legenda e strati della mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5z"/><path d="M2 13l10 5 10-5"/></svg></button>
   <button class="tondo" id="tMenu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 </div>
 
@@ -320,6 +397,10 @@
     <div class="sezione">
       <h3>Telefono sul cartello</h3>
       <div class="tel"><input class="campo" type="tel" id="telefono" inputmode="tel" placeholder="Facoltativo" autocomplete="off"></div>
+    </div>
+    <div class="sezione">
+      <h3>Agenzia sul cartello</h3>
+      <input class="campo" id="agenzia" list="listaAgenzie" placeholder="Facoltativo: chi la vende, o Privato" autocomplete="off"><datalist id="listaAgenzie"></datalist>
     </div>
     <div class="sezione">
       <h3>Da richiamare il</h3>
@@ -363,6 +444,37 @@
   <div class="foglio-corpo intro" id="aiutoCorpo"></div>
 </div>
 
+<div class="foglio" id="fPannello" role="dialog" aria-labelledby="tfPannello">
+  <div class="foglio-testa"><h2 id="tfPannello">Il mio pannello</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="pannelloAgente"></div>
+</div>
+<div class="foglio" id="fTaccuino" role="dialog" aria-labelledby="tfTaccuino">
+  <div class="foglio-testa"><h2 id="tfTaccuino">Taccuino</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="schede"><button class="scelta senza-icona" id="taccTabNote" aria-pressed="true">Notizie</button><button class="scelta senza-icona" id="taccTabPersone" aria-pressed="false">Persone</button></div>
+  <div class="cerca"><input class="campo" id="taccCerca" type="search" placeholder="Cerca: nome, via, parola…" autocomplete="off"></div>
+  <div class="foglio-corpo" id="taccCorpo"></div>
+  <div class="foglio-piede"><button class="tasto verde" id="taccNuovo">Nuova notizia</button><button class="link" id="taccEsporta" style="width:100%">Esporta le notizie (Excel)</button></div>
+</div>
+<div class="foglio" id="fNota" role="dialog" aria-labelledby="tfNota">
+  <div class="foglio-testa"><h2 id="tfNota">Nuova notizia</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="notaCorpo"></div>
+  <div class="foglio-piede"><button class="tasto verde" id="salvaNota"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>Salva nel taccuino</button></div>
+</div>
+<div class="foglio" id="fPersona" role="dialog" aria-labelledby="tfPersona">
+  <div class="foglio-testa"><h2 id="tfPersona">Persona</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="personaCorpo"></div>
+  <div class="foglio-piede"><button class="tasto verde" id="salvaPersona">Salva</button></div>
+</div>
+<div class="foglio" id="fProfilo" role="dialog" aria-labelledby="tfProfilo">
+  <div class="foglio-testa"><h2 id="tfProfilo">Profilo</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="profiloCorpo"></div>
+</div>
+<div class="foglio" id="fBenvenuto" role="dialog" aria-label="Benvenuto">
+  <div class="foglio-corpo" id="benvCorpo" style="padding-top:calc(env(safe-area-inset-top) + 8px)"></div>
+  <div class="foglio-piede"><div class="riga"><button class="tasto" id="benvIndietro" style="margin:0;flex:.6" hidden>Indietro</button><button class="tasto primario" id="benvAvanti" style="margin:0">Avanti</button></div></div>
+</div>
+<div id="blocco" role="dialog" aria-label="Accesso"></div>
+
 <input type="file" id="inputBackup" accept=".json,application/json" hidden>
 <div id="festa" role="dialog" aria-live="assertive"><div class="scheda" id="festaScheda"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -378,7 +490,7 @@
   });
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="planner.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="planner.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

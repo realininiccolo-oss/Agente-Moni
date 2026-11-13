@@ -1,7 +1,7 @@
 {
-  "name": "Agente Moni",
-  "short_name": "Agente Moni",
-  "description": "Giri a piedi guidati dal vivo e schede delle case per agenti immobiliari",
+  "name": "Zona – farming immobiliare",
+  "short_name": "Zona",
+  "description": "La tua zona sulla mappa: giri a piedi guidati, case, notizie raccolte e pannello dell'attività per agenti immobiliari",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

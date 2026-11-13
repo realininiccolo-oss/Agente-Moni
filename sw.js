@@ -1,6 +1,6 @@
 // Service worker: rende l'app installabile e utilizzabile anche con poca rete.
 // File dell'app e Leaflet: prima la rete (versione più recente), la copia salvata solo senza rete.
-const CACHE = 'agente-moni-v10';
+const CACHE = 'zona-v11';
 const LEAFLET = 'https://unpkg.com/leaflet@1.9.4/dist/';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

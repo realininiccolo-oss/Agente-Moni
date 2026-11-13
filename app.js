@@ -1,15 +1,22 @@
-/* Agente Moni v9 — giri a piedi guidati dal vivo e schede delle case.
-   Funziona da solo sul telefono: mappe del comune, strade viste, case con foto e note vocali restano sul telefono.
-   Il collegamento a Google (foglio e cartella Drive) è facoltativo. */
+/* Zona v11 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
+   case con foto e note vocali, taccuino delle notizie raccolte in zona, pannello dell'attività.
+   Tutto resta sul telefono, un profilo per ogni agente. Il collegamento a Google (foglio e cartella Drive) è facoltativo. */
 (() => {
   'use strict';
-  const VERSIONE = 10;
+  const VERSIONE = 11;
   const $ = id => document.getElementById(id);
+  // profili: ogni agente ha i suoi dati. Il primo profilo usa i dati delle versioni precedenti (nessun prefisso).
+  const PROFILI = (() => { try { const p = JSON.parse(localStorage.getItem('zona_profili')); if (p && p.lista && p.lista.length) return p; } catch (e) { } return { attivo: 'p0', lista: [{ id: 'p0', nome: '' }] }; })();
+  if (!PROFILI.lista.some(p => p.id === PROFILI.attivo)) PROFILI.attivo = PROFILI.lista[0].id;
+  const PID = PROFILI.attivo, PFX = PID === 'p0' ? '' : PID + '_';
+  const salvaProfili = () => { try { localStorage.setItem('zona_profili', JSON.stringify(PROFILI)); } catch (e) { } };
   const LS = {
-    get: (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
+    get: (k, d) => { try { const v = localStorage.getItem(PFX + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set: (k, v) => { try { localStorage.setItem(PFX + k, JSON.stringify(v)); } catch (e) { } },
+    del: k => { try { localStorage.removeItem(PFX + k); } catch (e) { } }
   };
-  const cfg = Object.assign({ url: '', key: '', comune: '', comuni: [], rivedi: 0, minuti: 60, tornaAuto: true }, LS.get('cfg', {}));
+  const cfg = Object.assign({ url: '', key: '', comune: '', comuni: [], rivedi: 0, minuti: 60, tornaAuto: true, aree: {}, zonaNome: '', profilo: null }, LS.get('cfg', {}));
+  if (!cfg.aree || typeof cfg.aree !== 'object') cfg.aree = {};
   if (cfg.comune && !cfg.comuni.includes(cfg.comune)) cfg.comuni.push(cfg.comune);
   const salvaCfg = () => LS.set('cfg', cfg);
   if (cfg.voce == null) { cfg.voce = LS.get('voce', false); salvaCfg(); }
@@ -42,8 +49,14 @@
     posizione: svg('<path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>'),
     aiuto: svg('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17v.5"/>'),
     salva: svg('<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/>'),
+    grafico: svg('<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>'),
+    nota: svg('<path d="M5 4h14v12H9l-4 4z"/><path d="M9 9h6M9 12h4"/>'),
+    lista: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>'),
+    persona: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
+    strati: svg('<path d="M12 3 2 8l10 5 10-5z"/><path d="M2 13l10 5 10-5"/>'),
     festa: '<svg class="grande" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="#2e7d4f"/><path d="M14 25l7 7 14-15" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
+  const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#17262b"/><path d="M14 46 22 18l14 6 14-8-6 30-14-4z" fill="#2e7d4f" opacity=".9"/><path d="M14 46 22 18l14 6 14-8-6 30-14-4z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round" stroke-dasharray="5 4"/><circle cx="33" cy="33" r="7" fill="#f2a900" stroke="#fff" stroke-width="3"/></svg>';
   const FRECCIA = {
     dritto: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 42V10M12 21 24 8l12 13" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     destra: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 42V24a6 6 0 0 1 6-6h18M30 9l9 9-9 9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -80,7 +93,7 @@
     const ore = H === 1 ? '1 ora' : H + ' ore';
     return M === 0 ? ore : M === 30 ? ore + ' e mezza' : ore + ' e ' + M;
   }
-  function toast(msg, tipo = '', ms = 3200) { const t = $('toast'); t.textContent = msg; t.className = tipo; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
+  function toast(msg, tipo = '', ms = 3200) { const t = $('toast'); t.textContent = msg; t.className = tipo; t.style.display = 'block'; if (document.querySelector('.foglio.aperto')) t.style.bottom = 'calc(env(safe-area-inset-bottom) + 96px)'; else if (typeof posizionaTondi === 'function') try { posizionaTondi(); } catch (e) { } clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
   function parla(testo) { if (!cfg.voce || !('speechSynthesis' in window)) return; try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(testo); u.lang = 'it-IT'; speechSynthesis.speak(u); } catch (e) { } }
   const vibra = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } };
   // notifiche del telefono: arrivano anche con lo schermo spento o con un'altra app davanti
@@ -117,10 +130,10 @@
   const DB = (() => {
     let p;
     const open = () => p || (p = new Promise((ok, ko) => {
-      const r = indexedDB.open('agente-moni', 2);
+      const r = indexedDB.open(PID === 'p0' ? 'agente-moni' : 'zona-' + PID, 3);
       r.onupgradeneeded = () => {
         const db = r.result;
-        for (const n of ['coda', 'case']) if (!db.objectStoreNames.contains(n)) db.createObjectStore(n, { keyPath: 'id' });
+        for (const n of ['coda', 'case', 'note', 'persone', 'uscite', 'agenda']) if (!db.objectStoreNames.contains(n)) db.createObjectStore(n, { keyPath: 'id' });
         for (const n of ['reti', 'visti']) if (!db.objectStoreNames.contains(n)) db.createObjectStore(n);
       };
       r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error);
@@ -137,7 +150,8 @@
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { }
 
   // ---------- comune attivo: rete stradale, strade viste, stato del giro ----------
-  let R = null, G = null, visti = null, S = null, caricamento = null;
+  let R = null, G = null, visti = null, passi = null, volant = null, S = null, caricamento = null, vistaZona = false;
+  const zonaCache = new Map(); // altre aree della zona, aperte per la vista d'insieme
   const statoVuoto = () => ({ fase: 'home', meta: null, auto: null, fine: null, minuti: 60, torna: true, rotta: null, prog: 0, sessione: null, ultima: null, isolateViste: {}, migrato: false, calcolo: 0 });
   function caricaStato() { S = Object.assign(statoVuoto(), LS.get('stato4_' + cfg.comune, {})); }
   const salvaStato = () => { if (cfg.comune) LS.set('stato4_' + cfg.comune, S); };
@@ -145,8 +159,10 @@
   const dv = () => Planner.daVedereFn(G, visti, cfg.rivedi);
   const avanzamento = () => G ? Planner.avanzamento(G, visti, cfg.rivedi) : { kmFatti: 0, kmTot: 0, perc: 0 };
   let tVisti = null;
+  // visti: pezzi con case (giorno in cui sono stati visti); passi: tutte le strade percorse a piedi; volant: strade con volantini
+  const recVisti = () => ({ id: R.id, v: visti, p: passi, f: volant });
   function salvaVisti() {
-    if (!G) return; const nome = cfg.comune, rec = { id: R.id, v: visti };
+    if (!G) return; const nome = cfg.comune, rec = recVisti();
     clearTimeout(tVisti); tVisti = setTimeout(() => DB.put('visti', rec, nome).catch(() => { }), 1200);
   }
 
@@ -164,12 +180,12 @@
       if (r) attivaRete(r, await DB.get('visti', nome));
     } catch (e) { caricamento = { nome, errore: e.message, log: [] }; }
     aggiorna(true); caricaCase();
-    if (G && !LS.get('aiutoVisto', false)) { LS.set('aiutoVisto', true); apriAiuto(); }
+    if (G && !LS.get('aiutoVisto', false) && !$('fBenvenuto').classList.contains('aperto')) { LS.set('aiutoVisto', true); apriAiuto(); }
   }
   async function scaricaComune(nome) {
     caricamento = { nome, log: [] }; pannello();
     const log = m => { caricamento.log.push(m); const el = $('logCarica'); if (el) el.textContent = caricamento.log.slice(-3).join('\n'); };
-    const r = await Planner.scaricaRete(nome, log);
+    const r = await Planner.scaricaRete(nome, log, cfg.aree[nome]);
     await DB.put('reti', r, nome);
     if (conGoogle()) api('saveRoutes', { comune: nome + ' (rete v4)', plan: r }).catch(() => { });
     caricamento = null;
@@ -179,7 +195,13 @@
     R = r; G = Planner.prepara(r);
     { let a = 90, b = 180, c = -90, d = -180; for (let i = 0; i < r.lat.length; i++) { const la = r.lat[i], lo = r.lon[i]; if (la < a) a = la; if (la > c) c = la; if (lo < b) b = lo; if (lo > d) d = lo; } G.confini = L.latLngBounds([[a, b], [c, d]]); }
     visti = v && v.id === r.id && v.v && v.v.length === G.m ? v.v : new Uint16Array(G.m);
+    passi = v && v.id === r.id && v.p && v.p.length === G.m ? v.p : null;
+    volant = v && v.id === r.id && v.f && v.f.length === G.m ? v.f : new Uint16Array(G.m);
+    if (!passi) { passi = new Uint16Array(G.m); for (let e = 0; e < G.m; e++) passi[e] = visti[e]; } // dalle versioni precedenti: il segno parte dalle strade viste
+    { const a = cfg.aree[cfg.comune] || (cfg.aree[cfg.comune] = { tipo: r.poly ? 'zona' : 'comune' }); const b = G.confini; a.bbox = [+b.getSouth().toFixed(5), +b.getWest().toFixed(5), +b.getNorth().toFixed(5), +b.getEast().toFixed(5)]; salvaCfg(); }
     if (S.rotta && S.rotta.rete !== R.id) { S.rotta = null; if (S.fase === 'cammino') S.fase = 'home'; }
+    // giro lasciato aperto (app chiusa senza "Basta per oggi"): lo chiudo e lo metto nelle uscite
+    if (S.fase === 'cammino' && S.sessione && Date.now() - (S.sessione.ultimo || S.sessione.inizio) > 6 * 3600e3) setTimeout(() => { if (S.fase === 'cammino') bastaPerOggi(); }, 0);
     if (!S.migrato) {
       // progressi della versione precedente (giri v3)
       const p3 = LS.get('plan_' + cfg.comune, null), s3 = LS.get('stato3_' + cfg.comune, null);
@@ -191,7 +213,7 @@
       S.migrato = true; salvaStato(); salvaVisti();
       if (n) setTimeout(() => toast('Le strade dei giri già fatti sono segnate come viste.', 'ok', 5000), 800);
     }
-    primaVista = true; disegnaRete();
+    primaVista = true; disegnaRete(); aggiornaStatArea(); disegnaNote();
     sincronizzaCopertura(false);
   }
 
@@ -205,12 +227,13 @@
       if (!soloInvio) {
         const d = await api('getRoutes', { comune: nome + ' (copertura)' });
         if (d && d.id === id && nome === cfg.comune) {
-          const altri = u16da(d.b64); let cambi = 0;
-          if (altri.length === visti.length) for (let i = 0; i < visti.length; i++) if (altri[i] > visti[i]) { visti[i] = altri[i]; cambi++; }
+          let cambi = 0;
+          const unisci = (b, mio) => { if (!b) return; const altri = u16da(b); if (altri.length === mio.length) for (let i = 0; i < mio.length; i++) if (altri[i] > mio[i]) { mio[i] = altri[i]; cambi++; } };
+          unisci(d.b64, visti); unisci(d.p, passi); unisci(d.f, volant);
           if (cambi) { salvaVisti(); disegnaRete(); pannello(); }
         }
       }
-      if (nome === cfg.comune) await api('saveRoutes', { comune: nome + ' (copertura)', plan: { id, b64: b64da(visti), ts: Date.now() } });
+      if (nome === cfg.comune) await api('saveRoutes', { comune: nome + ' (copertura)', plan: { id, b64: b64da(visti), p: b64da(passi), f: b64da(volant), ts: Date.now() } });
     } catch (e) { }
   }
 
@@ -223,13 +246,14 @@
   const lRete = L.layerGroup().addTo(map), lRotta = L.layerGroup().addTo(map), lExtra = L.layerGroup().addTo(map), lCase = L.layerGroup().addTo(map), lIo = L.layerGroup().addTo(map);
   let segui = true, primaVista = true;
   map.on('dragstart', () => { segui = false; });
-  const VERDE = '#2e7d4f', BLU = '#1d5fd1', OCRA = '#f2a900';
+  const VERDE = '#2e7d4f', VERDE_SC = '#1f6b42', VERDE_CH = '#9fd3b0', BLU = '#1d5fd1', OCRA = '#f2a900', GRIGIO = '#6b7a80', ARANCIO = '#e8590c';
+  const GG = () => G;
   const pEtichetta = (testo, altro) => L.divIcon({ className: '', html: `<div class="etichetta-p${altro ? ' altro' : ''}">${testo}</div>`, iconSize: altro ? [34, 34] : [40, 40], iconAnchor: altro ? [17, 17] : [20, 20] });
   const iconaAuto = () => L.divIcon({ className: '', html: `<div class="etichetta-p altro" style="width:36px;height:36px">${ICO.auto.replace('<svg', '<svg width="22" height="22"')}</div>`, iconSize: [36, 36], iconAnchor: [18, 18] });
   function pulisciMappa() { lRete.clearLayers(); lRotta.clearLayers(); lExtra.clearLayers(); lCase.clearLayers(); marcatori.clear(); }
 
   // strade con case: blu da vedere, verdi già viste (pezzi uniti in linee lunghe per disegnare veloce)
-  function catene(sel) {
+  function catene(sel, G = GG()) {
     const usato = new Uint8Array(G.m), out = [];
     const altro = (v, e0) => { let n = 0, f = -1; for (let p = G.start[v]; p < G.start[v + 1]; p++) { const e = G.adj[p]; if (e !== e0 && sel(e)) { n++; f = e; } } return n === 1 ? f : -1; };
     for (let e = 0; e < G.m; e++) {
@@ -244,22 +268,45 @@
           if (verso) nodi.push(u); else nodi.unshift(u);
         }
       }
-      out.push(nodi.map(v => [R.lat[v], R.lon[v]]));
+      out.push(nodi.map(v => [G.R.lat[v], G.R.lon[v]]));
     }
     return out;
   }
+  // colori delle strade: blu = case da vedere; verde scuro = percorse negli ultimi 3 mesi (il "segno");
+  // verde chiaro = viste più di 3 mesi fa. Durante il giro la rete resta sbiadita e risalta solo il percorso.
+  function disegnaReteDi(Gx, vx, px, fx, layer, cammino) {
+    const da = Planner.daVedereFn(Gx, vx, cfg.rivedi), o = Planner.oggi();
+    const recente = e => px[e] > 0 && o - px[e] <= 90;
+    const dafare = catene(e => da(e) && !recente(e), Gx), vecchie = catene(e => Gx.ER[e] && !da(e) && !recente(e), Gx);
+    const segnoCase = catene(e => recente(e) && Gx.ER[e], Gx), segnoAltre = catene(e => recente(e) && !Gx.ER[e], Gx);
+    const f = cammino ? .45 : 1;
+    if (dafare.length) L.polyline(dafare, { renderer: tela, pane: 'rete', color: BLU, weight: cammino ? 3 : 4, opacity: .6 * f, interactive: false }).addTo(layer);
+    if (vecchie.length) L.polyline(vecchie, { renderer: tela, pane: 'rete', color: VERDE_CH, weight: cammino ? 4 : 6, opacity: .9 * f, interactive: false }).addTo(layer);
+    if (segnoAltre.length) L.polyline(segnoAltre, { renderer: tela, pane: 'rete', color: VERDE_SC, weight: 3, opacity: .75 * f, interactive: false }).addTo(layer);
+    if (segnoCase.length) L.polyline(segnoCase, { renderer: tela, pane: 'rete', color: VERDE_SC, weight: cammino ? 4 : 6, opacity: .9 * f, interactive: false }).addTo(layer);
+    if (cfg.mostraVolantini && fx) { const vol = catene(e => fx[e] > 0 && o - fx[e] <= 90, Gx); if (vol.length) L.polyline(vol, { renderer: tela, pane: 'rete', color: ARANCIO, weight: 3, opacity: .95 * f, dashArray: '2 7', lineCap: 'round', interactive: false }).addTo(layer); }
+  }
   function disegnaRete() {
-    lRete.clearLayers(); if (!G) return;
-    const da = dv();
-    const fatte = catene(e => G.ER[e] && !da(e)), dafare = catene(e => da(e));
-    if (dafare.length) L.polyline(dafare, { renderer: tela, pane: 'rete', color: BLU, weight: 4, opacity: S.fase === 'cammino' ? .35 : .55, interactive: false }).addTo(lRete);
-    if (fatte.length) L.polyline(fatte, { renderer: tela, pane: 'rete', color: VERDE, weight: 6, opacity: .85, interactive: false }).addTo(lRete);
+    lRete.clearLayers();
+    if (vistaZona) { disegnaZona(); return; }
+    if (!G) return;
+    disegnaReteDi(G, visti, passi, volant, lRete, S.fase === 'cammino');
   }
   let tRete = null;
   const ridisegnaRete = () => { if (tRete) return; tRete = setTimeout(() => { tRete = null; disegnaRete(); }, 2500); };
 
   function disegna(centra) {
     lRotta.clearLayers(); lExtra.clearLayers();
+    if (vistaZona) {
+      let b = null;
+      for (const n of cfg.comuni) {
+        const a = cfg.aree[n]; if (!a || !a.bbox) continue;
+        const bb = L.latLngBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]]); b = b ? b.extend(bb) : bb;
+        L.marker(bb.getCenter(), { icon: L.divIcon({ className: '', html: `<div class="etichetta-area">${esc(n)}</div>`, iconSize: [10, 10], iconAnchor: [5, 5] }), zIndexOffset: 300 }).on('click', () => { if (n !== cfg.comune) cambiaComune(n); else mostraZona(false); }).addTo(lExtra);
+      }
+      if (centra && b && b.isValid()) map.fitBounds(b, { paddingTopLeft: [20, 30], paddingBottomRight: [70, Math.min(440, altezzaPannello() + 20)] });
+      return;
+    }
     if (!G) { if (centra && posizione) map.setView([posizione.lat, posizione.lng], 14); return; }
     let bounds = null;
     if (S.fase === 'home') {
@@ -288,29 +335,34 @@
       const r = S.rotta, c = r.coords, p = S.prog, I = info(r), da = dv();
       if (S.auto) L.marker([S.auto.lat, S.auto.lon], { icon: pEtichetta('P'), zIndexOffset: 500 }).addTo(lExtra);
       if (c.length > 1) {
-        L.polyline(c.slice(p), { pane: 'dafare', color: '#fff', weight: 11, opacity: .9, interactive: false }).addTo(lRotta);
+        // già fatto oggi su questo percorso: grigio, sotto
+        if (p > 0) L.polyline(c.slice(0, p + 1), { pane: 'dafare', color: GRIGIO, weight: 5, opacity: .7, dashArray: '8 6', interactive: false }).addTo(lRotta);
+        L.polyline(c.slice(p), { pane: 'dafare', color: '#fff', weight: 12, opacity: .95, interactive: false }).addTo(lRotta);
         const guarda = k => r.lk[k] === '1' && da(r.pezzi[k]);
         let i = p;
         while (i < c.length - 1) {
           const tipo = guarda(i); let j = i;
           while (j < c.length - 1 && guarda(j) === tipo) j++;
-          L.polyline(c.slice(i, j + 1), tipo ? { pane: 'dafare', color: BLU, weight: 7, opacity: .95, interactive: false } : { pane: 'dafare', color: BLU, weight: 5, opacity: .7, dashArray: '1 10', lineCap: 'round', interactive: false }).addTo(lRotta);
+          L.polyline(c.slice(i, j + 1), tipo ? { pane: 'dafare', color: BLU, weight: 8, opacity: 1, interactive: false } : { pane: 'dafare', color: BLU, weight: 6, opacity: .75, dashArray: '1 11', lineCap: 'round', interactive: false }).addTo(lRotta);
           i = j;
         }
         let j = p; while (j < c.length - 1 && I.cc[j] - I.cc[p] < 300) j++;
-        L.polyline(c.slice(p, j + 1), { pane: 'prossimo', color: OCRA, weight: 9, opacity: 1, interactive: false }).addTo(lRotta);
-        frecce(r, p, 1200, 90);
+        L.polyline(c.slice(p, j + 1), { pane: 'prossimo', color: OCRA, weight: 10, opacity: 1, interactive: false }).addTo(lRotta);
+        frecce(r, p, I.cc[j] - I.cc[p], 32, '#17262b');      // frecce scure fitte sul tratto giallo
+        frecce(r, j, 2500, 70);                               // poi frecce bianche più rade sul resto
+        if (c.length - 1 > p) L.marker(c[c.length - 1], { interactive: false, keyboard: false, pane: 'prossimo', icon: L.divIcon({ className: '', html: '<div class="arrivo-giro">Fine</div>', iconSize: [46, 26], iconAnchor: [23, 13] }) }).addTo(lRotta);
       }
       bounds = L.latLngBounds(c.slice(p, Math.min(c.length, p + 40)));
     }
     if (centra && bounds && bounds.isValid()) { map.fitBounds(bounds, { paddingTopLeft: [20, S.fase === 'home' ? 30 : 150], paddingBottomRight: [70, Math.min(440, altezzaPannello() + 20)], maxZoom: 18 }); primaVista = false; }
   }
-  function frecce(r, p, quanto, passo) {
-    const c = r.coords, I = info(r); let ultimo = -1e9;
+  // frecce di direzione lungo il percorso, a metà dei pezzi (così non coprono gli incroci)
+  function frecce(r, p, quanto, passo, colore = '#fff') {
+    const c = r.coords, I = info(r); let ultimo = I.cc[p] - passo / 2;
     for (let k = p + 1; k < c.length && I.cc[k] - I.cc[p] < quanto; k++) {
-      if (I.cc[k] - ultimo < passo) continue; ultimo = I.cc[k];
-      const ang = bearing(c[k - 1], c[k]);
-      L.marker(c[k], { interactive: false, keyboard: false, pane: 'prossimo', icon: L.divIcon({ className: '', html: `<svg class="freccia" viewBox="0 0 18 18" style="transform:rotate(${ang}deg)"><path d="M4 12l5-6 5 6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`, iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(lRotta);
+      if (I.cc[k] - ultimo < passo || I.cc[k] - I.cc[k - 1] < 4) continue; ultimo = I.cc[k];
+      const ang = bearing(c[k - 1], c[k]), m = [(c[k - 1][0] + c[k][0]) / 2, (c[k - 1][1] + c[k][1]) / 2];
+      L.marker(m, { interactive: false, keyboard: false, pane: 'prossimo', icon: L.divIcon({ className: '', html: `<svg class="freccia" viewBox="0 0 18 18" style="transform:rotate(${ang}deg)"><path d="M4 12l5-6 5 6" fill="none" stroke="${colore}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`, iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(lRotta);
     }
   }
 
@@ -389,13 +441,16 @@
     if (S.fase !== ultimaFase) { if (ultimaFase !== null && panChiuso) chiudiPannello(false); const cambiaRete = (S.fase === 'cammino') !== (ultimaFase === 'cammino'); ultimaFase = S.fase; if (cambiaRete && G) disegnaRete(); }
     const comuneChip = `<button class="chip-comune" id="bComune">${ICO.mappa}<span>${esc(cfg.comune || 'Scegli il comune')}</span><span aria-hidden="true">▾</span></button>`;
     const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
+    if (vistaZona) { pannelloZona(box, on); return; }
     if (!cfg.comune) {
-      box.innerHTML = `<h1>Ciao, questo è Agente Moni</h1><div class="intro"><p>Ti guida a piedi strada per strada, si ricorda le strade che hai già fatto e ti fa salvare le case con foto e nota vocale.</p></div>
-        <button class="tasto primario" id="bQui">${ICO.posizione}Usa il comune dove sono</button>
+      box.innerHTML = `<p class="ciao">${esc(saluto())}${nomeAgente() ? ', ' + esc(nomeAgente()) : ''}</p><h1>Aggiungi la tua zona</h1><div class="intro"><p>La zona è l'insieme dei comuni o dei quartieri che lavori. Inizia dal primo: poi ne aggiungi altri da "La mia zona".</p></div>
+        <button class="tasto primario" id="bQui">${ICO.posizione}Usa il posto dove sono</button>
         <label class="campo" for="nomeComune">Oppure scrivi il nome del comune</label><input class="campo" id="nomeComune" placeholder="Per esempio Cazzago San Martino" autocomplete="off">
-        <button class="tasto" id="bNome">Scarica questo comune</button><div class="log" id="logQui"></div>`;
-      on('bQui', comuneDaPosizione);
+        <button class="tasto" id="bNome">Scarica questo comune</button>
+        <div class="riga"><button class="link" id="bQuart">Un quartiere di una città</button><button class="link" id="bDisegna">Disegna sulla mappa</button></div><div class="log" id="logQui"></div>`;
+      on('bQui', () => comuneDaPosizione('logQui'));
       on('bNome', () => { const n = $('nomeComune').value.trim(); if (n) aggiungiComune(n); });
+      on('bQuart', () => apriComuni('quartiere')); on('bDisegna', () => iniziaDisegno());
       return;
     }
     if (caricamento) {
@@ -409,11 +464,14 @@
     }
     if (!G) { box.innerHTML = `${comuneChip}<h1>Un momento…</h1><p>Apro la mappa di ${esc(cfg.comune)}.</p>`; on('bComune', apriComuni); return; }
     const av = avanzamento(), perc = Math.round(av.perc * 100);
-    const testa = `${comuneChip}<div class="avanz-testo" style="margin-top:8px"><span><b>${perc}%</b> delle strade con case viste</span><span>${kmTesto(av.kmFatti * 1000)} su ${kmTesto(av.kmTot * 1000)}</span></div><div class="avanz"><div style="width:${perc}%"></div></div>`;
+    const testa = `${S.fase === 'home' ? `<p class="ciao">${esc(saluto())}${nomeAgente() ? ', ' + esc(nomeAgente()) : ''}</p>` : ''}${comuneChip}<div class="avanz-testo" style="margin-top:8px"><span><b>${perc}%</b> delle strade con case viste</span><span>${kmTesto(av.kmFatti * 1000)} su ${kmTesto(av.kmTot * 1000)}</span></div><div class="avanz"><div style="width:${perc}%"></div></div>`;
 
     if (S.fase === 'home') {
       let html = testa;
-      const rich = daRichiamare(); if (rich.length) html += `<button class="vicina" id="bRichiami" style="width:100%;border:0;text-align:left">${ICO.telefono.replace('<svg', '<svg width="26" height="26"')}<span><b>${rich.length === 1 ? '1 casa da richiamare' : rich.length + ' case da richiamare'}</b><br>${esc(rich[0].address || 'Casa')}${rich.length > 1 ? ' e altre' : ''}</span></button>`;
+      if (!anteprima && !zone) html += `<div class="scorciatoie"><button id="bPan">${ICO.grafico}<span>Pannello</span></button><button id="bTacc">${ICO.nota}<span>Taccuino</span></button><button id="bZona">${ICO.mappa}<span>Tutta la zona</span></button></div>`;
+      const altra = areaQui(); if (altra && !anteprima) html += `<button class="vicina" id="bAltraArea" style="width:100%;border:0;text-align:left">${ICO.posizione.replace('<svg', '<svg width="26" height="26"')}<span>Sei a <b>${esc(altra)}</b>, nella tua zona.<br>Tocca per aprire la sua mappa.</span></button>`;
+      const oggiN = cosePerOggi().length; if (oggiN && !anteprima && !zone) html += `<button class="vicina" id="bOggi" style="width:100%;border:0;text-align:left;background:var(--lago-chiaro);color:var(--lago-scuro)">${ICO.lista.replace('<svg', '<svg width="26" height="26"')}<span><b>${oggiN === 1 ? '1 cosa da fare oggi' : oggiN + ' cose da fare oggi'}</b><br>${esc(taglia(cosePerOggi()[0].titolo, 48))}</span></button>`;
+      const rich = oggiN ? [] : daRichiamare(); if (rich.length) html += `<button class="vicina" id="bRichiami" style="width:100%;border:0;text-align:left">${ICO.telefono.replace('<svg', '<svg width="26" height="26"')}<span><b>${rich.length === 1 ? '1 casa da richiamare' : rich.length + ' case da richiamare'}</b><br>${esc(rich[0].address || 'Casa')}${rich.length > 1 ? ' e altre' : ''}</span></button>`;
       if (S.ultima && Date.now() - S.ultima.quando < 14 * 3600e3) html += `<p class="nota-ok">Ultima uscita: ${kmTesto(S.ultima.kmNuovi * 1000)} di strade nuove, ${S.ultima.case === 1 ? '1 casa salvata' : S.ultima.case + ' case salvate'}.</p>`;
       if (anteprima) {
         const a = anteprima, r = a.rotta, lontano = a.meta && !(posizione && dist([posizione.lat, posizione.lng], [a.meta.lat, a.meta.lon]) < 200);
@@ -435,12 +493,14 @@
         const nIso = (R.isolate || []).filter((_, i) => !S.isolateViste[i]).length;
         if (av.perc >= 0.995) html += `<h1>Hai visto tutto ${esc(cfg.comune)}</h1><p>Puoi passare a un altro comune toccando il nome qui sopra${cfg.rivedi ? '' : ', oppure nelle impostazioni scegli dopo quanto tempo ripassare'}.</p>`;
         else html += `<h1>Quanto tempo hai?</h1><div class="tempi">${TEMPI.map(t => `<button class="tempo${t.m === cfg.minuti ? ' scelto' : ''}" data-min="${t.m}">${t.t}</button>`).join('')}</div>`;
-        html += `<div class="riga"><button class="link" id="bMappa">Scegli sulla mappa</button>${nIso ? `<button class="link" id="bAuto">Case isolate (${nIso})</button>` : ''}</div><button class="tasto piccolo" id="bCasaQui">${ICO.piu}Salva una casa qui</button>`;
+        html += `<div class="riga"><button class="link" id="bMappa">Scegli sulla mappa</button><button class="link" id="bCasaQui">Salva una casa qui</button></div>${nIso ? `<button class="link" id="bAuto" style="width:100%">Case isolate da vedere in macchina (${nIso})</button>` : ''}`;
         box.innerHTML = html;
         box.querySelectorAll('.tempo').forEach(b => b.onclick = () => scegliTempo(+b.dataset.min));
         on('bMappa', iniziaSceltaMappa); on('bAuto', () => { S.fase = 'macchina'; salvaStato(); aggiorna(true); }); on('bCasaQui', () => apriNuovaCasa());
       }
       on('bComune', apriComuni); on('bRichiami', () => { filtro = '__richiamo'; apriCase(); });
+      on('bPan', apriPannello); on('bTacc', () => apriTaccuino()); on('bZona', () => mostraZona(true)); on('bOggi', apriPannello);
+      on('bAltraArea', () => { const a = areaQui(); if (a) cambiaComune(a); });
       return;
     }
     if (S.fase === 'verso') {
@@ -463,10 +523,13 @@
       box.innerHTML = `<div class="stats"><div class="stat"><b>${kmTesto(nuovi)}</b><span>viste oggi</span></div><div class="stat"><b>${kmTesto(rM)}</b><span>mancano</span></div><div class="stat"><b>${oreTesto(resto).replace(' minuti', ' min')}</b><span>ancora</span></div></div>
         <div class="avanz" role="progressbar" aria-valuenow="${perc}" aria-valuemin="0" aria-valuemax="100"><div style="width:${perc}%"></div></div>
         <p style="margin:0">${fineTxt}${S.fine && Date.now() > S.fine ? ' · il tempo che avevi è finito' : ''}</p>
-        <button class="tasto verde" id="bNuova">${ICO.piu}Nuova casa</button>
+        <div class="riga"><button class="tasto verde" id="bNuova">${ICO.piu}Nuova casa</button><button class="tasto" id="bNotaG" style="flex:.7">${ICO.nota}Notizia</button></div>
+        <button class="interruttore" id="bVol" role="switch" aria-checked="${!!(S.sessione && S.sessione.volantini)}" style="padding:6px 12px"><span>Sto lasciando volantini</span><span class="leva"></span></button>
         <div class="riga">${S.auto && !(r && r.ritorno) ? `<button class="tasto piccolo" id="bTornaAuto">${ICO.auto}Torno alla macchina</button>` : ''}<button class="tasto piccolo" id="bRicalcola">${ICO.rifai}Ricalcola</button></div>
         <button class="link" id="bStop">Basta per oggi</button>`;
       on('bNuova', () => apriNuovaCasa());
+      on('bNotaG', () => apriNota());
+      on('bVol', () => { if (!S.sessione) return; S.sessione.volantini = !S.sessione.volantini; salvaStato(); toast(S.sessione.volantini ? 'Volantinaggio: segno le strade dove passi' : 'Volantinaggio spento', 'ok'); pannello(); });
       on('bTornaAuto', () => { const rr = Planner.versoPunto(G, visti, pos4() || (r ? { lat: r.coords[S.prog][0], lon: r.coords[S.prog][1] } : S.auto), S.auto, cfg.rivedi); if (rr) { impostaRotta(rr); toast('Ti porto alla macchina: ' + kmTesto(rr.km * 1000), 'ok'); } });
       on('bRicalcola', () => ricalcola('mano'));
       on('bStop', () => { if (confirm('Finisci per oggi? Le strade viste restano segnate.')) bastaPerOggi(); });
@@ -511,6 +574,7 @@
   }
   $('annullaScelta').onclick = () => { scegliendo = false; $('scegliMappa').classList.remove('visibile'); chiudiPannello(false); };
   map.on('click', e => {
+    if (disegno) { disegno.punti.push([e.latlng.lat, e.latlng.lng]); aggiornaDisegno(); vibra(30); return; }
     if (!scegliendo || !G) return;
     scegliendo = false; $('scegliMappa').classList.remove('visibile'); chiudiPannello(false);
     const { lat, lng } = e.latlng, v = Planner.nodoVicino(G, lat, lng, 400);
@@ -535,7 +599,7 @@
     S.fase = 'cammino'; S.meta = null; S.minuti = minuti; S.torna = torna;
     S.auto = { lat: p.lat, lon: p.lon }; S.rotta = null; // la macchina resta qui: serve anche per "Torno alla macchina"
     S.fine = minuti ? Date.now() + minuti * 60e3 : null;
-    S.sessione = { inizio: Date.now(), km0: avanzamento().kmFatti, metri: 0 }; S.avvisi = {};
+    S.sessione = { inizio: Date.now(), ultimo: Date.now(), km0: avanzamento().kmFatti, metri: 0, volantini: false, metriVol: 0 }; S.avvisi = {};
     salvaStato();
     if (cfg.notifiche == null) chiediNotifiche();
     if (rotta && rotta.coords.length && dist(rotta.coords[0], [p.lat, p.lon]) < 80) impostaRotta(rotta, true); else ricalcola('inizio');
@@ -604,16 +668,19 @@
   const daRichiamare = () => [...case_.values()].filter(h => h.richiamo && h.richiamo <= oggiISO()).sort((a, b) => a.richiamo < b.richiamo ? -1 : 1);
   const dataTesto = iso => new Date(iso + 'T12:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
   function controllaRichiami() {
-    const lista = daRichiamare(); if (!lista.length) return;
+    const lista = cosePerOggi(0); if (!lista.length) return;
     const chiave = oggiISO(); if (LS.get('richiamiAvvisati', '') === chiave) return;
     LS.set('richiamiAvvisati', chiave);
-    notifica(lista.length === 1 ? 'Da richiamare oggi' : lista.length + ' case da richiamare', lista.slice(0, 3).map(h => (h.address || 'Casa') + (h.telefono ? ' – ' + h.telefono : '')).join('\n'), 'richiami', true);
+    notifica(lista.length === 1 ? 'Una cosa da fare oggi' : lista.length + ' cose da fare oggi', lista.slice(0, 3).map(x => x.titolo).join('\n'), 'richiami', true);
   }
   setInterval(controllaRichiami, 30 * 60e3);
   const caseOggi = () => { const da = S.sessione ? S.sessione.inizio : Date.now(); return [...case_.values()].filter(h => h.comune === cfg.comune && h.ts >= da).length; };
   function bastaPerOggi() {
     const av = avanzamento();
-    if (S.sessione) S.ultima = { quando: Date.now(), kmNuovi: Math.max(0, av.kmFatti - S.sessione.km0), case: caseOggi() };
+    if (S.sessione) {
+      S.ultima = { quando: Date.now(), kmNuovi: Math.max(0, av.kmFatti - S.sessione.km0), case: caseOggi() };
+      registraUscita(S.sessione, S.ultima);
+    }
     Object.assign(S, { fase: 'home', meta: null, auto: null, fine: null, rotta: null, prog: 0, sessione: null });
     anteprima = null; zone = null;
     salvaStato(); salvaVisti(); aggiorna(true); sincronizzaCopertura(true); inviaTraccia();
@@ -621,7 +688,10 @@
 
   function aggiorna(centra) { pannello(); guida(); posizionaTondi(); disegna(centra); }
   function altezzaPannello() { return Math.max(0, Math.round(window.innerHeight - $('pannello').getBoundingClientRect().top)); }
-  function posizionaTondi() { const h = altezzaPannello(); $('tondi').style.bottom = (h + 12) + 'px'; $('invio').style.bottom = (h + 12) + 'px'; $('toast').style.bottom = (h + 12) + 'px'; }
+  function posizionaTondi() {
+    const h = altezzaPannello(), T = $('tondi'), alto = h + 24 + T.children.length * 66 > window.innerHeight - 10 && !$('guida').classList.contains('visibile');
+    T.classList.toggle('in-alto', alto); T.style.bottom = alto ? '' : (h + 12) + 'px';
+    $('strati').style.bottom = alto ? 'auto' : (h + 12) + 'px'; $('strati').style.top = alto ? 'calc(env(safe-area-inset-top) + 80px)' : ''; $('strati').style.right = alto ? '12px' : ''; $('invio').style.bottom = (h + 12) + 'px'; $('toast').style.bottom = (h + 12) + 'px'; }
 
   // ---------- pannello trascinabile ----------
   const PAN = $('pannello'), ZONA = $('maniglia'), CORPO = $('pannelloCorpo'), SBIRCIA = 58;
@@ -711,16 +781,32 @@
 
   // ---------- GPS ----------
   let posizione = null, ultimaCopertura = null, bufferTraccia = LS.get('buffer_traccia', []), ultimoPunto = null;
-  const io = L.marker([0, 0], { icon: L.divIcon({ className: '', html: '<div class="io"></div>', iconSize: [26, 26], iconAnchor: [13, 13] }), interactive: false, zIndexOffset: 1000 });
+  const io = L.marker([0, 0], { icon: L.divIcon({ className: '', html: '<div class="io-box"><svg class="io-dir" viewBox="0 0 60 60" aria-hidden="true"><path d="M30 2 41 22a13 13 0 0 0-22 0z" fill="#1d5fd1" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg><div class="io"></div></div>', iconSize: [60, 60], iconAnchor: [30, 30] }), interactive: false, zIndexOffset: 1000 });
+  // direzione di marcia: dalla bussola del GPS se c'è, altrimenti dagli ultimi spostamenti
+  let rotta0 = null, direzione = null;
+  function aggiornaDirezione(p, lat, lng) {
+    let h = p.coords.heading;
+    if (!(h != null && !isNaN(h) && (p.coords.speed || 0) > 0.4)) {
+      h = null;
+      if (rotta0 && dist(rotta0, [lat, lng]) >= 6) h = bearing(rotta0, [lat, lng]);
+    }
+    if (!rotta0 || dist(rotta0, [lat, lng]) >= 6) rotta0 = [lat, lng];
+    if (h == null) return;
+    direzione = h;
+    const el = io.getElement && io.getElement(), d = el && el.querySelector('.io-dir');
+    if (d) { d.style.transform = `rotate(${h}deg)`; d.style.opacity = '1'; }
+  }
   const cerchio = L.circle([0, 0], { radius: 10, color: BLU, weight: 1, fillOpacity: .08, interactive: false });
   function suPosizione(p) {
     const { latitude: lat, longitude: lng, accuracy: acc } = p.coords, ts = p.timestamp || Date.now();
     const primaVolta = !posizione;
     posizione = { lat, lng, acc, ts };
     io.setLatLng([lat, lng]); cerchio.setLatLng([lat, lng]).setRadius(acc);
+    if (acc <= 40) aggiornaDirezione(p, lat, lng);
     if (primaVolta) { lIo.addLayer(cerchio); lIo.addLayer(io); if (S.fase === 'cammino') map.setView([lat, lng], 18); else if (!G) map.setView([lat, lng], 13); pannello(); }
     else if (segui && S.fase === 'cammino') map.panTo([lat, lng], { animate: true });
     if (S.fase === 'verso' && S.meta) { const v = dist([lat, lng], [S.meta.lat, S.meta.lon]) < 180; if (v !== suPosizione.arrivata) { suPosizione.arrivata = v; pannello(); if (v) { vibra([150, 80, 150]); parla('Sei al parcheggio.'); notifica('Sei al parcheggio', 'Apri l\'app e inizia a camminare.', 'parcheggio'); } } }
+    if (S.fase === 'home' && !primaVolta) { const q = areaQui(); if (q !== suPosizione.area) { suPosizione.area = q; pannello(); } }
     if (S.fase === 'macchina' && G) (R.isolate || []).forEach((s, i) => { if (!S.isolateViste[i] && dist([lat, lng], [s.lat, s.lon]) < 70) { S.isolateViste[i] = true; salvaStato(); toast('Casa isolata vista', 'ok'); aggiorna(false); } });
     if (acc > 30) return;
     const pt = [lat, lng];
@@ -729,8 +815,12 @@
       let n = 0;
       if (ultimaCopertura) {
         const d = dist(ultimaCopertura.pt, pt), dt = Math.max(1, (ts - ultimaCopertura.ts) / 1000), v = d / dt;
-        if (v < 2.8 && d < 150) { n = Planner.copriTratto(G, visti, ultimaCopertura.pt, pt, 20); if (S.sessione) S.sessione.metri += d; }
-      } else n = Planner.copri(G, visti, lat, lng, 20);
+        if (v < 2.8 && d < 150) {
+          n = Planner.copriTratto(G, visti, ultimaCopertura.pt, pt, 20);
+          n += Planner.segnaTratto(G, passi, ultimaCopertura.pt, pt, 15);
+          if (S.sessione) { S.sessione.metri += d; S.sessione.ultimo = ts; if (S.sessione.volantini) { Planner.segnaTratto(G, volant, ultimaCopertura.pt, pt, 15); S.sessione.metriVol = (S.sessione.metriVol || 0) + d; } }
+        }
+      } else n = Planner.copri(G, visti, lat, lng, 20) + Planner.segna(G, passi, lat, lng, 15);
       ultimaCopertura = { pt, ts };
       if (n) { salvaVisti(); ridisegnaRete(); }
     } else ultimaCopertura = null;
@@ -747,7 +837,7 @@
   const aspettaGPS = (ms = 20000) => new Promise(ok => { if (posizione) return ok(pos4()); const t0 = Date.now(), i = setInterval(() => { if (posizione || Date.now() - t0 > ms) { clearInterval(i); ok(pos4()); } }, 400); });
 
   async function tieniAcceso() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible') await navigator.wakeLock.request('screen'); } catch (e) { } }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tieniAcceso(); else { inviaTraccia(); if (G) DB.put('visti', { id: R.id, v: visti }, cfg.comune).catch(() => { }); } });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tieniAcceso(); else { inviaTraccia(); if (G) DB.put('visti', recVisti(), cfg.comune).catch(() => { }); } });
   tieniAcceso();
   async function inviaTraccia() {
     if (!bufferTraccia.length || !conGoogle()) return;
@@ -775,7 +865,7 @@
   function marcatore(h, nuovo) {
     if (h.lat === '' || h.lat == null) return;
     if (marcatori.has(h.id)) lCase.removeLayer(marcatori.get(h.id));
-    if (h.comune !== cfg.comune) return;
+    if (h.comune !== cfg.comune && !vistaZona) return;
     const m = L.marker([h.lat, h.lng], { icon: L.divIcon({ className: 'pin' + (nuovo ? ' nuovo' : ''), html: pinSVG(h.stato), iconSize: [30, 38], iconAnchor: [15, 37] }), title: h.address || 'Casa', zIndexOffset: 600 });
     m.on('click', () => apriScheda(h.id));
     m.addTo(lCase); marcatori.set(h.id, m);
@@ -842,6 +932,8 @@
     c.innerHTML = `${foto.length ? `<div class="galleria">${foto.map((u, i) => `<img src="${u}" alt="Foto ${i + 1}">`).join('')}</div>` : ''}
       <div class="scheda-ind">${esc(h.address || 'Casa senza indirizzo')}</div>
       <div class="scheda-sotto">${esc([h.tipo, data, h.comune].filter(Boolean).join(' · '))}</div>
+      ${h.agenzia ? `<p class="scheda-sotto" style="margin-top:4px">Cartello: <b>${esc(h.agenzia)}</b></p>` : ''}
+      ${notizieCasa(h).length ? `<div class="sezione"><h3>Notizie su questa casa</h3>${notizieCasa(h).map(n => `<button class="nota-riga" data-nota="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 120))}</b><span>${esc([n.chi, dataBreve(n.ts), n.stato].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
       ${h.remota && (h.photos || []).length ? `<p><a class="link" target="_blank" rel="noopener" href="${esc(h.photos[0])}">Apri le foto</a></p>` : ''}
       ${h.telefono ? `<a class="tasto verde" href="tel:${esc(h.telefono.replace(/[^\d+]/g, ''))}">${ICO.telefono}Chiama ${esc(h.telefono)}</a>` : ''}
       ${h.richiamo ? `<div class="vicina" style="margin-top:12px"><span>Da richiamare <b>${esc(dataTesto(h.richiamo))}</b></span><button class="tasto ocra" id="sRichiamato">Fatto</button></div>
@@ -852,6 +944,7 @@
       <div class="azioni">
         <button class="tasto" id="sCondividi">${ICO.condividi}Condividi</button>
         <a class="tasto" href="${mapsPiedi(h.lat, h.lng)}" target="_blank" rel="noopener">${ICO.posizione}Portami qui</a>
+        <button class="tasto" id="sNotizia" style="grid-column:span 2">${ICO.nota}Aggiungi una notizia</button>
         ${h.remota ? '' : `<button class="tasto" id="sModifica">${ICO.matita}Modifica</button><button class="tasto pericolo" id="sElimina">${ICO.cestino}Elimina</button>`}
       </div>`;
     const sc = $('sStati');
@@ -867,6 +960,8 @@
       }
     }
     $('sCondividi').onclick = () => condividiCasa(h);
+    c.querySelectorAll('[data-nota]').forEach(b => b.onclick = () => apriNota(b.dataset.nota));
+    $('sNotizia').onclick = () => { apriNota(); nn.casaId = h.id; if (h.lat !== '' && h.lat != null) { nn.lat = h.lat; nn.lng = h.lng; } if (!$('nDove').value) $('nDove').value = h.address || ''; };
     if ($('sRichiamato')) $('sRichiamato').onclick = async () => { h.richiamo = ''; await DB.put('case', h); toast('Promemoria tolto', 'ok'); apriScheda(h.id); pannello(); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
     if (!h.remota) {
       $('sModifica').onclick = () => { chiudi('fScheda'); apriNuovaCasa(h); };
@@ -891,7 +986,9 @@
     return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent('Richiamare: ' + (h.address || 'casa')) + '&dates=' + d + '/' + fine + '&details=' + encodeURIComponent(testoCasa(h));
   }
   const fileDa = (dataUrl, nome) => { const [t, b] = dataUrl.split(','), mime = (t.match(/data:(.*?);/) || [])[1] || 'image/jpeg', bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], nome, { type: mime }); };
-  const testoCasa = h => [h.address || 'Casa', [h.stato, h.tipo].filter(Boolean).join(' · '), h.telefono ? 'Tel. ' + h.telefono : '', h.note || '', h.lat !== '' && h.lat != null ? 'Mappa: https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].filter(Boolean).join('\n');
+  const notizieCasa = h => [...note.values()].filter(n => n.casaId === h.id).sort((a, b) => b.ts - a.ts);
+  const firma = () => { const p = cfg.profilo || {}; return p.nome ? '— ' + [p.nome, p.agenzia, p.telefono].filter(Boolean).join(' · ') : ''; };
+  const testoCasa = h => [h.address || 'Casa', [h.stato, h.tipo].filter(Boolean).join(' · '), h.agenzia ? 'Cartello: ' + h.agenzia : '', h.telefono ? 'Tel. ' + h.telefono : '', h.note || '', h.lat !== '' && h.lat != null ? 'Mappa: https://maps.google.com/?q=' + h.lat + ',' + h.lng : '', firma()].filter(Boolean).join('\n');
   async function condividiCasa(h) {
     const testo = testoCasa(h);
     try {
@@ -909,20 +1006,22 @@
   function esportaCSV(lista, comune) {
     if (!lista.length) { toast('Non ci sono case da esportare.', 'errore'); return; }
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
-    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Telefono', 'Richiamare il', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
-    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.telefono, h.richiamo ? new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT') : '', h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
+    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Agenzia sul cartello', 'Telefono', 'Richiamare il', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
+    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.agenzia, h.telefono, h.richiamo ? new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT') : '', h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
     condividiFile(new Blob(['﻿' + righe.join('\r\n')], { type: 'text/csv' }), 'case-' + (comune || 'tutte').replace(/\s+/g, '-') + '-' + new Date().toISOString().slice(0, 10) + '.csv');
   }
 
   // ---------- nuova casa / modifica ----------
   let nc = null;
-  const casaModificata = () => nc && !nc.id && (nc.foto.length || nc.audio || $('note').value.trim() || $('telefono').value.trim() || $('richiamo').value);
+  const casaModificata = () => nc && !nc.id && (nc.foto.length || nc.audio || $('note').value.trim() || $('telefono').value.trim() || $('richiamo').value || $('agenzia').value.trim());
   function apriNuovaCasa(esistente) {
     if (esistente) nc = { id: esistente.id, pos: esistente.lat !== '' && esistente.lat != null ? { lat: esistente.lat, lng: esistente.lng, acc: esistente.acc || 0 } : null, foto: (esistente.foto || []).slice(), audio: esistente.audio || null, audioSec: esistente.audioSec || 0, stato: esistente.stato || 'Da valutare', tipo: esistente.tipo || '', ts: esistente.ts, sync: esistente.sync };
     else nc = { pos: posizione ? { ...posizione } : null, foto: [], audio: null, stato: 'Da valutare', tipo: '' };
     $('tCasaTitolo').textContent = esistente ? 'Modifica casa' : 'Nuova casa';
     $('note').value = esistente ? esistente.note || '' : ''; $('telefono').value = esistente ? esistente.telefono || '' : ''; $('richiamo').value = esistente ? esistente.richiamo || '' : ''; $('richiamo').min = oggiISO();
     $('indirizzo').value = esistente ? esistente.address || '' : '';
+    $('agenzia').value = esistente ? esistente.agenzia || '' : '';
+    $('listaAgenzie').innerHTML = [...new Set(['Privato', ...[...case_.values()].map(h => h.agenzia).filter(Boolean)])].map(a => `<option value="${esc(a)}">`).join('');
     disegnaFoto(); disegnaVoce(); disegnaScelte(); casaVicina();
     apri('fCasa');
     if (!esistente) cercaIndirizzo(); else { allarga(); $('aiutoIndirizzo').textContent = ''; }
@@ -1049,7 +1148,7 @@
     const h = {
       id: nc.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: nc.ts || Date.now(), comune: vecchia ? vecchia.comune : cfg.comune, address,
       lat: p ? +(+p.lat).toFixed(6) : '', lng: p ? +(+p.lng).toFixed(6) : '', acc: p ? p.acc : null,
-      stato: nc.stato === 'Da valutare' && $('richiamo').value ? 'Da ricontattare' : nc.stato, tipo: nc.tipo, note: $('note').value.trim(), telefono: $('telefono').value.trim(), richiamo: $('richiamo').value,
+      stato: nc.stato === 'Da valutare' && $('richiamo').value ? 'Da ricontattare' : nc.stato, tipo: nc.tipo, note: $('note').value.trim(), telefono: $('telefono').value.trim(), richiamo: $('richiamo').value, agenzia: $('agenzia').value.trim(),
       foto: nc.foto.slice(), audio: nc.audio, audioSec: nc.audioSec || 0,
       sync: vecchia && vecchia.sync === 'ok' ? 'ok' : conGoogle() ? 'attesa' : 'locale', remote: vecchia ? vecchia.remote : null
     };
@@ -1072,7 +1171,7 @@
     if (invioInCorso || !conGoogle()) return; invioInCorso = true;
     try {
       for (const r of [...case_.values()].filter(h => h.sync === 'attesa')) {
-        const house = { id: r.id, ts: r.ts, comune: r.comune, day: '', address: r.address, lat: r.lat, lng: r.lng, acc: r.acc, stato: r.stato, tipo: r.tipo, note: [r.note, r.telefono ? 'Tel. ' + r.telefono : '', r.richiamo ? 'Richiamare il ' + new Date(r.richiamo + 'T12:00').toLocaleDateString('it-IT') : ''].filter(Boolean).join(' – '),
+        const house = { id: r.id, ts: r.ts, comune: r.comune, day: '', address: r.address, lat: r.lat, lng: r.lng, acc: r.acc, stato: r.stato, tipo: r.tipo, note: [r.note, r.agenzia ? 'Cartello: ' + r.agenzia : '', r.telefono ? 'Tel. ' + r.telefono : '', r.richiamo ? 'Richiamare il ' + new Date(r.richiamo + 'T12:00').toLocaleDateString('it-IT') : ''].filter(Boolean).join(' – '),
           photos: (r.foto || []).map(u => ({ b64: u.split(',')[1], mime: 'image/jpeg' })), audio: r.audio instanceof Blob ? { b64: await b64(r.audio), mime: r.audio.type } : null };
         const res = await api('saveHouse', { house });
         r.sync = 'ok'; r.remote = { photos: res.photoUrls || [], audio: res.audioUrl || '' };
@@ -1091,22 +1190,34 @@
     for (const h of await DB.all('case')) case2.push({ ...h, audio: h.audio instanceof Blob ? { b64: await b64(h.audio), mime: h.audio.type } : null });
     const reti = {}, copertura = {};
     for (const k of await DB.chiavi('reti')) reti[k] = await DB.get('reti', k);
-    for (const k of await DB.chiavi('visti')) { const v = await DB.get('visti', k); if (v) copertura[k] = { id: v.id, b64: b64da(v.v) }; }
-    const dati = { app: 'Agente Moni', versione: VERSIONE, creato: new Date().toISOString(), cfg: { comuni: cfg.comuni, rivedi: cfg.rivedi }, case: case2, reti, copertura };
-    condividiFile(new Blob([JSON.stringify(dati)], { type: 'application/json' }), 'agente-moni-backup-' + new Date().toISOString().slice(0, 10) + '.json');
+    for (const k of await DB.chiavi('visti')) { const v = await DB.get('visti', k); if (v) copertura[k] = { id: v.id, b64: b64da(v.v), p: v.p ? b64da(v.p) : '', f: v.f ? b64da(v.f) : '' }; }
+    const dati = { app: 'Zona', versione: VERSIONE, creato: new Date().toISOString(), cfg: { comuni: cfg.comuni, rivedi: cfg.rivedi, aree: cfg.aree, zonaNome: cfg.zonaNome, profilo: cfg.profilo }, case: case2, reti, copertura,
+      note: [...note.values()], persone: [...persone.values()], agenda: [...agenda.values()], uscite };
+    condividiFile(new Blob([JSON.stringify(dati)], { type: 'application/json' }), 'zona-backup-' + (nomeAgente() ? nomeAgente().toLowerCase() + '-' : '') + new Date().toISOString().slice(0, 10) + '.json');
   }
   $('inputBackup').onchange = async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try {
-      const d = JSON.parse(await f.text()); if (d.app !== 'Agente Moni') throw new Error('non è un backup di Agente Moni');
+      const d = JSON.parse(await f.text()); if (d.app !== 'Zona' && d.app !== 'Agente Moni') throw new Error('non è un backup di Zona');
+      const dc = d.cfg || {};
+      if (dc.aree) for (const [k, v] of Object.entries(dc.aree)) if (!cfg.aree[k]) cfg.aree[k] = v;
+      if (dc.zonaNome && !cfg.zonaNome) cfg.zonaNome = dc.zonaNome;
+      if (dc.profilo && !(cfg.profilo && cfg.profilo.nome)) salvaProfilo(dc.profilo);
+      for (const [store, mappa] of [['note', note], ['persone', persone], ['agenda', agenda]]) for (const x of d[store] || []) if (x && x.id && !mappa.has(x.id)) { mappa.set(x.id, x); await DB.put(store, x); }
+      for (const u of d.uscite || []) if (u && u.id && !uscite.some(x => x.id === u.id)) { uscite.push(u); await DB.put('uscite', u); }
+      uscite.sort((a, b) => a.inizio - b.inizio);
       let nCase = 0;
       for (const h of d.case || []) { if (await DB.get('case', h.id)) continue; if (h.audio && h.audio.b64) { const bin = atob(h.audio.b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); h.audio = new Blob([u], { type: h.audio.mime }); } else h.audio = null; await DB.put('case', h); nCase++; }
       for (const [k, r] of Object.entries(d.reti || {})) { if (!(await DB.get('reti', k))) await DB.put('reti', r, k); if (!cfg.comuni.includes(k)) cfg.comuni.push(k); }
       for (const [k, c] of Object.entries(d.copertura || {})) {
         const r = await DB.get('reti', k); if (!r || r.id !== c.id) continue;
-        const loro = u16da(c.b64), mio = await DB.get('visti', k), v = mio && mio.id === c.id ? mio.v : new Uint16Array(loro.length);
-        for (let i = 0; i < v.length; i++) if (loro[i] > v[i]) v[i] = loro[i];
-        await DB.put('visti', { id: c.id, v }, k);
+        const mio = await DB.get('visti', k), stessa = mio && mio.id === c.id, out = { id: c.id };
+        for (const [campo, b] of [['v', c.b64], ['p', c.p], ['f', c.f]]) {
+          const loro = b ? u16da(b) : null, v = stessa && mio[campo] ? mio[campo] : loro ? new Uint16Array(loro.length) : null;
+          if (v && loro && loro.length === v.length) for (let i = 0; i < v.length; i++) if (loro[i] > v[i]) v[i] = loro[i];
+          if (v) out[campo] = v;
+        }
+        if (out.v) await DB.put('visti', out, k);
       }
       salvaCfg(); toast(`Backup ripristinato: ${nCase} case nuove.`, 'ok', 5000);
       chiudi('fImpost'); preparaComune(false);
@@ -1121,56 +1232,23 @@
       if (S.auto) voci.push({ i: ICO.auto, t: 'Riportami alla macchina', s: 'La strada più breve', f: () => { chiudi('fMenu'); const r = Planner.versoPunto(G, visti, pos4() || S.auto, S.auto, cfg.rivedi); if (r && r.km > 0.03) impostaRotta(r); else toast('Sei già alla macchina.'); } });
       voci.push({ i: ICO.ok, t: 'Basta per oggi', s: 'Le strade viste restano segnate', f: () => { chiudi('fMenu'); bastaPerOggi(); } });
     }
+    voci.push({ i: ICO.grafico, t: 'Il mio pannello', s: 'Da fare oggi, settimana, zona, uscite', f: apriPannello });
+    voci.push({ i: ICO.nota, t: 'Taccuino', s: note.size + ' notizie · ' + persone.size + ' persone della zona', f: () => apriTaccuino() });
     voci.push({ i: ICO.casa, t: 'Le mie case', s: casePerComune().length + ' a ' + (cfg.comune || '—'), f: () => { chiudi('fMenu'); apriCase(); } });
+    voci.push({ i: ICO.mappa, t: cfg.zonaNome ? 'La mia zona: ' + cfg.zonaNome : 'La mia zona', s: (cfg.comuni.length === 1 ? '1 area' : cfg.comuni.length + ' aree') + ' · cambia o aggiungi', f: () => { chiudi('fMenu'); apriComuni(); } });
     if (G && (R.isolate || []).length) voci.push({ i: ICO.auto, t: 'Case isolate in macchina', s: (R.isolate.length - Object.keys(S.isolateViste).length) + ' da vedere', f: () => { chiudi('fMenu'); if (S.fase === 'cammino' && !confirm('Interrompo il giro a piedi?')) return; if (S.fase === 'cammino') bastaPerOggi(); S.fase = 'macchina'; salvaStato(); aggiorna(true); } });
-    voci.push({ i: ICO.mappa, t: 'Comuni', s: (cfg.comune || 'Nessuno') + ' · cambia o aggiungi', f: () => { chiudi('fMenu'); apriComuni(); } });
-    voci.push({ i: ICO.voce, t: 'Indicazioni a voce: ' + (cfg.voce ? 'sì' : 'no'), s: cfg.voce ? 'Tocca per spegnerle' : 'Il telefono ti dice dove girare', f: () => { cfg.voce = !cfg.voce; salvaCfg(); if (cfg.voce) parla('Indicazioni a voce accese.'); apriMenu(); } });
-    voci.push({ i: ICO.foglio, t: 'Esporta le case (Excel)', s: 'Elenco da mandare o stampare', f: () => esportaCSV(casePerComune(), cfg.comune) });
+    voci.push({ i: ICO.foglio, t: 'Esporta in Excel', s: 'Case di ' + (cfg.comune || '—') + ' o tutte le notizie', f: () => { if (confirm('Esporto le case di ' + (cfg.comune || 'questa area') + '? (Annulla = esporta le notizie del taccuino)')) esportaCSV(casePerComune(), cfg.comune); else esportaNote(); } });
     if (conGoogle()) voci.push({ i: ICO.foglio, t: 'Apri il foglio Google', s: 'Tutte le case nel foglio condiviso', f: () => { const u = LS.get('sheetUrl', ''); if (u) window.open(u, '_blank'); else toast('Prova prima il collegamento nelle impostazioni.', 'errore'); } });
-    voci.push({ i: ICO.ingranaggio, t: 'Impostazioni', s: 'Ripasso delle strade, backup, Google', f: () => { chiudi('fMenu'); apriImpost(); } });
-    voci.push({ i: ICO.aiuto, t: 'Come si usa', s: 'Spiegazione in 1 minuto', f: () => { chiudi('fMenu'); apriAiuto(); } });
+    voci.push({ i: ICO.persona, t: 'Profilo' + (nomeAgente() ? ': ' + nomeAgente() : ''), s: 'Dati, obiettivi, PIN, altri agenti', f: apriProfilo });
+    voci.push({ i: ICO.ingranaggio, t: 'Impostazioni', s: 'Ripasso delle strade, avvisi, backup, Google', f: () => { chiudi('fMenu'); apriImpost(); } });
+    voci.push({ i: ICO.aiuto, t: 'Come si usa', s: 'Spiegazione in 2 minuti', f: () => { chiudi('fMenu'); apriAiuto(); } });
     c.innerHTML = '';
     voci.forEach(v => { const b = document.createElement('button'); b.className = 'voce-menu'; b.innerHTML = `${v.i}<span>${esc(v.t)}<small>${esc(v.s)}</small></span>`; b.onclick = v.f; c.appendChild(b); });
     apri('fMenu');
   }
   $('tMenu').onclick = apriMenu;
 
-  // ---------- comuni ----------
-  async function apriComuni() {
-    const c = $('comuniCorpo'); c.innerHTML = '';
-    let scaricati = []; try { scaricati = await DB.chiavi('reti'); } catch (e) { }
-    for (const nome of cfg.comuni) {
-      const b = document.createElement('button'); b.className = 'giorno-scelta' + (nome === cfg.comune ? ' oggi' : '');
-      let sotto = 'Mappa da scaricare (1-3 minuti)';
-      if (scaricati.includes(nome)) {
-        sotto = 'Mappa sul telefono';
-        try { if (nome === cfg.comune && G) sotto = Math.round(avanzamento().perc * 100) + '% delle strade viste'; else { const r = await DB.get('reti', nome), v = await DB.get('visti', nome); if (r && v && v.id === r.id) { const g = Planner.prepara(r); sotto = Math.round(Planner.avanzamento(g, v.v, cfg.rivedi).perc * 100) + '% delle strade viste'; } } } catch (e) { }
-      }
-      b.innerHTML = `<b>${esc(nome)}</b><span>${sotto}</span>`;
-      b.onclick = () => { chiudi('fComuni'); cambiaComune(nome); };
-      c.appendChild(b);
-    }
-    const add = document.createElement('div');
-    add.innerHTML = `<h3 class="gruppo">Aggiungi un comune</h3><button class="tasto" id="bQuiC">${ICO.posizione}Il comune dove sono adesso</button>
-      <label class="campo" for="nuovoComune">Oppure scrivi il nome</label><input class="campo" id="nuovoComune" placeholder="Nome ufficiale, per esempio Provaglio d'Iseo" autocomplete="off"><button class="tasto" id="bAggiungi">${ICO.piu}Aggiungi</button><div class="log" id="logQuiC"></div>`;
-    c.appendChild(add);
-    $('bAggiungi').onclick = () => { const nome = $('nuovoComune').value.trim(); if (!nome) return; chiudi('fComuni'); aggiungiComune(nome); };
-    $('bQuiC').onclick = () => comuneDaPosizione('logQuiC');
-    apri('fComuni');
-  }
-  async function comuneDaPosizione(idLog = 'logQui') {
-    const log = m => { const el = $(typeof idLog === 'string' ? idLog : 'logQui'); if (el) el.textContent = m; };
-    log('Cerco la tua posizione…');
-    const p = await aspettaGPS(25000);
-    if (!p) { log('Il GPS non trova la posizione: scrivi il nome del comune.'); return; }
-    log('Cerco il comune…');
-    try {
-      const nome = await Planner.trovaComune(p.lat, p.lon);
-      if (!nome) { log('Non trovo il comune qui: scrivi il nome.'); return; }
-      if (!confirm('Sei a ' + nome + '. Scarico la mappa di ' + nome + '?')) { log(''); return; }
-      chiudi('fComuni'); aggiungiComune(nome);
-    } catch (e) { log('Server delle mappe occupati: riprova tra poco o scrivi il nome.'); }
-  }
+  // ---------- comuni e quartieri della zona ----------
   function aggiungiComune(nome) {
     nome = nome.replace(/\s+/g, ' ').trim();
     if (!cfg.comuni.includes(nome)) cfg.comuni.push(nome);
@@ -1179,7 +1257,8 @@
   async function cambiaComune(nome) {
     if (S.fase === 'cammino' && !confirm('Interrompo il giro in corso? Le strade viste restano segnate.')) return;
     if (S.fase !== 'home') bastaPerOggi();
-    if (G) await DB.put('visti', { id: R.id, v: visti }, cfg.comune).catch(() => { });
+    if (G) await DB.put('visti', recVisti(), cfg.comune).catch(() => { });
+    zonaCache.delete(cfg.comune); zonaCache.delete(nome); vistaZona = false;
     cfg.comune = nome; salvaCfg();
     caricamento = null; anteprima = null; zone = null;
     await preparaComune(true);
@@ -1200,7 +1279,7 @@
         <label class="campo" for="cfgUrl">Indirizzo dello script (finisce con /exec)</label><input class="campo" type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cfg.url)}">
         <label class="campo" for="cfgKey">Chiave segreta</label><input class="campo" type="password" id="cfgKey" value="${esc(cfg.key)}">
         <button class="tasto primario" id="iSalvaG">Salva e prova il collegamento</button>${conGoogle() ? '<button class="link" id="iScollega">Scollega Google</button>' : ''}</div>
-      <p class="versione">Agente Moni · versione ${VERSIONE}</p>`;
+      <p class="versione">Zona · versione ${VERSIONE}</p>`;
     c.querySelectorAll('#iRiv [data-g]').forEach(b => b.onclick = () => { cfg.rivedi = +b.dataset.g; salvaCfg(); apriImpost(); disegnaRete(); pannello(); });
     $('iAggiorna').onclick = aggiornaMappa;
     $('iNotifiche').onclick = async () => {
@@ -1213,7 +1292,7 @@
     $('iVoce').onclick = () => { cfg.voce = !cfg.voce; salvaCfg(); if (cfg.voce) parla('Indicazioni a voce accese.'); apriImpost(); };
     $('iTogli').onclick = async () => {
       if (!confirm('Togliere ' + cfg.comune + ' dal telefono? Le strade viste si perdono, le case restano.')) return;
-      const n = cfg.comune; await DB.del('reti', n).catch(() => { }); await DB.del('visti', n).catch(() => { }); localStorage.removeItem('stato4_' + n);
+      const n = cfg.comune; await DB.del('reti', n).catch(() => { }); await DB.del('visti', n).catch(() => { }); LS.del('stato4_' + n);
       cfg.comuni = cfg.comuni.filter(x => x !== n); cfg.comune = cfg.comuni[0] || ''; salvaCfg(); chiudi('fImpost'); preparaComune(false);
     };
     $('iBackup').onclick = salvaBackup;
@@ -1232,39 +1311,706 @@
     const nome = cfg.comune, Gv = G, vv = visti, el = $('iLog'), b = $('iAggiorna');
     b.disabled = true;
     try {
-      const r = await Planner.scaricaRete(nome, m => { el.textContent = m; });
-      const Gn = Planner.prepara(r), vn = new Uint16Array(Gn.m);
-      Planner.rimappa(Gv, vv, Gn, vn);
-      await DB.put('reti', r, nome); await DB.put('visti', { id: r.id, v: vn }, nome);
+      const r = await Planner.scaricaRete(nome, m => { el.textContent = m; }, cfg.aree[nome]);
+      const Gn = Planner.prepara(r), vn = new Uint16Array(Gn.m), pn = new Uint16Array(Gn.m), fn = new Uint16Array(Gn.m);
+      Planner.rimappa(Gv, vv, Gn, vn); Planner.rimappaSegno(Gv, passi, Gn, pn); Planner.rimappaSegno(Gv, volant, Gn, fn);
+      await DB.put('reti', r, nome); await DB.put('visti', { id: r.id, v: vn, p: pn, f: fn }, nome);
       if (conGoogle()) api('saveRoutes', { comune: nome + ' (rete v4)', plan: r }).catch(() => { });
       el.textContent = 'Mappa aggiornata.';
-      if (nome === cfg.comune) { S.rotta = null; if (S.fase === 'cammino') S.fase = 'home'; salvaStato(); attivaRete(r, { id: r.id, v: vn }); aggiorna(true); sincronizzaCopertura(true); }
+      if (nome === cfg.comune) { S.rotta = null; if (S.fase === 'cammino') S.fase = 'home'; salvaStato(); attivaRete(r, { id: r.id, v: vn, p: pn, f: fn }); aggiorna(true); sincronizzaCopertura(true); }
     } catch (e) { el.textContent = 'Non riesco: ' + e.message; }
     b.disabled = false;
   }
 
   function apriAiuto() {
-    $('aiutoCorpo').innerHTML = `<p><b>1. Scegli quanto tempo hai.</b> L'app prepara un giro a piedi dalle strade con case che non hai ancora visto, partendo da dove sei.</p>
-      <p><b>2. Se sei lontano dalle strade da vedere</b>, ti propone le zone più vicine e ti porta a parcheggiare con Google Maps.</p>
-      <p><b>3. Cammina seguendo la linea gialla.</b> In alto c'è dove girare. Se prendi un'altra strada, il percorso si aggiorna da solo da dove sei.</p>
-      <p><b>4. Le strade diventano verdi</b> quando ci passi a piedi, anche fuori dal percorso. In macchina non si segna niente.</p>
-      <p><b>5. Nuova casa:</b> indirizzo automatico, foto, nota vocale, stato e telefono del cartello. Dalla scheda puoi condividerla su WhatsApp o chiamare.</p>
-      <p><b>6. Il tempo:</b> se rallenti, l'app accorcia il giro per farti tornare alla macchina in orario. Se vai veloce, aggiunge strade.</p>
-      <p><b>7. Avvisi:</b> con le notifiche attive il telefono ti avvisa anche in tasca: 10 minuti alla fine, giro cambiato, arrivo al parcheggio. Nella scheda casa puoi mettere il giorno in cui richiamare: quel giorno te lo ricorda.</p>
-      <p><b>Colori:</b> blu = da vedere, verde = già vista, giallo = i prossimi 300 m, puntini = solo passaggio.</p>
-      <p><b>Consiglio:</b> tieni lo schermo acceso (l'app lo fa da sola) e porta una batteria esterna.</p>`;
+    $('aiutoCorpo').innerHTML = `<p><b>La tua zona.</b> È il territorio che lavori: uno o più comuni, un quartiere o una zona disegnata sulla mappa. La aggiungi e la cambi da Menu → La mia zona. Con "Tutta la zona" la vedi intera.</p>
+      <p><b>1. Scegli quanto tempo hai.</b> L'app prepara un giro a piedi sulle strade con case che non hai ancora visto, partendo da dove sei. Se sei lontano, ti propone le zone più vicine e ti porta a parcheggiare.</p>
+      <p><b>2. Segui la linea gialla.</b> Le frecce indicano il verso; in alto c'è dove girare. Il pezzo già fatto diventa grigio tratteggiato; la freccia blu sul tuo pallino è la direzione in cui cammini. Se prendi un'altra strada, il giro si aggiorna da solo.</p>
+      <p><b>3. Il segno delle strade.</b> Le strade dove passi a piedi restano verde scuro per 3 mesi; poi diventano verde chiaro. Le blu hanno case da vedere. In macchina non si segna niente. Il tasto con i fogli sovrapposti sulla mappa mostra la legenda.</p>
+      <p><b>4. Case:</b> "Nuova casa" salva indirizzo, foto, nota vocale, stato, telefono e agenzia del cartello. Dalla scheda chiami, condividi su WhatsApp o metti il giorno in cui richiamare.</p>
+      <p><b>5. Taccuino:</b> quello che senti al bar, dai negozianti, dai vicini (chi vende, chi eredita, chi si trasferisce) va in "Notizia". Le persone che te le danno finiscono nella rubrica della zona e l'app ti ricorda di ripassare da loro.</p>
+      <p><b>6. Volantini:</b> durante il giro accendi "Sto lasciando volantini": le strade si segnano e le vedi sulla mappa (strato "Strade con volantini").</p>
+      <p><b>7. Il pannello:</b> cose da fare oggi (richiami, notizie da verificare, persone da risentire, promemoria tuoi), la settimana rispetto ai tuoi obiettivi, i chilometri delle ultime settimane, quanto hai visto di ogni area.</p>
+      <p><b>8. Alla fine premi "Basta per oggi":</b> così l'uscita finisce nel pannello.</p>
+      <p><b>Consiglio:</b> tieni lo schermo acceso (l'app lo fa da sola) e porta una batteria esterna. Ogni tanto fai Impostazioni → Salva backup.</p>`;
     apri('fAiuto');
+  }
+
+  // =====================================================================================
+  // ZONA: profilo dell'agente, zona sulla mappa, pannello dell'attività, taccuino, agenda
+  // =====================================================================================
+  const saluto = () => { const h = new Date().getHours(); return h >= 5 && h < 13 ? 'Buongiorno' : h >= 13 && h < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
+  const nomeAgente = () => ((cfg.profilo && cfg.profilo.nome) || '').trim().split(/\s+/)[0] || '';
+  const OB = () => Object.assign({ ore: 6, case: 10, notizie: 5, risentire: 30 }, (cfg.profilo && cfg.profilo.obiettivi) || {});
+  const nuovoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const giornoISO = ts => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const inizioSettimana = (ts = Date.now()) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.getTime(); };
+  const settimanaPrima = (ts, n) => { const d = new Date(ts); d.setDate(d.getDate() - 7 * n); return d.getTime(); };
+  const dataBreve = ts => new Date(ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+  const giorniFa = ts => { const g = Math.floor((inizioGiorno(Date.now()) - inizioGiorno(ts)) / 864e5); return g <= 0 ? 'oggi' : g === 1 ? 'ieri' : g + ' giorni fa'; };
+  const inizioGiorno = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const taglia = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+  const tipoArea = n => { const a = cfg.aree[n]; return !a || a.tipo === 'comune' || !a.tipo ? 'Comune' : a.tipo === 'quartiere' ? 'Quartiere' : 'Zona disegnata'; };
+  const nCaseArea = n => [...case_.values()].filter(h => h.comune === n).length;
+  const kmBreve = km => km < 1 ? Math.round(km * 1000 / 10) * 10 + ' m' : km.toFixed(1).replace('.', ',') + ' km';
+
+  // ---------- dati del taccuino e delle uscite ----------
+  const note = new Map(), persone = new Map(), agenda = new Map(); let uscite = [];
+  async function caricaTaccuino() {
+    try { (await DB.all('note')).forEach(n => note.set(n.id, n)); } catch (e) { }
+    try { (await DB.all('persone')).forEach(n => persone.set(n.id, n)); } catch (e) { }
+    try { (await DB.all('agenda')).forEach(n => agenda.set(n.id, n)); } catch (e) { }
+    try { uscite = (await DB.all('uscite')).sort((a, b) => a.inizio - b.inizio); } catch (e) { uscite = []; }
+    disegnaNote();
+  }
+  function registraUscita(ses, ult) {
+    const fine = Math.max(ses.inizio, ses.ultimo || ses.inizio);
+    const u = { id: nuovoId(), inizio: ses.inizio, fine, minuti: Math.round((fine - ses.inizio) / 60e3), area: cfg.comune, metri: Math.round(ses.metri || 0), kmNuovi: +(ult.kmNuovi || 0).toFixed(3), case: ult.case || 0, metriVol: Math.round(ses.metriVol || 0) };
+    if (u.metri < 30 && !u.case) return;
+    uscite.push(u); DB.put('uscite', u).catch(() => { });
+    aggiornaStatArea();
+  }
+  function aggiornaStatArea() {
+    if (!G || !cfg.comune) return;
+    const a = cfg.aree[cfg.comune] || (cfg.aree[cfg.comune] = { tipo: 'comune' });
+    a.stat = Object.assign(avanzamento(), { ts: Date.now() }); salvaCfg();
+  }
+  const statArea = n => n === cfg.comune && G ? avanzamento() : cfg.aree[n] && cfg.aree[n].stat;
+  // statistiche delle altre aree (si calcolano dalla mappa salvata sul telefono)
+  async function statTutte(forza) {
+    let cambi = 0;
+    for (const n of cfg.comuni) {
+      if (n === cfg.comune) continue;
+      const a = cfg.aree[n] || (cfg.aree[n] = { tipo: 'comune' });
+      if (!forza && a.stat && Date.now() - a.stat.ts < 6 * 3600e3) continue;
+      try {
+        const z = await apriArea(n); if (!z) continue;
+        a.stat = Object.assign(Planner.avanzamento(z.G, z.v, cfg.rivedi), { ts: Date.now() }); cambi++;
+        if (!a.bbox) { let s = 90, w = 180, nn = -90, e = -180; for (let i = 0; i < z.G.n; i++) { const la = z.G.R.lat[i], lo = z.G.R.lon[i]; if (la < s) s = la; if (la > nn) nn = la; if (lo < w) w = lo; if (lo > e) e = lo; } a.bbox = [s, w, nn, e]; }
+      } catch (e) { }
+    }
+    if (cambi) salvaCfg();
+    return cambi;
+  }
+  async function apriArea(n) {
+    if (zonaCache.has(n)) return zonaCache.get(n);
+    const r = await DB.get('reti', n); if (!r) return null;
+    const v = await DB.get('visti', n), g = Planner.prepara(r), ok = v && v.id === r.id;
+    const z = { G: g, v: ok && v.v ? v.v : new Uint16Array(g.m), p: ok && v.p ? v.p : ok && v.v ? v.v : new Uint16Array(g.m), f: ok && v.f ? v.f : null };
+    zonaCache.set(n, z);
+    return z;
+  }
+
+  // ---------- agenda: cose da fare oggi ----------
+  function cosePerOggi(giorniAvanti = 0) {
+    const lim = giornoISO(Date.now() + giorniAvanti * 864e5), out = [];
+    for (const h of case_.values()) if (h.richiamo && h.richiamo <= lim) out.push({ tipo: 'casa', quando: h.richiamo, titolo: 'Richiama: ' + (h.address || 'casa'), sotto: [h.telefono, h.comune].filter(Boolean).join(' · '), id: h.id });
+    for (const n of note.values()) if (n.verifica && n.verifica <= lim && n.stato === 'Da verificare') out.push({ tipo: 'nota', quando: n.verifica, titolo: 'Verifica: ' + taglia(n.testo, 70), sotto: [n.tipoInfo, n.chi].filter(Boolean).join(' · '), id: n.id });
+    for (const a of agenda.values()) if (!a.fatto && (!a.giorno || a.giorno <= lim)) out.push({ tipo: 'compito', quando: a.giorno || giornoISO(a.ts), titolo: a.testo, sotto: a.giorno ? dataTesto(a.giorno) : 'Senza data', id: a.id });
+    const ris = OB().risentire;
+    if (ris) for (const p of persone.values()) { const u = p.ultimo || p.ts; const quando = giornoISO(u + ris * 864e5); if (quando <= lim) out.push({ tipo: 'persona', quando, titolo: 'Passa a trovare ' + p.nome, sotto: [p.ruolo, 'sentita ' + giorniFa(u)].filter(Boolean).join(' · '), id: p.id }); }
+    return out.sort((a, b) => a.quando < b.quando ? -1 : a.quando > b.quando ? 1 : 0);
+  }
+  const ICO_AGENDA = { casa: () => ICO.telefono, nota: () => ICO.nota, compito: () => ICO.lista, persona: () => ICO.persona };
+  function rigaAgenda(x) {
+    const ritardo = x.quando < oggiISO() ? ' ritardo' : '';
+    return `<div class="agenda-riga${ritardo}"><button class="agenda-ico" data-ag="${x.tipo}:${x.id}" aria-label="${x.tipo === 'compito' ? 'Segna come fatto' : 'Apri'}">${x.tipo === 'compito' ? '<span class="spunta-vuota"></span>' : ICO_AGENDA[x.tipo]()}</button><button class="agenda-testo" data-apri="${x.tipo}:${x.id}"><b>${esc(x.titolo)}</b><span>${esc(x.sotto)}${ritardo ? ' · in ritardo' : ''}</span></button></div>`;
+  }
+  function collegaAgenda(box, ridisegna) {
+    const fai = async (k, apriSolo) => {
+      const [tipo, id] = k.split(':');
+      if (tipo === 'casa') apriScheda(id);
+      else if (tipo === 'nota') apriNota(id);
+      else if (tipo === 'persona') apriPersona(id);
+      else if (tipo === 'compito' && !apriSolo) { const a = agenda.get(id); if (a) { a.fatto = Date.now(); await DB.put('agenda', a); toast('Fatto', 'ok'); ridisegna(); pannello(); } }
+      else if (tipo === 'compito') { const a = agenda.get(id); if (a) { const t = prompt('Cosa devi fare?', a.testo); if (t != null) { if (!t.trim()) { await DB.del('agenda', id); agenda.delete(id); } else { a.testo = t.trim(); await DB.put('agenda', a); } ridisegna(); pannello(); } } }
+    };
+    box.querySelectorAll('[data-ag]').forEach(b => b.onclick = () => fai(b.dataset.ag, false));
+    box.querySelectorAll('[data-apri]').forEach(b => b.onclick = () => fai(b.dataset.apri, true));
+  }
+
+  // ---------- area in cui mi trovo (se è un'altra della mia zona) ----------
+  function areaQui() {
+    if (!posizione || S.fase !== 'home' || cfg.comuni.length < 2 || vistaZona) return null;
+    const la = posizione.lat, lo = posizione.lng, m = 0.0005;
+    if (G && Planner.nodoVicino(G, la, lo, 120) >= 0) return null;
+    for (const n of cfg.comuni) {
+      if (n === cfg.comune) continue;
+      const a = cfg.aree[n]; if (!a || !a.bbox) continue;
+      const b = a.bbox; if (la < b[0] - m || la > b[2] + m || lo < b[1] - m || lo > b[3] + m) continue;
+      if (a.poly && !Planner.dentroPoligono(a.poly, la, lo)) continue;
+      return n;
+    }
+    return null;
+  }
+
+  // ---------- vista di tutta la zona ----------
+  async function mostraZona(on) {
+    if (on && S.fase !== 'home') { toast('Finisci prima il giro in corso.', 'errore'); return; }
+    if (on) { toast('Apro tutta la zona…', '', 1800); for (const n of cfg.comuni) if (n !== cfg.comune) { try { await apriArea(n); } catch (e) { } } await statTutte(); }
+    vistaZona = on; anteprima = null; zone = null;
+    caricaMarcatori(); disegnaNote(); disegnaRete(); aggiorna(true);
+    if (!on) disegna(true);
+  }
+  function disegnaZona() {
+    for (const n of cfg.comuni) {
+      if (n === cfg.comune && G) disegnaReteDi(G, visti, passi, volant, lRete, false);
+      else { const z = zonaCache.get(n); if (z) disegnaReteDi(z.G, z.v, z.p, z.f, lRete, false); }
+      const a = cfg.aree[n];
+      if (a && a.poly) L.polygon(a.poly, { renderer: tela, pane: 'rete', color: '#17262b', weight: 2, dashArray: '6 6', fillColor: OCRA, fillOpacity: .05, interactive: false }).addTo(lRete);
+    }
+  }
+  function caricaMarcatori() { lCase.clearLayers(); marcatori.clear(); [...case_.values()].forEach(h => marcatore(h)); }
+  function riepilogoZona() {
+    let fatti = 0, tot = 0, recenti = 0; const aree = cfg.comuni.map(n => statArea(n)).filter(Boolean);
+    aree.forEach(s => { fatti += s.kmFatti; tot += s.kmTot; recenti += s.kmRecenti || 0; });
+    return { fatti, tot, recenti, perc: tot ? fatti / tot : 0, nAree: cfg.comuni.length, nCase: [...case_.values()].filter(h => cfg.comuni.includes(h.comune)).length };
+  }
+  function pannelloZona(box, on) {
+    const z = riepilogoZona(), perc = Math.round(z.perc * 100);
+    const righe = cfg.comuni.map(n => { const st = statArea(n); return `<button class="zona" data-a="${esc(n)}"><span class="num-giro">${ICO.mappa}</span><div><b>${esc(n)}</b><span>${st ? Math.round(st.perc * 100) + '% viste · ' + nCaseArea(n) + ' case' : tipoArea(n) + ' · mappa da scaricare'}</span></div>${n === cfg.comune ? '<span class="dist">aperta</span>' : ''}</button>`; }).join('');
+    box.innerHTML = `<p class="ciao">${esc(cfg.zonaNome || 'La mia zona')}</p><h1>Tutta la zona</h1>
+      <div class="avanz-testo"><span><b>${perc}%</b> delle strade con case viste</span><span>${kmBreve(z.fatti)} su ${kmBreve(z.tot)}</span></div><div class="avanz"><div style="width:${perc}%"></div></div>
+      ${righe || '<p>Nessuna area nella zona.</p>'}
+      <button class="tasto primario" id="bChiudiZona">Torna a ${esc(cfg.comune || 'la mappa')}</button>
+      <div class="riga"><button class="link" id="bGestZona">Aggiungi un'area</button><button class="link" id="bPanZ">Pannello</button></div>`;
+    box.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { const n = b.dataset.a; if (n === cfg.comune) mostraZona(false); else cambiaComune(n); });
+    on('bChiudiZona', () => mostraZona(false)); on('bGestZona', apriComuni); on('bPanZ', apriPannello);
+  }
+
+  // ---------- disegnare una zona sulla mappa ----------
+  let disegno = null;
+  const lDisegno = L.layerGroup().addTo(map);
+  function iniziaDisegno(dopo) {
+    if (S.fase === 'cammino') { toast('Finisci prima il giro in corso.', 'errore'); return; }
+    ['fComuni', 'fBenvenuto', 'fMenu', 'fPannello'].forEach(chiudi);
+    disegno = { punti: [], dopo }; chiudiPannello(true); $('disegna').classList.add('visibile'); aggiornaDisegno();
+    if (posizione) map.setView([posizione.lat, posizione.lng], Math.max(map.getZoom(), 15));
+    toast('Tocca la mappa lungo il confine della zona, un punto alla volta.', '', 5000);
+  }
+  function aggiornaDisegno() {
+    lDisegno.clearLayers(); if (!disegno) return;
+    const pts = disegno.punti;
+    if (pts.length >= 3) L.polygon(pts, { color: '#17262b', weight: 3, fillColor: OCRA, fillOpacity: .2, interactive: false }).addTo(lDisegno);
+    else if (pts.length === 2) L.polyline(pts, { color: '#17262b', weight: 3, interactive: false }).addTo(lDisegno);
+    pts.forEach(p => L.circleMarker(p, { radius: 8, color: '#fff', weight: 3, fillColor: '#17262b', fillOpacity: 1, interactive: false }).addTo(lDisegno));
+    $('disegnaTesto').textContent = pts.length < 3 ? `Tocca il confine: ${pts.length} di almeno 3 punti` : `${pts.length} punti · ${Planner.areaKm2(pts).toFixed(1).replace('.', ',')} km²`;
+    $('disegnaFatto').disabled = pts.length < 3; $('disegnaTogli').disabled = !pts.length;
+  }
+  function fineDisegno(ok) {
+    const d = disegno; disegno = null; lDisegno.clearLayers(); $('disegna').classList.remove('visibile'); chiudiPannello(false);
+    const esci = nome => { if (d && d.dopo) d.dopo(nome); else if (nome) aggiungiComune(nome); };
+    if (!ok || !d) return esci(null);
+    const poly = d.punti.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]), km2 = Planner.areaKm2(poly);
+    if (km2 > 30) { toast('Zona troppo grande (' + Math.round(km2) + ' km²): disegnane una più piccola o aggiungi il comune intero.', 'errore', 8000); return esci(null); }
+    let nome = prompt('Come chiami questa zona?', 'Zona ' + (cfg.comuni.length + 1));
+    if (!nome || !nome.trim()) return esci(null);
+    nome = nome.replace(/\s+/g, ' ').trim(); while (cfg.comuni.includes(nome)) nome += ' bis';
+    cfg.aree[nome] = { tipo: 'zona', poly }; salvaCfg();
+    esci(nome);
+  }
+  $('disegnaTogli').onclick = () => { if (disegno) { disegno.punti.pop(); aggiornaDisegno(); } };
+  $('disegnaAnnulla').onclick = () => fineDisegno(false);
+  $('disegnaFatto').onclick = () => fineDisegno(true);
+
+  // ---------- aggiungere aree: posizione, comune, quartiere ----------
+  async function comuneDaPosizione(idLog = 'logQui', fatto) {
+    const el = () => $(typeof idLog === 'string' ? idLog : 'logQui');
+    const log = m => { if (el()) el().textContent = m; };
+    log('Cerco la tua posizione…');
+    const p = await aspettaGPS(25000);
+    if (!p) { log('Il GPS non trova la posizione: scrivi il nome del comune.'); return; }
+    log('Cerco dove sei…');
+    let a; try { a = await Planner.trovaAree(p.lat, p.lon); } catch (e) { log('Server delle mappe occupati: riprova tra poco o scrivi il nome.'); return; }
+    if (!a.comune) { log('Non trovo il comune qui: scrivi il nome.'); return; }
+    const fine = fatto || (nome => { chiudi('fComuni'); aggiungiComune(nome); });
+    const box = el(); if (!box) return;
+    box.innerHTML = `<p style="margin:10px 0 0;color:var(--ardesia)">Sei a <b>${esc(a.quartiere ? a.quartiere + ', ' : '')}${esc(a.comune)}</b>.</p><button class="tasto primario" id="pcCom">${ICO.piu}Aggiungi tutto ${esc(a.comune)}</button>${a.quartiere ? `<button class="tasto" id="pcQ">Solo il quartiere ${esc(a.quartiere)}</button>` : ''}`;
+    $('pcCom').onclick = () => { if (cfg.comuni.includes(a.comune)) { toast(a.comune + ' è già nella tua zona.'); return; } fine(a.comune); };
+    if ($('pcQ')) $('pcQ').onclick = () => prendiQuartiere(a.comune, a.quartiere, box, fine);
+  }
+  async function prendiQuartiere(citta, q, box, fine) {
+    box.innerHTML = '<p class="log">Scarico il confine di ' + esc(q) + '…</p>';
+    try {
+      const poly = await Planner.confineQuartiere(citta, q), nome = q + ' (' + citta + ')';
+      if (cfg.comuni.includes(nome)) { toast(nome + ' è già nella tua zona.'); box.innerHTML = ''; return; }
+      cfg.aree[nome] = { tipo: 'quartiere', citta, nome: q, poly }; salvaCfg(); fine(nome);
+    } catch (e) { box.innerHTML = '<p class="log">' + esc(e.message) + '</p>'; }
+  }
+  async function cercaQuartieri(citta, box, fine) {
+    if (!citta) { toast('Scrivi prima il nome della città.', 'errore'); return; }
+    box.innerHTML = '<p class="log">Cerco i quartieri di ' + esc(citta) + '…</p>';
+    let nomi = [];
+    try { nomi = await Planner.quartieri(citta); } catch (e) { box.innerHTML = '<p class="log">Server delle mappe occupati: riprova tra poco, oppure disegna la zona sulla mappa.</p>'; return; }
+    box.innerHTML = nomi.length ? `<p class="aiuto">Tocca il quartiere che lavori:</p><div class="scelte" style="margin-top:8px">${nomi.slice(0, 120).map((n, i) => `<button class="scelta senza-icona" data-q="${i}">${esc(n)}</button>`).join('')}</div>` : `<p class="log">Non trovo quartieri di ${esc(citta)} sulle mappe (controlla il nome ufficiale). Puoi disegnare la zona sulla mappa.</p>`;
+    box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => prendiQuartiere(citta, nomi[+b.dataset.q], box, fine));
+  }
+  async function apriComuni(modo) {
+    const c = $('comuniCorpo');
+    $('tfComuni').textContent = cfg.zonaNome || 'La mia zona';
+    c.innerHTML = `<label class="campo" for="nomeZona" style="margin-top:8px">Nome della zona</label><input class="campo" id="nomeZona" placeholder="Per esempio Franciacorta" value="${esc(cfg.zonaNome || '')}">
+      <h3 class="gruppo">Comuni e quartieri<span>${cfg.comuni.length}</span></h3><div id="listaAree"></div>
+      <h3 class="gruppo">Aggiungi alla zona</h3>
+      <button class="tasto" id="bQuiC">${ICO.posizione}Il posto dove sono adesso</button><div class="log" id="logQuiC"></div>
+      <label class="campo" for="nuovoComune">Un comune intero</label><input class="campo" id="nuovoComune" placeholder="Nome ufficiale, per esempio Provaglio d'Iseo" autocomplete="off"><button class="tasto" id="bAggiungi">${ICO.piu}Aggiungi il comune</button>
+      <label class="campo" for="cittaQ">Un quartiere di una città</label><input class="campo" id="cittaQ" placeholder="La città, per esempio Brescia" autocomplete="off"><button class="tasto" id="bCercaQ">Cerca i quartieri</button><div id="listaQ"></div>
+      <button class="tasto" id="bDisegnaC">${ICO.matita}Disegna la zona sulla mappa</button><p class="aiuto">Per una zona fatta a mano: alcune vie, un pezzo di città, più frazioni insieme.</p>`;
+    $('nomeZona').onchange = () => { cfg.zonaNome = $('nomeZona').value.trim(); salvaCfg(); $('tfComuni').textContent = cfg.zonaNome || 'La mia zona'; pannello(); };
+    const la = $('listaAree');
+    let scaricati = []; try { scaricati = await DB.chiavi('reti'); } catch (e) { }
+    if (!cfg.comuni.length) la.innerHTML = '<p class="aiuto">Ancora niente: aggiungi la prima area qui sotto.</p>';
+    for (const nome of cfg.comuni) {
+      const b = document.createElement('button'); b.className = 'giorno-scelta' + (nome === cfg.comune ? ' oggi' : '');
+      const st = statArea(nome);
+      const sotto = !scaricati.includes(nome) ? 'Mappa da scaricare (1-3 minuti)' : st ? Math.round(st.perc * 100) + '% delle strade viste · ' + nCaseArea(nome) + ' case' : 'Mappa sul telefono';
+      b.innerHTML = `<b>${esc(nome)}</b><span>${tipoArea(nome)} · ${sotto}${nome === cfg.comune ? ' · aperta adesso' : ''}</span>`;
+      b.onclick = () => { chiudi('fComuni'); cambiaComune(nome); };
+      la.appendChild(b);
+    }
+    $('bAggiungi').onclick = () => { const nome = $('nuovoComune').value.trim(); if (!nome) return; chiudi('fComuni'); aggiungiComune(nome); };
+    $('bQuiC').onclick = () => comuneDaPosizione('logQuiC');
+    $('bCercaQ').onclick = () => cercaQuartieri($('cittaQ').value.trim(), $('listaQ'), nome => { chiudi('fComuni'); aggiungiComune(nome); });
+    $('bDisegnaC').onclick = () => iniziaDisegno();
+    apri('fComuni');
+    if (modo === 'quartiere') setTimeout(() => { const i = $('cittaQ'); if (i) { i.scrollIntoView({ block: 'center' }); i.focus(); } }, 350);
+  }
+
+  // ---------- pannello dell'agente ----------
+  async function apriPannello() {
+    chiudi('fMenu'); disegnaPannello(); apri('fPannello');
+    if (await statTutte()) { if ($('fPannello').classList.contains('aperto')) disegnaPannello(); }
+  }
+  function settimanaDati(a, b) {
+    const us = uscite.filter(u => u.inizio >= a && u.inizio < b);
+    const inCorso = S.sessione && S.sessione.inizio >= a && S.sessione.inizio < b ? S.sessione : null;
+    return {
+      ore: us.reduce((x, u) => x + u.minuti, 0) / 60 + (inCorso ? Math.max(0, (inCorso.ultimo || inCorso.inizio) - inCorso.inizio) / 36e5 : 0),
+      km: us.reduce((x, u) => x + u.metri, 0) / 1000 + (inCorso ? (inCorso.metri || 0) / 1000 : 0),
+      kmNuovi: us.reduce((x, u) => x + (u.kmNuovi || 0), 0) + (inCorso && G ? Math.max(0, avanzamento().kmFatti - inCorso.km0) : 0),
+      vol: us.reduce((x, u) => x + (u.metriVol || 0), 0) / 1000 + (inCorso ? (inCorso.metriVol || 0) / 1000 : 0),
+      uscite: us.length + (inCorso ? 1 : 0),
+      case: [...case_.values()].filter(h => h.ts >= a && h.ts < b).length,
+      notizie: [...note.values()].filter(n => n.ts >= a && n.ts < b).length
+    };
+  }
+  function tile(valore, etichetta, obiettivo, attuale) {
+    const p = obiettivo ? Math.min(1, attuale / obiettivo) : 0;
+    return `<div class="tile"><b>${valore}</b><span>${etichetta}</span>${obiettivo ? `<div class="mini-barra${p >= 1 ? ' fatto' : ''}"><div style="width:${Math.round(p * 100)}%"></div></div><small>${p >= 1 ? 'Obiettivo raggiunto' : 'obiettivo ' + obiettivo}</small>` : ''}</div>`;
+  }
+  function graficoSettimane() {
+    const s0 = inizioSettimana(), dati = [];
+    for (let i = 7; i >= 0; i--) { const a = settimanaPrima(s0, i), b = settimanaPrima(s0, i - 1); dati.push({ a, km: settimanaDati(a, b).km }); }
+    const max = Math.max(1, ...dati.map(d => d.km)), W = 320, H = 128, base = 104, bw = 26, gap = (W - 16 - bw * 8) / 7;
+    let barre = '', etich = '';
+    dati.forEach((d, i) => {
+      const x = 8 + i * (bw + gap), h = d.km > 0 ? Math.max(4, (base - 14) * d.km / max) : 0, ora = i === 7;
+      barre += `<g class="barra" data-i="${i}"><rect x="${x - gap / 2}" y="0" width="${bw + gap}" height="${H}" fill="transparent"/>${h ? `<rect x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="4" fill="${ora ? VERDE : '#8cc7a1'}"/>` : `<rect x="${x}" y="${base - 2}" width="${bw}" height="2" rx="1" fill="#d5dcda"/>`}</g>`;
+      if (i % 2 === 1 || ora) etich += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="#4a5a60">${ora ? 'questa' : esc(dataBreve(d.a))}</text>`;
+      if (ora && d.km > 0) etich += `<text x="${x + bw / 2}" y="${base - h - 5}" text-anchor="middle" font-size="13" font-weight="700" fill="#17262b">${esc(kmBreve(d.km))}</text>`;
+    });
+    return { svg: `<svg class="grafico" viewBox="0 0 ${W} ${H}" role="img" aria-label="Chilometri a piedi nelle ultime 8 settimane"><line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="#d5dcda"/>${barre}${etich}</svg>`, dati };
+  }
+  function calendarioAttivita() {
+    const perGiorno = new Map();
+    uscite.forEach(u => { const k = giornoISO(u.inizio); perGiorno.set(k, (perGiorno.get(k) || 0) + u.minuti); });
+    if (S.sessione) { const k = giornoISO(S.sessione.inizio); perGiorno.set(k, (perGiorno.get(k) || 0) + Math.round(((S.sessione.ultimo || S.sessione.inizio) - S.sessione.inizio) / 60e3)); }
+    const s0 = settimanaPrima(inizioSettimana(), 11), C = 22, oggi = giornoISO(Date.now());
+    const colore = m => !m ? '#eef2f1' : m < 30 ? '#cfe8d7' : m < 60 ? '#8cc7a1' : m < 120 ? '#4fa572' : '#1f6b42';
+    let celle = '';
+    for (let w = 0; w < 12; w++) for (let d = 0; d < 7; d++) {
+      const g = new Date(s0); g.setDate(g.getDate() + w * 7 + d); const k = giornoISO(g.getTime()); if (k > oggi) continue;
+      const m = perGiorno.get(k) || 0;
+      celle += `<rect class="cella-cal" data-g="${k}" data-m="${m}" x="${24 + w * C}" y="${d * C}" width="${C - 4}" height="${C - 4}" rx="4" fill="${colore(m)}"${k === oggi ? ' stroke="#17262b" stroke-width="2"' : ''}/>`;
+    }
+    const gg = ['L', '', 'M', '', 'V', '', 'D'].map((t, d) => t ? `<text x="0" y="${d * C + 14}" font-size="12" fill="#4a5a60">${t}</text>` : '').join('');
+    const legenda = [0, 20, 45, 90, 150].map((m, i) => `<rect x="${170 + i * 20}" y="${7 * C + 6}" width="16" height="16" rx="4" fill="${colore(m)}"/>`).join('');
+    return `<svg class="grafico" viewBox="0 0 290 ${7 * C + 28}" role="img" aria-label="Giorni con uscite nelle ultime 12 settimane">${gg}${celle}<text x="164" y="${7 * C + 19}" text-anchor="end" font-size="12" fill="#4a5a60">meno</text>${legenda}<text x="274" y="${7 * C + 19}" font-size="12" fill="#4a5a60">più</text></svg>`;
+  }
+  function disegnaPannello() {
+    const c = $('pannelloAgente'), ob = OB(), pr = cfg.profilo || {};
+    const set0 = inizioSettimana(), W = settimanaDati(set0, Date.now() + 864e5);
+    const oggiL = cosePerOggi(0), prossimi = cosePerOggi(7).filter(x => x.quando > oggiISO());
+    const z = riepilogoZona();
+    const iniziali = (pr.nome || 'Z').trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
+    const graf = graficoSettimane();
+    const casePerStato = STATI.map(s => ({ s, n: [...case_.values()].filter(h => cfg.comuni.includes(h.comune) && h.stato === s.k).length })).filter(o => o.n);
+    const agenzie = new Map(); [...case_.values()].forEach(h => { if (h.agenzia && /Cartello/.test(h.stato || '')) agenzie.set(h.agenzia, (agenzie.get(h.agenzia) || 0) + 1); });
+    const agTop = [...agenzie.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const nDaVer = [...note.values()].filter(n => n.stato === 'Da verificare').length;
+    const ult = uscite.slice(-5).reverse();
+    c.innerHTML = `
+      <div class="profilo-testa"><div class="avatar">${esc(iniziali)}</div><div><b>${esc(saluto())}${nomeAgente() ? ', ' + esc(nomeAgente()) : ''}</b><span>${esc([pr.agenzia, cfg.zonaNome ? 'Zona ' + cfg.zonaNome : ''].filter(Boolean).join(' · ') || 'Il tuo pannello')}</span></div><button class="tondo piccolo" id="pProfilo" aria-label="Profilo">${ICO.persona}</button></div>
+
+      <div class="sezione"><h3 class="gruppo" style="margin-top:0">Da fare oggi<span>${oggiL.length || 'niente'}</span></h3>
+        <div id="pAgenda">${oggiL.length ? oggiL.map(rigaAgenda).join('') : '<p class="aiuto">Niente in scadenza. Buon giro!</p>'}</div>
+        ${prossimi.length ? `<details class="piega"><summary>Prossimi 7 giorni (${prossimi.length})</summary><div id="pProssimi">${prossimi.map(rigaAgenda).join('')}</div></details>` : ''}
+        <div class="aggiungi-compito"><input class="campo" id="pCompito" placeholder="Aggiungi una cosa da fare…" autocomplete="off"><input class="campo" type="date" id="pCompitoData" aria-label="Per quando"><button class="tasto piccolo" id="pCompitoOk" aria-label="Aggiungi">${ICO.piu}</button></div>
+      </div>
+
+      <div class="sezione"><h3 class="gruppo">Questa settimana<span>${W.uscite === 1 ? '1 uscita' : W.uscite + ' uscite'}</span></h3>
+        <div class="tiles">
+          ${tile(oreTesto(W.ore).replace(' minuti', ' min'), 'a piedi', ob.ore, W.ore)}
+          ${tile(String(W.case), W.case === 1 ? 'casa segnata' : 'case segnate', ob.case, W.case)}
+          ${tile(String(W.notizie), W.notizie === 1 ? 'notizia raccolta' : 'notizie raccolte', ob.notizie, W.notizie)}
+          ${tile(kmBreve(W.kmNuovi), 'di strade nuove', 0, 0)}
+        </div>
+        ${W.vol > 0.05 ? `<p class="aiuto">Volantini: ${kmBreve(W.vol)} di strade questa settimana.</p>` : ''}
+      </div>
+
+      <div class="sezione"><h3 class="gruppo">Chilometri a piedi<span>ultime 8 settimane</span></h3>${graf.svg}<p class="aiuto" id="pGrafSel">Tocca una barra per vedere la settimana.</p></div>
+
+      <div class="sezione"><h3 class="gruppo">Le tue uscite<span>ultime 12 settimane</span></h3>${calendarioAttivita()}<p class="aiuto" id="pCalSel">Ogni quadratino è un giorno: più è scuro, più hai camminato.</p>
+        ${ult.length ? ult.map(u => `<div class="uscita"><b>${esc(new Date(u.inizio).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }))}</b><span>${esc(u.area || '')} · ${oreTesto(u.minuti / 60).replace(' minuti', ' min')} · ${kmBreve(u.metri / 1000)}${u.case ? ' · ' + (u.case === 1 ? '1 casa' : u.case + ' case') : ''}${u.metriVol > 50 ? ' · volantini' : ''}</span></div>`).join('') : '<p class="aiuto">Le uscite compaiono qui quando premi "Basta per oggi" alla fine di un giro.</p>'}
+      </div>
+
+      <div class="sezione"><h3 class="gruppo">La tua zona${cfg.zonaNome ? ': ' + esc(cfg.zonaNome) : ''}<span>${Math.round(z.perc * 100)}% vista</span></h3>
+        ${cfg.comuni.map(n => { const st = statArea(n), p = st ? Math.round(st.perc * 100) : 0; return `<button class="area-riga" data-area="${esc(n)}"><div class="area-nome"><b>${esc(n)}</b><span>${st ? p + '%' : 'da scaricare'}</span></div><div class="avanz" style="margin:4px 0"><div style="width:${p}%"></div></div><span class="area-sotto">${st ? kmBreve(Math.max(0, st.kmTot - st.kmFatti)) + ' da vedere · ' + nCaseArea(n) + ' case' + (st.kmVecchi > 0.3 ? ' · ' + kmBreve(st.kmVecchi) + ' viste più di 6 mesi fa' : '') : tipoArea(n)}</span></button>`; }).join('') || '<p class="aiuto">Nessuna area: aggiungila da "La mia zona".</p>'}
+        <div class="riga"><button class="tasto piccolo" id="pVediZona">${ICO.mappa}Vedi sulla mappa</button><button class="tasto piccolo" id="pGestZona">${ICO.piu}Aggiungi area</button></div>
+      </div>
+
+      <div class="sezione"><h3 class="gruppo">Le tue case<span>${z.nCase}</span></h3>
+        ${casePerStato.length ? `<div class="scelte">${casePerStato.map(o => `<span class="scelta conteggio">${pinSVG(o.s.k)}${esc(o.s.k)} <b>${o.n}</b></span>`).join('')}</div>` : '<p class="aiuto">Ancora nessuna casa segnata.</p>'}
+        ${agTop.length ? `<p class="aiuto" style="margin-top:12px"><b>Cartelli delle agenzie in zona:</b> ${agTop.map(([a, n]) => esc(a) + ' ' + n).join(' · ')}</p>` : ''}
+      </div>
+
+      <div class="sezione"><h3 class="gruppo">Taccuino<span>${note.size} notizie · ${persone.size} persone</span></h3>
+        <p class="aiuto">${nDaVer ? (nDaVer === 1 ? '1 notizia da verificare.' : nDaVer + ' notizie da verificare.') : 'Nessuna notizia da verificare.'}</p>
+        <div class="riga"><button class="tasto piccolo" id="pNota">${ICO.piu}Notizia</button><button class="tasto piccolo" id="pTacc">${ICO.nota}Apri il taccuino</button></div>
+      </div>
+      <p class="versione">Zona · versione ${VERSIONE}</p>`;
+    collegaAgenda(c, disegnaPannello);
+    $('pProfilo').onclick = apriProfilo;
+    $('pCompitoOk').onclick = async () => {
+      const t = $('pCompito').value.trim(); if (!t) { $('pCompito').focus(); return; }
+      const a = { id: nuovoId(), ts: Date.now(), testo: t, giorno: $('pCompitoData').value || '', fatto: 0 };
+      agenda.set(a.id, a); await DB.put('agenda', a); toast('Aggiunto', 'ok'); disegnaPannello(); pannello();
+    };
+    $('pCompito').onkeydown = e => { if (e.key === 'Enter') $('pCompitoOk').click(); };
+    c.querySelectorAll('.barra').forEach(g => g.onclick = () => { const d = graf.dati[+g.dataset.i]; $('pGrafSel').textContent = `Settimana dal ${dataBreve(d.a)}: ${kmBreve(d.km)} a piedi.`; });
+    c.querySelectorAll('.cella-cal').forEach(r => r.onclick = () => { const m = +r.dataset.m; $('pCalSel').textContent = `${dataTesto(r.dataset.g)}: ${m ? oreTesto(m / 60) + ' a piedi' : 'nessuna uscita'}.`; });
+    c.querySelectorAll('[data-area]').forEach(b => b.onclick = () => { chiudi('fPannello'); const n = b.dataset.area; if (n !== cfg.comune) cambiaComune(n); else { mostraZona(false); } });
+    $('pVediZona').onclick = () => { chiudi('fPannello'); mostraZona(true); };
+    $('pGestZona').onclick = () => { chiudi('fPannello'); apriComuni(); };
+    $('pNota').onclick = () => apriNota();
+    $('pTacc').onclick = () => { chiudi('fPannello'); apriTaccuino(); };
+  }
+
+  // ---------- taccuino: notizie raccolte in zona e persone che le danno ----------
+  const TIPI_INFO = ['Vuole vendere', 'Vuole comprare', 'Vuole affittare', 'Eredità o successione', 'Trasloco o separazione', 'Casa vuota', 'Lavori in corso', 'Nuova costruzione', 'Prezzi e mercato', 'Altro'];
+  const FONTI = ['Bar o ristorante', 'Negozio', 'Vicino di casa', 'Amministratore', 'Artigiano', 'Parrocchia o associazione', 'Cliente', 'Collega', 'Altro'];
+  const STATI_NOTA = ['Da verificare', 'Verificata', 'Non vera', 'Diventata incarico'];
+  let tabTacc = 'note', cercaTacc = '', filtroTacc = '';
+  function apriTaccuino(tab) { if (tab) tabTacc = tab; chiudi('fMenu'); disegnaTaccuino(); apri('fTaccuino'); }
+  function disegnaTaccuino() {
+    const c = $('taccCorpo'), q = cercaTacc.toLowerCase();
+    $('taccTabNote').setAttribute('aria-pressed', tabTacc === 'note'); $('taccTabPersone').setAttribute('aria-pressed', tabTacc === 'persone');
+    $('taccNuovo').innerHTML = ICO.piu + (tabTacc === 'note' ? 'Nuova notizia' : 'Nuova persona');
+    if (tabTacc === 'note') {
+      let lista = [...note.values()].sort((a, b) => b.ts - a.ts);
+      const conta = k => lista.filter(n => n.stato === k).length;
+      const filtri = [{ k: '', t: 'Tutte (' + lista.length + ')' }, ...STATI_NOTA.map(k => ({ k, t: k + ' (' + conta(k) + ')' })).filter(o => conta(o.k))];
+      if (filtroTacc && !STATI_NOTA.includes(filtroTacc)) filtroTacc = '';
+      if (filtroTacc) lista = lista.filter(n => n.stato === filtroTacc);
+      if (q) lista = lista.filter(n => [n.testo, n.chi, n.indirizzo, n.tipoInfo, n.fonte, n.area].join(' ').toLowerCase().includes(q));
+      c.innerHTML = `<div class="filtri">${filtri.map(f => `<button class="scelta senza-icona" data-f="${esc(f.k)}" aria-pressed="${filtroTacc === f.k}">${esc(f.t)}</button>`).join('')}</div>` +
+        (lista.length ? lista.map(n => `<button class="nota-riga" data-n="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 140) || '(senza testo)')}</b><span>${esc([n.chi || n.fonte, n.indirizzo || n.area, dataBreve(n.ts)].filter(Boolean).join(' · '))}</span>${n.stato !== 'Da verificare' ? `<span class="nota-stato">${esc(n.stato)}</span>` : n.verifica ? `<span class="nota-stato attesa">verifica entro ${esc(dataBreve(new Date(n.verifica + 'T12:00')))}</span>` : ''}</button>`).join('')
+          : `<div class="vuoto">${note.size ? 'Nessuna notizia trovata.' : 'Qui segni quello che senti in zona: al bar, dal parrucchiere, dai vicini. Chi vende, chi eredita, chi si trasferisce.'}</div>`);
+      c.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filtroTacc = b.dataset.f; disegnaTaccuino(); });
+      c.querySelectorAll('[data-n]').forEach(b => b.onclick = () => apriNota(b.dataset.n));
+    } else {
+      let lista = [...persone.values()].sort((a, b) => (b.ultimo || b.ts) - (a.ultimo || a.ts));
+      if (q) lista = lista.filter(p => [p.nome, p.ruolo, p.luogo, p.note].join(' ').toLowerCase().includes(q));
+      const ris = OB().risentire;
+      c.innerHTML = lista.length ? lista.map(p => { const u = p.ultimo || p.ts, tardi = ris && Date.now() - u > ris * 864e5, n = [...note.values()].filter(x => x.personaId === p.id).length; return `<button class="nota-riga" data-p="${p.id}"><b>${esc(p.nome)}</b><span>${esc([p.ruolo, p.luogo].filter(Boolean).join(' · '))}</span><span>${n === 1 ? '1 notizia' : n + ' notizie'} · sentita ${esc(giorniFa(u))}</span>${tardi ? '<span class="nota-stato attesa">da risentire</span>' : ''}</button>`; }).join('')
+        : `<div class="vuoto">${persone.size ? 'Nessuna persona trovata.' : 'Le persone che ti danno notizie: la barista, il giornalaio, l\'amministratore di condominio. L\'app ti ricorda di passare a trovarle.'}</div>`;
+      c.querySelectorAll('[data-p]').forEach(b => b.onclick = () => apriPersona(b.dataset.p));
+    }
+  }
+  $('taccTabNote').onclick = () => { tabTacc = 'note'; disegnaTaccuino(); };
+  $('taccTabPersone').onclick = () => { tabTacc = 'persone'; disegnaTaccuino(); };
+  $('taccCerca').oninput = () => { cercaTacc = $('taccCerca').value; disegnaTaccuino(); };
+  $('taccNuovo').onclick = () => tabTacc === 'note' ? apriNota() : apriPersona();
+  $('taccEsporta').onclick = () => esportaNote();
+
+  // editor di una notizia
+  let nn = null;
+  function apriNota(id) {
+    const v = id ? note.get(id) : null;
+    const pos = v ? (v.lat != null && v.lat !== '' ? { lat: v.lat, lng: v.lng } : null) : posizione ? { lat: posizione.lat, lng: posizione.lng } : null;
+    nn = v ? { ...v } : { id: '', ts: Date.now(), testo: '', tipoInfo: '', fonte: '', chi: '', personaId: '', area: cfg.comune, lat: pos ? +pos.lat.toFixed(6) : '', lng: pos ? +pos.lng.toFixed(6) : '', indirizzo: '', casaId: '', verifica: '', stato: 'Da verificare' };
+    if (!v && pos && G) { const s = Planner.indirizzoVicino(G, pos.lat, pos.lng); if (s.via) nn.indirizzo = s.via + (s.paese ? ', ' + s.paese : ''); }
+    $('tfNota').textContent = v ? 'Notizia' : 'Nuova notizia';
+    const vicine = pos ? [...case_.values()].filter(h => h.lat !== '' && h.lat != null && dist([pos.lat, pos.lng], [h.lat, h.lng]) < 120).sort((a, b) => dist([pos.lat, pos.lng], [a.lat, a.lng]) - dist([pos.lat, pos.lng], [b.lat, b.lng])).slice(0, 4) : [];
+    if (nn.casaId && !vicine.some(h => h.id === nn.casaId) && case_.get(nn.casaId)) vicine.unshift(case_.get(nn.casaId));
+    const ppl = [...persone.values()].sort((a, b) => (b.ultimo || b.ts) - (a.ultimo || a.ts)).slice(0, 10);
+    $('notaCorpo').innerHTML = `
+      <div class="sezione" style="margin-top:10px"><h3>Cosa hai saputo?</h3><textarea class="note" id="nTesto" rows="4" placeholder="Per esempio: al bar dicono che i Rossi di via Garibaldi vogliono vendere e trasferirsi dalla figlia.">${esc(nn.testo)}</textarea><p class="aiuto">Puoi dettare con il microfono della tastiera.</p></div>
+      <div class="sezione"><h3>Che notizia è?</h3><div class="scelte" id="nTipi">${TIPI_INFO.map(t => `<button class="scelta senza-icona" data-v="${esc(t)}" aria-pressed="${nn.tipoInfo === t}">${esc(t)}</button>`).join('')}</div></div>
+      <div class="sezione"><h3>Chi te l'ha detta?</h3>
+        ${ppl.length ? `<div class="scelte" id="nPersone">${ppl.map(p => `<button class="scelta senza-icona" data-p="${p.id}" aria-pressed="${nn.personaId === p.id}">${esc(p.nome)}</button>`).join('')}</div><p class="aiuto">Oppure scrivi qui sotto una persona nuova.</p>` : ''}
+        <input class="campo" id="nChi" placeholder="Nome o posto, per esempio Giulia del Bar Sport" value="${esc(nn.personaId ? '' : nn.chi)}" autocomplete="off" style="margin-top:8px">
+        <div class="scelte" id="nFonti" style="margin-top:10px">${FONTI.map(t => `<button class="scelta senza-icona" data-v="${esc(t)}" aria-pressed="${nn.fonte === t}">${esc(t)}</button>`).join('')}</div>
+        <button class="interruttore" id="nRubrica" role="switch" aria-checked="false" ${nn.personaId ? 'hidden' : ''}><span>Aggiungi alle persone della zona<small>Così l'app ti ricorda di ripassare a trovarla</small></span><span class="leva"></span></button>
+      </div>
+      <div class="sezione"><h3>Dove?</h3><input class="campo" id="nDove" placeholder="Via, piazza o casa di cui si parla" value="${esc(nn.indirizzo)}" autocomplete="off">
+        <p class="aiuto">${nn.lat !== '' ? 'Segnata sulla mappa nel punto in cui sei.' : 'Senza posizione GPS: non compare sulla mappa.'}</p>
+        ${vicine.length ? `<p class="aiuto" style="margin-top:10px">Riguarda una casa che hai salvato?</p><div class="scelte" id="nCase">${vicine.map(h => `<button class="scelta" data-c="${h.id}" aria-pressed="${nn.casaId === h.id}">${pinSVG(h.stato)}${esc(taglia(h.address || 'Casa', 34))}</button>`).join('')}</div>` : ''}
+      </div>
+      <div class="sezione"><h3>Da verificare entro</h3><input class="campo" type="date" id="nVerifica" value="${esc(nn.verifica)}"><p class="aiuto">Facoltativo. Quel giorno la trovi in "Da fare oggi".</p></div>
+      <div class="sezione"><h3>Com'è andata?</h3><div class="scelte" id="nStati">${STATI_NOTA.map(t => `<button class="scelta senza-icona" data-v="${esc(t)}" aria-pressed="${nn.stato === t}">${esc(t)}</button>`).join('')}</div></div>
+      ${v ? `<div class="azioni" style="margin-top:22px">${v.lat !== '' && v.lat != null ? `<a class="tasto" href="${mapsPiedi(v.lat, v.lng)}" target="_blank" rel="noopener">${ICO.posizione}Portami qui</a>` : ''}<button class="tasto pericolo" id="nElimina">${ICO.cestino}Elimina</button></div>` : ''}`;
+    const scelta = (idBox, campo, toggle) => $(idBox).querySelectorAll('[data-v]').forEach(b => b.onclick = () => { nn[campo] = toggle && nn[campo] === b.dataset.v ? '' : b.dataset.v; $(idBox).querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', nn[campo] === x.dataset.v)); });
+    scelta('nTipi', 'tipoInfo', true); scelta('nFonti', 'fonte', true); scelta('nStati', 'stato', false);
+    if ($('nPersone')) $('nPersone').querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+      nn.personaId = nn.personaId === b.dataset.p ? '' : b.dataset.p;
+      const p = persone.get(nn.personaId); if (p) { $('nChi').value = ''; if (!nn.fonte && p.fonte) nn.fonte = p.fonte; }
+      $('nPersone').querySelectorAll('[data-p]').forEach(x => x.setAttribute('aria-pressed', nn.personaId === x.dataset.p));
+      $('nRubrica').hidden = !!nn.personaId;
+      $('nFonti').querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', nn.fonte === x.dataset.v));
+    });
+    $('nChi').oninput = () => { if ($('nChi').value.trim() && nn.personaId) { nn.personaId = ''; if ($('nPersone')) $('nPersone').querySelectorAll('[data-p]').forEach(x => x.setAttribute('aria-pressed', 'false')); $('nRubrica').hidden = false; } };
+    $('nRubrica').onclick = () => $('nRubrica').setAttribute('aria-checked', $('nRubrica').getAttribute('aria-checked') !== 'true');
+    if ($('nCase')) $('nCase').querySelectorAll('[data-c]').forEach(b => b.onclick = () => { nn.casaId = nn.casaId === b.dataset.c ? '' : b.dataset.c; $('nCase').querySelectorAll('[data-c]').forEach(x => x.setAttribute('aria-pressed', nn.casaId === x.dataset.c)); });
+    if ($('nElimina')) $('nElimina').onclick = async () => { if (!confirm('Eliminare questa notizia?')) return; await DB.del('note', v.id); note.delete(v.id); chiudi('fNota'); disegnaNote(); dopoTaccuino(); toast('Notizia eliminata'); };
+    apri('fNota');
+    if (!v) setTimeout(() => $('nTesto').focus(), 350);
+  }
+  $('salvaNota').onclick = async () => {
+    const testo = $('nTesto').value.trim(); if (!testo) { toast('Scrivi cosa hai saputo.', 'errore'); $('nTesto').focus(); return; }
+    const n = { ...nn, testo, indirizzo: $('nDove').value.trim(), verifica: $('nVerifica').value, id: nn.id || nuovoId() };
+    const chi = $('nChi').value.trim();
+    if (n.personaId) { const p = persone.get(n.personaId); if (p) { n.chi = p.nome; p.ultimo = Date.now(); await DB.put('persone', p); } }
+    else {
+      n.chi = chi;
+      if (chi && $('nRubrica').getAttribute('aria-checked') === 'true') {
+        const p = { id: nuovoId(), ts: Date.now(), ultimo: Date.now(), nome: chi, ruolo: n.fonte || '', fonte: n.fonte || '', luogo: n.indirizzo || '', telefono: '', note: '', area: cfg.comune };
+        persone.set(p.id, p); await DB.put('persone', p); n.personaId = p.id;
+      }
+    }
+    try { await DB.put('note', n); } catch (e) { toast('Memoria del telefono piena.', 'errore'); return; }
+    note.set(n.id, n); chiudi('fNota'); disegnaNote(); dopoTaccuino();
+    toast(nn.id ? 'Notizia aggiornata' : 'Notizia salvata nel taccuino', 'ok');
+    nn = null;
+  };
+  function dopoTaccuino() { if ($('fTaccuino').classList.contains('aperto')) disegnaTaccuino(); if ($('fPannello').classList.contains('aperto')) disegnaPannello(); if ($('fPersona').classList.contains('aperto') && pp) apriPersona(pp.id); pannello(); }
+
+  // scheda di una persona della zona
+  let pp = null;
+  function apriPersona(id) {
+    const v = id ? persone.get(id) : null;
+    pp = v ? { ...v } : { id: '', ts: Date.now(), ultimo: Date.now(), nome: '', ruolo: '', fonte: '', luogo: '', telefono: '', note: '', area: cfg.comune };
+    $('tfPersona').textContent = v ? v.nome : 'Nuova persona';
+    const sue = v ? [...note.values()].filter(n => n.personaId === v.id).sort((a, b) => b.ts - a.ts) : [];
+    $('personaCorpo').innerHTML = `
+      ${v ? `<div class="vicina" style="margin-top:12px"><span>Sentita <b>${esc(giorniFa(v.ultimo || v.ts))}</b>${OB().risentire ? ', l\'app te la ricorda dopo ' + OB().risentire + ' giorni' : ''}.</span><button class="tasto ocra" id="psOggi">Sentita oggi</button></div>` : ''}
+      ${v && v.telefono ? `<a class="tasto verde" href="tel:${esc(v.telefono.replace(/[^\d+]/g, ''))}">${ICO.telefono}Chiama ${esc(v.telefono)}</a>` : ''}
+      <label class="campo" for="psNome">Nome</label><input class="campo" id="psNome" value="${esc(pp.nome)}" placeholder="Per esempio Giulia" autocomplete="off">
+      <label class="campo" for="psRuolo">Chi è</label><input class="campo" id="psRuolo" value="${esc(pp.ruolo)}" placeholder="Per esempio barista del Bar Sport" autocomplete="off">
+      <label class="campo" for="psLuogo">Dove la trovi</label><input class="campo" id="psLuogo" value="${esc(pp.luogo)}" placeholder="Piazza Garibaldi, la mattina" autocomplete="off">
+      <label class="campo" for="psTel">Telefono</label><input class="campo" type="tel" id="psTel" value="${esc(pp.telefono)}" placeholder="Facoltativo" autocomplete="off">
+      <label class="campo" for="psNote">Note</label><textarea class="note" id="psNote" placeholder="Cosa sa, chi conosce, quando passare">${esc(pp.note)}</textarea>
+      ${v ? `<h3 class="gruppo">Notizie da ${esc(v.nome)}<span>${sue.length}</span></h3>${sue.map(n => `<button class="nota-riga" data-n="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 120))}</b><span>${esc(dataBreve(n.ts))} · ${esc(n.stato)}</span></button>`).join('') || '<p class="aiuto">Ancora nessuna.</p>'}
+        <button class="tasto" id="psNota">${ICO.piu}Nuova notizia da ${esc(v.nome)}</button><button class="link pericolo" id="psElimina">Elimina questa persona</button>` : ''}`;
+    if ($('psOggi')) $('psOggi').onclick = async () => { v.ultimo = Date.now(); await DB.put('persone', v); toast('Segnato', 'ok'); apriPersona(v.id); dopoTaccuino(); };
+    if ($('psNota')) $('psNota').onclick = () => { apriNota(); nn.personaId = v.id; nn.chi = v.nome; nn.fonte = v.fonte || ''; const b = $('nPersone') && $('nPersone').querySelector(`[data-p="${v.id}"]`); if (b) b.setAttribute('aria-pressed', 'true'); $('nRubrica').hidden = true; $('nFonti').querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', nn.fonte === x.dataset.v)); };
+    if ($('psElimina')) $('psElimina').onclick = async () => { if (!confirm('Eliminare ' + v.nome + '? Le sue notizie restano.')) return; await DB.del('persone', v.id); persone.delete(v.id); chiudi('fPersona'); pp = null; dopoTaccuino(); };
+    $('personaCorpo').querySelectorAll('[data-n]').forEach(b => b.onclick = () => apriNota(b.dataset.n));
+    apri('fPersona');
+  }
+  $('salvaPersona').onclick = async () => {
+    const nome = $('psNome').value.trim(); if (!nome) { toast('Scrivi almeno il nome.', 'errore'); return; }
+    const p = { ...pp, id: pp.id || nuovoId(), nome, ruolo: $('psRuolo').value.trim(), luogo: $('psLuogo').value.trim(), telefono: $('psTel').value.trim(), note: $('psNote').value.trim() };
+    await DB.put('persone', p); persone.set(p.id, p);
+    for (const n of note.values()) if (n.personaId === p.id && n.chi !== p.nome) { n.chi = p.nome; DB.put('note', n); }
+    chiudi('fPersona'); pp = null; dopoTaccuino(); toast('Persona salvata', 'ok');
+  };
+
+  // notizie sulla mappa
+  const lNote = L.layerGroup().addTo(map);
+  const iconaNota = n => L.divIcon({ className: '', html: `<div class="pin-nota${n.stato === 'Da verificare' ? '' : ' chiusa'}">${ICO.nota}</div>`, iconSize: [30, 30], iconAnchor: [15, 28] });
+  function disegnaNote() {
+    lNote.clearLayers(); if (cfg.mostraNote === false) return;
+    for (const n of note.values()) {
+      if (n.lat === '' || n.lat == null) continue;
+      if (!vistaZona && n.area !== cfg.comune) continue;
+      L.marker([n.lat, n.lng], { icon: iconaNota(n), title: taglia(n.testo, 60), zIndexOffset: 550 }).on('click', () => apriNota(n.id)).addTo(lNote);
+    }
+  }
+  function esportaNote() {
+    if (!note.size) { toast('Non ci sono notizie da esportare.', 'errore'); return; }
+    const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+    const righe = [['Data', 'Area', 'Notizia', 'Tipo', 'Chi', 'Fonte', 'Dove', 'Verificare entro', 'Stato', 'Mappa'].map(q).join(';')];
+    [...note.values()].sort((a, b) => a.ts - b.ts).forEach(n => righe.push([new Date(n.ts).toLocaleDateString('it-IT'), n.area, n.testo, n.tipoInfo, n.chi, n.fonte, n.indirizzo, n.verifica ? new Date(n.verifica + 'T12:00').toLocaleDateString('it-IT') : '', n.stato, n.lat !== '' && n.lat != null ? 'https://maps.google.com/?q=' + n.lat + ',' + n.lng : ''].map(q).join(';')));
+    condividiFile(new Blob(['﻿' + righe.join('\r\n')], { type: 'text/csv' }), 'notizie-zona-' + new Date().toISOString().slice(0, 10) + '.csv');
+  }
+
+  // ---------- strati della mappa e legenda ----------
+  function apriStrati() {
+    const box = $('strati');
+    if (box.classList.contains('aperto')) { box.classList.remove('aperto'); return; }
+    const voce = (id, t, on) => `<button class="interruttore" id="${id}" role="switch" aria-checked="${on}"><span>${t}</span><span class="leva"></span></button>`;
+    box.innerHTML = `<div class="legenda">
+        <div><i style="background:${BLU}"></i>Case da vedere</div>
+        <div><i style="background:${VERDE_SC}"></i>Percorse negli ultimi 3 mesi</div>
+        <div><i style="background:${VERDE_CH}"></i>Viste più di 3 mesi fa</div>
+        ${S.fase === 'cammino' ? `<div><i style="background:${OCRA}"></i>Prossimi 300 m, con le frecce</div><div><i class="tratteggio" style="border-color:${GRIGIO}"></i>Già fatto oggi</div>` : ''}
+        ${cfg.mostraVolantini ? `<div><i class="tratteggio" style="border-color:${ARANCIO}"></i>Volantini (3 mesi)</div>` : ''}
+      </div>
+      ${voce('sNote', 'Notizie sulla mappa', cfg.mostraNote !== false)}${voce('sVol', 'Strade con volantini', !!cfg.mostraVolantini)}${S.fase === 'home' ? voce('sZona', 'Tutta la zona', vistaZona) : ''}`;
+    box.classList.add('aperto');
+    $('sNote').onclick = () => { cfg.mostraNote = cfg.mostraNote === false; salvaCfg(); disegnaNote(); box.classList.remove('aperto'); apriStrati(); };
+    $('sVol').onclick = () => { cfg.mostraVolantini = !cfg.mostraVolantini; salvaCfg(); disegnaRete(); box.classList.remove('aperto'); apriStrati(); };
+    if ($('sZona')) $('sZona').onclick = () => { box.classList.remove('aperto'); mostraZona(!vistaZona); };
+  }
+  $('tStrati').onclick = apriStrati;
+  map.on('movestart', () => $('strati').classList.remove('aperto'));
+
+  // ---------- profilo dell'agente ----------
+  const hashPin = async (id, pin) => { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('zona:' + id + ':' + pin)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); };
+  const mioProfilo = () => PROFILI.lista.find(p => p.id === PID);
+  function salvaProfilo(campi) {
+    cfg.profilo = Object.assign({ nome: '', agenzia: '', telefono: '', email: '', obiettivi: {} }, cfg.profilo, campi);
+    salvaCfg(); const p = mioProfilo(); if (p) { p.nome = cfg.profilo.nome; salvaProfili(); }
+  }
+  function apriProfilo() {
+    chiudi('fMenu');
+    const pr = Object.assign({ nome: '', agenzia: '', telefono: '', email: '' }, cfg.profilo), ob = OB(), mio = mioProfilo();
+    const scelte = (id, valori, att, fmt) => `<div class="scelte" id="${id}">${valori.map(v => `<button class="scelta senza-icona" data-v="${v}" aria-pressed="${att === v}">${fmt(v)}</button>`).join('')}</div>`;
+    $('profiloCorpo').innerHTML = `
+      <label class="campo" for="prNome">Nome e cognome</label><input class="campo" id="prNome" value="${esc(pr.nome)}" autocomplete="name">
+      <label class="campo" for="prAg">Agenzia</label><input class="campo" id="prAg" value="${esc(pr.agenzia)}" placeholder="Facoltativo">
+      <label class="campo" for="prTel">Telefono</label><input class="campo" type="tel" id="prTel" value="${esc(pr.telefono)}" placeholder="Facoltativo: va in fondo alle schede che condividi">
+      <label class="campo" for="prMail">Email</label><input class="campo" type="email" id="prMail" value="${esc(pr.email)}" placeholder="Facoltativo">
+      <div class="sezione"><h3>I tuoi obiettivi della settimana</h3>
+        <p class="aiuto">Ore a piedi</p>${scelte('obOre', [2, 4, 6, 8, 12], ob.ore, v => v + ' ore')}
+        <p class="aiuto" style="margin-top:12px">Case da segnare</p>${scelte('obCase', [5, 10, 15, 20, 30], ob.case, v => String(v))}
+        <p class="aiuto" style="margin-top:12px">Notizie da raccogliere</p>${scelte('obNot', [3, 5, 10, 15], ob.notizie, v => String(v))}
+        <p class="aiuto" style="margin-top:12px">Ripassare dalle persone della zona ogni</p>${scelte('obRis', [15, 30, 60, 0], ob.risentire, v => v ? v + ' giorni' : 'Mai')}
+      </div>
+      <div class="sezione"><h3>Blocco con PIN</h3><p class="aiuto">${mio && mio.pin ? 'L\'app chiede il PIN ogni volta che la apri.' : 'Facoltativo: chi prende il telefono non vede le tue case e le tue notizie.'}</p>
+        <button class="tasto piccolo" id="prPin">${mio && mio.pin ? 'Togli il PIN' : 'Metti un PIN'}</button></div>
+      <div class="sezione"><h3>Agenti su questo telefono</h3><p class="aiuto">Ognuno ha la sua zona, le sue case e il suo taccuino.</p>
+        ${PROFILI.lista.map(p => `<div class="giro-riga"><span class="num-giro">${esc(((p.nome || '?').trim()[0] || '?').toUpperCase())}</span><div><b>${esc(p.nome || 'Senza nome')}</b><span>${p.id === PID ? 'sei tu, adesso' : p.pin ? 'con PIN' : ''}</span></div>${p.id !== PID ? `<button class="tasto piccolo" style="width:auto;margin:0" data-entra="${p.id}">Entra</button>` : ''}${p.id !== PID && p.id !== 'p0' ? `<button class="togli-giro" data-togli="${p.id}" aria-label="Elimina questo agente">${ICO.cestino}</button>` : ''}</div>`).join('')}
+        <button class="tasto" id="prNuovo">${ICO.piu}Aggiungi un agente</button></div>`;
+    const testo = (id, campo) => $(id).onchange = () => salvaProfilo({ [campo]: $(id).value.trim() });
+    testo('prNome', 'nome'); testo('prAg', 'agenzia'); testo('prTel', 'telefono'); testo('prMail', 'email');
+    const ob2 = (id, campo) => $(id).querySelectorAll('[data-v]').forEach(b => b.onclick = () => { salvaProfilo({ obiettivi: Object.assign({}, OB(), { [campo]: +b.dataset.v }) }); $(id).querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+    ob2('obOre', 'ore'); ob2('obCase', 'case'); ob2('obNot', 'notizie'); ob2('obRis', 'risentire');
+    $('prPin').onclick = async () => {
+      if (mio.pin) { if (!confirm('Togliere il PIN?')) return; delete mio.pin; salvaProfili(); apriProfilo(); return; }
+      const a = prompt('Scegli un PIN di 4-8 cifre'); if (!a) return;
+      if (!/^\d{4,8}$/.test(a)) { toast('Il PIN deve avere da 4 a 8 cifre.', 'errore'); return; }
+      if (prompt('Riscrivi il PIN per conferma') !== a) { toast('I due PIN non sono uguali.', 'errore'); return; }
+      mio.pin = await hashPin(PID, a); salvaProfili(); sessionStorage.setItem('zona_sbloccato', PID); toast('PIN impostato', 'ok'); apriProfilo();
+    };
+    $('profiloCorpo').querySelectorAll('[data-entra]').forEach(b => b.onclick = () => mostraBlocco(b.dataset.entra));
+    $('profiloCorpo').querySelectorAll('[data-togli]').forEach(b => b.onclick = () => togliProfilo(b.dataset.togli));
+    $('prNuovo').onclick = () => {
+      if (S.fase === 'cammino') { toast('Finisci prima il giro in corso.', 'errore'); return; }
+      if (!confirm('Aggiungo un nuovo agente su questo telefono? L\'app si riapre vuota per lui; i tuoi dati restano qui.')) return;
+      const id = 'p' + Date.now().toString(36); PROFILI.lista.push({ id, nome: '' }); PROFILI.attivo = id; salvaProfili();
+      sessionStorage.setItem('zona_sbloccato', id); location.reload();
+    };
+    apri('fProfilo');
+  }
+  async function togliProfilo(id) {
+    const p = PROFILI.lista.find(x => x.id === id); if (!p || id === PID || id === 'p0') return;
+    if (!confirm('Eliminare ' + (p.nome || 'questo agente') + ' e tutti i suoi dati (case, notizie, strade viste)? Non si può annullare.')) return;
+    if (p.pin) { const x = prompt('PIN di ' + (p.nome || 'questo agente')); if (!x || await hashPin(id, x) !== p.pin) { toast('PIN sbagliato.', 'errore'); return; } }
+    for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith(id + '_')) localStorage.removeItem(k); }
+    try { indexedDB.deleteDatabase('zona-' + id); } catch (e) { }
+    PROFILI.lista = PROFILI.lista.filter(x => x.id !== id); salvaProfili(); toast('Agente eliminato'); apriProfilo();
+  }
+
+  // ---------- blocco: scelta dell'agente e PIN ----------
+  const vaBloccata = () => { const m = mioProfilo(); return (PROFILI.lista.length > 1 || (m && m.pin)) && sessionStorage.getItem('zona_sbloccato') !== PID; };
+  function mostraBlocco(scelto) {
+    const box = $('blocco'); box.classList.add('aperto');
+    const lista = PROFILI.lista, disegnaScelta = () => {
+      box.innerHTML = `<div class="blocco-scheda"><div class="logo-zona">${LOGO}</div><h2>Chi sei?</h2>${lista.map(p => `<button class="tasto${p.id === PID ? ' primario' : ''}" data-chi="${p.id}">${esc(p.nome || 'Agente senza nome')}${p.pin ? ' 🔒' : ''}</button>`).join('')}${scelto ? '<button class="link" id="bloccoAnn">Annulla</button>' : ''}</div>`;
+      box.querySelectorAll('[data-chi]').forEach(b => b.onclick = () => chiediPin(b.dataset.chi));
+      if ($('bloccoAnn')) $('bloccoAnn').onclick = () => box.classList.remove('aperto');
+    };
+    const entra = id => { sessionStorage.setItem('zona_sbloccato', id); if (id === PID) { box.classList.remove('aperto'); return; } PROFILI.attivo = id; salvaProfili(); location.reload(); };
+    const chiediPin = id => {
+      const p = lista.find(x => x.id === id); if (!p) return;
+      if (!p.pin) return entra(id);
+      box.innerHTML = `<div class="blocco-scheda"><div class="logo-zona">${LOGO}</div><h2>${esc(p.nome || 'Agente')}</h2><p>Scrivi il tuo PIN</p><input class="campo pin" id="pinIn" type="password" inputmode="numeric" autocomplete="off" maxlength="8"><button class="tasto primario" id="pinOk">Entra</button>${lista.length > 1 ? '<button class="link" id="pinAltro">Sono un altro agente</button>' : ''}<p class="aiuto">PIN dimenticato? Serve il backup: reinstallando l'app i dati si perdono.</p></div>`;
+      const prova = async () => { if (await hashPin(id, $('pinIn').value) === p.pin) entra(id); else { $('pinIn').value = ''; toast('PIN sbagliato', 'errore'); vibra(200); } };
+      $('pinOk').onclick = prova; $('pinIn').onkeydown = e => { if (e.key === 'Enter') prova(); };
+      if ($('pinAltro')) $('pinAltro').onclick = disegnaScelta;
+      setTimeout(() => $('pinIn').focus(), 100);
+    };
+    if (scelto) chiediPin(scelto); else if (lista.length === 1) chiediPin(lista[0].id); else disegnaScelta();
+  }
+
+  // ---------- benvenuto: profilo, zona, obiettivi ----------
+  let passoB = 1;
+  function apriBenvenuto(passo = 1) {
+    passoB = passo; const c = $('benvCorpo'), pr = Object.assign({ nome: '', agenzia: '', telefono: '' }, cfg.profilo), ob = OB();
+    const punti = `<div class="passi">${[1, 2, 3].map(i => `<span class="${i === passo ? 'ora' : i < passo ? 'fatto' : ''}"></span>`).join('')}</div>`;
+    if (passo === 1) {
+      c.innerHTML = `${punti}<div class="logo-zona grande">${LOGO}</div><h2 class="benv-titolo">Benvenuto in Zona</h2>
+        <p class="intro">L'app per lavorare la tua zona a piedi, strada per strada: ti guida nei giri, si ricorda dove sei passato, tiene le case che vedi e le notizie che raccogli in giro.</p>
+        <label class="campo" for="bvNome">Come ti chiami?</label><input class="campo" id="bvNome" value="${esc(pr.nome)}" placeholder="Nome e cognome" autocomplete="name">
+        <label class="campo" for="bvAg">Agenzia</label><input class="campo" id="bvAg" value="${esc(pr.agenzia)}" placeholder="Facoltativo">
+        <label class="campo" for="bvTel">Il tuo telefono</label><input class="campo" type="tel" id="bvTel" value="${esc(pr.telefono)}" placeholder="Facoltativo: va in fondo alle schede che condividi">`;
+      $('benvAvanti').textContent = 'Avanti';
+      $('benvAvanti').onclick = () => { const n = $('bvNome').value.trim(); if (!n) { toast('Scrivi il tuo nome.', 'errore'); $('bvNome').focus(); return; } salvaProfilo({ nome: n, agenzia: $('bvAg').value.trim(), telefono: $('bvTel').value.trim() }); apriBenvenuto(2); };
+    } else if (passo === 2) {
+      c.innerHTML = `${punti}<h2 class="benv-titolo">La tua zona</h2>
+        <p class="intro">La zona è il territorio che lavori: uno o più comuni, oppure un quartiere se lavori in città. Puoi aggiungere altre aree quando vuoi.</p>
+        <label class="campo" for="bvZona">Nome della zona</label><input class="campo" id="bvZona" value="${esc(cfg.zonaNome)}" placeholder="Per esempio Franciacorta">
+        <h3 class="gruppo">Le aree della zona<span>${cfg.comuni.length}</span></h3>
+        <div id="bvAree">${cfg.comuni.map(n => `<div class="giro-riga"><span class="num-giro">${ICO.ok}</span><div><b>${esc(n)}</b><span>${tipoArea(n)}</span></div><button class="togli-giro" data-tolgo="${esc(n)}" aria-label="Togli ${esc(n)}">${ICO.x}</button></div>`).join('') || '<p class="aiuto">Ancora nessuna: aggiungi la prima qui sotto.</p>'}</div>
+        <button class="tasto" id="bvQui">${ICO.posizione}Il posto dove sono adesso</button><div class="log" id="bvLog"></div>
+        <label class="campo" for="bvComune">Un comune</label><div class="riga"><input class="campo" id="bvComune" placeholder="Nome ufficiale del comune" autocomplete="off" style="flex:2"><button class="tasto piccolo" id="bvAggiungi" style="margin-top:0">${ICO.piu}</button></div>
+        <label class="campo" for="bvCitta">Un quartiere di una città</label><div class="riga"><input class="campo" id="bvCitta" placeholder="La città" autocomplete="off" style="flex:2"><button class="tasto piccolo" id="bvCercaQ" style="margin-top:0">Cerca</button></div><div id="bvQuart"></div>
+        <button class="link" id="bvDisegna">Oppure disegnala sulla mappa</button>`;
+      const aggiunta = nome => { if (!cfg.comuni.includes(nome)) cfg.comuni.push(nome); if (!cfg.aree[nome]) cfg.aree[nome] = { tipo: 'comune' }; salvaCfg(); apriBenvenuto(2); };
+      $('bvZona').onchange = () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); };
+      c.querySelectorAll('[data-tolgo]').forEach(b => b.onclick = () => { const n = b.dataset.tolgo; if (n === cfg.comune && G) { toast('È l\'area aperta adesso: la togli dalle impostazioni.', 'errore'); return; } cfg.comuni = cfg.comuni.filter(x => x !== n); salvaCfg(); apriBenvenuto(2); });
+      $('bvQui').onclick = () => comuneDaPosizione('bvLog', aggiunta);
+      $('bvAggiungi').onclick = () => { const n = $('bvComune').value.replace(/\s+/g, ' ').trim(); if (n) aggiunta(n); };
+      $('bvCercaQ').onclick = () => cercaQuartieri($('bvCitta').value.trim(), $('bvQuart'), aggiunta);
+      $('bvDisegna').onclick = () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); iniziaDisegno(nome => { if (nome) { if (!cfg.comuni.includes(nome)) cfg.comuni.push(nome); salvaCfg(); } apri('fBenvenuto'); apriBenvenuto(2); }); };
+      $('benvAvanti').textContent = 'Avanti';
+      $('benvAvanti').onclick = () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); if (!cfg.comuni.length && !confirm('Non hai ancora aggiunto nessuna area. Vai avanti lo stesso?')) return; apriBenvenuto(3); };
+    } else {
+      const scelte = (id, valori, att, fmt) => `<div class="scelte" id="${id}">${valori.map(v => `<button class="scelta senza-icona" data-v="${v}" aria-pressed="${att === v}">${fmt(v)}</button>`).join('')}</div>`;
+      c.innerHTML = `${punti}<h2 class="benv-titolo">I tuoi obiettivi</h2><p class="intro">Ogni settimana il pannello ti mostra a che punto sei. Puoi cambiarli quando vuoi nel profilo.</p>
+        <div class="sezione"><h3>Ore a piedi alla settimana</h3>${scelte('bvOre', [2, 4, 6, 8, 12], ob.ore, v => v + ' ore')}</div>
+        <div class="sezione"><h3>Case da segnare</h3>${scelte('bvCase', [5, 10, 15, 20, 30], ob.case, v => String(v))}</div>
+        <div class="sezione"><h3>Notizie da raccogliere</h3>${scelte('bvNot', [3, 5, 10, 15], ob.notizie, v => String(v))}</div>`;
+      const ob2 = (id, campo) => $(id).querySelectorAll('[data-v]').forEach(b => b.onclick = () => { salvaProfilo({ obiettivi: Object.assign({}, OB(), { [campo]: +b.dataset.v }) }); $(id).querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+      ob2('bvOre', 'ore'); ob2('bvCase', 'case'); ob2('bvNot', 'notizie');
+      $('benvAvanti').textContent = 'Inizia';
+      $('benvAvanti').onclick = () => {
+        salvaProfilo({ benvenuto: Date.now(), obiettivi: OB() });
+        chiudi('fBenvenuto'); toast('Ciao ' + nomeAgente() + ', la tua zona è pronta.', 'ok', 4000);
+        if (!LS.get('aiutoVisto11', false)) { LS.set('aiutoVisto11', true); LS.set('aiutoVisto', true); setTimeout(apriAiuto, 600); }
+        if (!cfg.comune && cfg.comuni.length) cambiaComune(cfg.comuni[0]); else aggiorna(true);
+      };
+    }
+    $('benvIndietro').hidden = passo === 1;
+    $('benvIndietro').onclick = () => apriBenvenuto(passo - 1);
+    $('benvCorpo').scrollTop = 0;
+    apri('fBenvenuto');
   }
 
   // ---------- avvio ----------
   window.addEventListener('resize', posizionaTondi);
+  try { new ResizeObserver(() => posizionaTondi()).observe($('pannello')); } catch (e) { }
+  if (vaBloccata()) mostraBlocco();
   (async () => {
     await migraCoda();
+    await caricaTaccuino();
     aggiorna(true);
+    if (!cfg.profilo || !cfg.profilo.benvenuto) apriBenvenuto(1);
     if (cfg.comune) await preparaComune(true); else caricaCase();
     svuotaCoda(); inviaTraccia();
   })();
   if ('serviceWorker' in navigator && !/[?&]test=1/.test(location.search)) navigator.serviceWorker.register('sw.js').catch(() => { });
   // solo per le prove automatiche
-  if (/[?&]test=1/.test(location.search)) window.__am = { get S() { return S; }, get fuori() { return fuori; }, get G() { return G; }, get visti() { return visti; }, ricalcola, controllaTempo, avanzamento, controllaRichiami };
+  if (/[?&]test=1/.test(location.search)) window.__am = { get S() { return S; }, get fuori() { return fuori; }, get G() { return G; }, get visti() { return visti; }, get passi() { return passi; }, get volant() { return volant; }, get cfg() { return cfg; }, get note() { return note; }, get persone() { return persone; }, get uscite() { return uscite; }, get vistaZona() { return vistaZona; }, get map() { return map; }, ricalcola, controllaTempo, avanzamento, controllaRichiami, cosePerOggi, bastaPerOggi, mostraZona };
 })();
