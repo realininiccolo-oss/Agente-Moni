@@ -1,4 +1,4 @@
-/* planner.js v5 — rete stradale di un comune, di un quartiere o di una zona disegnata, e percorsi a piedi calcolati dal vivo.
+/* planner.js v6 — rete stradale di un comune, di un quartiere o di una zona disegnata, e percorsi a piedi calcolati dal vivo.
    Dati: OpenStreetMap (Overpass), scaricati una volta per comune e salvati sul telefono.
    Ogni strada con case è divisa in pezzi da 25 m: un pezzo diventa "visto" quando ci si passa a piedi.
    Il percorso parte sempre dalla posizione attuale e copre le strade non ancora viste più vicine,
@@ -87,16 +87,27 @@
     const j = await overpass(`[out:json][timeout:90];rel["boundary"="administrative"]["admin_level"="8"]["name"="${c}"];out geom;`, log, 2);
     return anelliDa(j.elements || []);
   }
-  function anelliDa(elementi) {
-    let anelli = [];
-    for (const e of elementi) {
-      if (e.type !== 'relation') continue;
+  // centro: [lat, lon] dell'area già nota, per scegliere il comune giusto tra quelli con lo stesso nome
+  function anelliDa(elementi, centro) {
+    let anelli = [], rel = elementi.filter(e => e.type === 'relation');
+    if (centro && rel.length > 1) { const b = rel.filter(e => e.bounds && centro[0] >= e.bounds.minlat && centro[0] <= e.bounds.maxlat && centro[1] >= e.bounds.minlon && centro[1] <= e.bounds.maxlon); if (b.length) rel = b; }
+    for (const e of rel) {
       anelli = anelli.concat(unisciAnelli((e.members || []).filter(m => m.type === 'way' && m.geometry && m.role !== 'inner').map(m => m.geometry.map(p => [p.lat, p.lon]))));
     }
     anelli = anelli.filter(a => a.length >= 4).sort((a, b) => areaKm2(b) - areaKm2(a));
     if (!anelli.length) throw new Error('Confine non trovato');
     const grande = areaKm2(anelli[0]);
-    return anelli.filter((a, i) => i === 0 || areaKm2(a) > Math.max(0.02, grande * 0.002)).slice(0, 8).map(a => semplifica(a, 10));
+    // confine preciso: tolleranza di 2 m (prima 10 m e al massimo 400 punti, troppo approssimato)
+    return anelli.filter((a, i) => i === 0 || areaKm2(a) > Math.max(0.02, grande * 0.002)).slice(0, 8).map(a => semplifica(a, 2, 3000));
+  }
+  // confini di più comuni con una sola richiesta: { nome: anelli }
+  async function confiniComuni(nomi, centri = {}) {
+    if (!nomi.length) return {};
+    const re = nomi.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/"/g, '\\"')).join('|');
+    const j = await overpass(`[out:json][timeout:90];rel["boundary"="administrative"]["admin_level"="8"]["name"~"^(${re})$"];out geom;`, () => { }, 2);
+    const out = {};
+    for (const n of nomi) { const el = (j.elements || []).filter(e => e.tags && e.tags.name === n); if (el.length) try { out[n] = anelliDa(el, centri[n]); } catch (e) { } }
+    return out;
   }
   // involucro convesso dei punti: confine di riserva finché non arriva quello vero
   function involucro(pts) {
@@ -143,7 +154,7 @@
     return c;
   }
   // Douglas-Peucker: meno punti, stessa forma (toll in metri)
-  function semplifica(poly, toll = 8) {
+  function semplifica(poly, toll = 8, max = 400) {
     const k = kxDi(poly[0][0]), P = poly.map(p => [p[1] * k, p[0] * 110540]);
     if (P.length < 5) return poly.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]);
     const tieni = new Uint8Array(P.length); tieni[0] = tieni[P.length - 1] = 1;
@@ -154,7 +165,7 @@
       if (md > toll && mi > 0) { tieni[mi] = 1; st.push([i, mi], [mi, j]); }
     }
     let out = poly.filter((_, i) => tieni[i]).map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]);
-    if (out.length > 400) return semplifica(poly, toll * 2);
+    if (out.length > max) return semplifica(poly, toll * 1.5, max);
     return out;
   }
   const polyOSM = poly => poly.map(p => p[0].toFixed(5) + ' ' + p[1].toFixed(5)).join(' ');
@@ -343,6 +354,18 @@
     }
     if (!er.includes('1')) throw new Error('Le mappe sono arrivate incomplete (nessuna casa trovata). Riprova tra qualche minuto');
     return { v: 4, id: Date.now().toString(36), comune, creata: new Date().toISOString(), lat, lon, eu, ev, el, er: er.join(''), en, nomi: NOMI, luoghi, parcheggi, isolate, civici, poly: poly || null };
+  }
+
+  // ---------- rete leggera: solo quello che serve per disegnarla e contarla (vista di tutta la zona) ----------
+  function preparaLeggera(R) {
+    const n = R.lat.length, m = R.eu.length;
+    const EU = Int32Array.from(R.eu), EV = Int32Array.from(R.ev), EL = Float64Array.from(R.el);
+    const ER = new Uint8Array(m); let reqTot = 0; for (let e = 0; e < m; e++) { ER[e] = R.er.charCodeAt(e) === 49 ? 1 : 0; if (ER[e]) reqTot += EL[e]; }
+    const deg = new Int32Array(n); for (let e = 0; e < m; e++) { deg[EU[e]]++; deg[EV[e]]++; }
+    const start = new Int32Array(n + 1); for (let i = 0; i < n; i++) start[i + 1] = start[i] + deg[i];
+    const fill = start.slice(0, n), adj = new Int32Array(2 * m);
+    for (let e = 0; e < m; e++) { adj[fill[EU[e]]++] = e; adj[fill[EV[e]]++] = e; }
+    return { R, id: R.id, comune: R.comune, n, m, EU, EV, EL, ER, start, adj, reqTot, leggera: true };
   }
 
   // ---------- rete pronta per i calcoli ----------
@@ -704,5 +727,5 @@
     for (let e = 0; e < Gv.m; e++) if (av[e]) { const a = Gv.EU[e], b = Gv.EV[e]; segna(Gn, an, (Gv.R.lat[a] + Gv.R.lat[b]) / 2, (Gv.R.lon[a] + Gv.R.lon[b]) / 2, 8, av[e]); }
   }
 
-  global.Planner = { versione: 7, overpass, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, trovaAree, quartieri, confineQuartiere, confineComune, anelliDa, involucro, areaKm2, dentroPoligono, semplifica, segna, segnaTratto, rimappaSegno, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
+  global.Planner = { versione: 8, overpass, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, trovaAree, quartieri, confineQuartiere, confineComune, confiniComuni, preparaLeggera, anelliDa, involucro, areaKm2, dentroPoligono, semplifica, segna, segnaTratto, rimappaSegno, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
 })(typeof window !== 'undefined' ? window : globalThis);

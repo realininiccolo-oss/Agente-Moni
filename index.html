@@ -12,30 +12,29 @@
 <link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="stile.css?v=14">
+<link rel="stylesheet" href="stile.css?v=15">
 </head>
 <body>
 <div id="splash" aria-hidden="true"><svg class="marchio" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#102A43"/><rect x=".75" y=".75" width="62.5" height="62.5" rx="14.5" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5"/><path d="M22.6 20H44L20.4 44H40" fill="none" stroke="#fff" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18.6" cy="20" r="4" fill="none" stroke="#fff" stroke-width="3"/><circle cx="45.2" cy="44" r="6.6" fill="#102A43"/><circle cx="45.2" cy="44" r="5" fill="#F0B429"/></svg><div class="marca">Zona</div><div class="barretta"></div></div>
 <div id="map" aria-label="Mappa"></div>
 <div id="attesaMappa" role="status" aria-live="polite"><span class="spin"></span><span id="attesaTesto"></span></div>
 
+<header id="testata"><div class="marca-testata"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#102A43"/><path d="M22.6 20H44L20.4 44H40" fill="none" stroke="#fff" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18.6" cy="20" r="4" fill="none" stroke="#fff" stroke-width="3"/><circle cx="45.2" cy="44" r="6.6" fill="#102A43"/><circle cx="45.2" cy="44" r="5" fill="#F0B429"/></svg><b>Zona</b><span id="testataZona"></span></div><div id="invio" role="status"></div><button class="profilo-tondo" id="tProfilo" aria-label="Il mio profilo" title="Profilo"></button></header>
 <div id="guida" role="status" aria-live="polite"></div>
 <div class="sceglimappa" id="scegliMappa"><span>Tocca la mappa nel punto da cui vuoi partire</span><button id="annullaScelta">Annulla</button></div>
 <div class="sceglimappa" id="disegna"><span id="disegnaTesto">Tocca il confine della zona</span><button id="disegnaTogli">Togli l'ultimo</button><button id="disegnaAnnulla">Annulla</button><button id="disegnaFatto">Fatto</button></div>
 <div id="strati" role="dialog" aria-label="Legenda e strati della mappa"></div>
-<div id="invio"></div>
 
-<div class="barra-icone" id="tondi" role="toolbar" aria-label="Strumenti della mappa">
+
+
+<section id="pannello"><div class="barra-icone" id="tondi" role="toolbar" aria-label="Strumenti della mappa">
   <button class="icona" id="tCase" aria-label="Le mie case" title="Le mie case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.8 12 4l8.5 6.8"/><path d="M5.8 9.3V20h12.4V9.3"/><path d="M10 20v-5.2a2 2 0 0 1 4 0V20"/></svg><span class="num" id="numCase" hidden>0</span></button>
   <button class="icona" id="tCentra" aria-label="Centra sulla mia posizione" title="La mia posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 3.8 10.4a.5.5 0 0 0 .05.94l6.65 1.96 1.96 6.65a.5.5 0 0 0 .94.05z"/></svg></button>
   <button class="icona" id="tStrati" aria-label="Legenda e strati della mappa" title="Legenda e strati"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 3 8.2l9 4.7 9-4.7z"/><path d="m3 12.3 9 4.7 9-4.7"/><path d="m3 16.3 9 4.7 9-4.7" opacity=".55"/></svg></button>
   <button class="icona" id="tMenu" aria-label="Menu" title="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="3.25"/></svg></button>
-</div>
-<button class="profilo-tondo" id="tProfilo" aria-label="Il mio profilo" title="Profilo"></button>
-
-<section id="pannello"><div class="maniglia-zona" id="maniglia" role="button" tabindex="0" aria-expanded="true" aria-label="Apri o chiudi il pannello"><div class="maniglia"></div><div class="maniglia-testo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>Tira su per aprire</div></div><div id="pannelloCorpo" aria-live="polite"></div></section>
+</div><div class="maniglia-zona" id="maniglia" role="button" tabindex="0" aria-expanded="true" aria-label="Apri o chiudi il pannello"><div class="maniglia"></div><div class="maniglia-testo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>Tira su per aprire</div></div><div id="pannelloCorpo" aria-live="polite"></div></section>
 
 <!-- Nuova casa / modifica -->
 <div class="foglio" id="fCasa" role="dialog" aria-labelledby="tCasaTitolo">
@@ -167,7 +166,7 @@
   });
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="planner.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="planner.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

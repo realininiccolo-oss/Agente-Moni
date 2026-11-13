@@ -1,9 +1,9 @@
-/* Zona v14 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
+/* Zona v15 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
    case con foto e note vocali, taccuino delle notizie raccolte in zona, pannello dell'attività.
    Tutto resta sul telefono, un profilo per ogni agente. Il collegamento a Google (foglio e cartella Drive) è facoltativo. */
 (() => {
   'use strict';
-  const VERSIONE = 14;
+  const VERSIONE = 15;
   const $ = id => document.getElementById(id);
   // profili: ogni agente ha i suoi dati. Il primo profilo usa i dati delle versioni precedenti (nessun prefisso).
   const PROFILI = (() => { try { const p = JSON.parse(localStorage.getItem('zona_profili')); if (p && p.lista && p.lista.length) return p; } catch (e) { } return { attivo: 'p0', lista: [{ id: 'p0', nome: '' }] }; })();
@@ -54,7 +54,7 @@
     lista: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>'),
     persona: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
     strati: svg('<path d="M12 3 2 8l10 5 10-5z"/><path d="M2 13l10 5 10-5"/>'),
-    festa: '<svg class="grande" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="#E7F6EE"/><circle cx="24" cy="24" r="16" fill="#1E8A5A"/><path d="M17 24.5l5 5 9-10" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    festa: '<svg class="grande" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="#FFF6DC"/><circle cx="24" cy="24" r="16" fill="#102A43"/><path d="M17 24.5l5 5 9-10" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     giu: svg('<path d="m6 9 6 6 6-6"/>', 'class="giu"'),
     lucchetto: svg('<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
     attenzione: svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17.2v.3"/>'),
@@ -67,7 +67,7 @@
   const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#102A43"/><path d="M22.6 20H44L20.4 44H40" fill="none" stroke="#fff" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18.6" cy="20" r="4" fill="none" stroke="#fff" stroke-width="3"/><circle cx="45.2" cy="44" r="6.6" fill="#102A43"/><circle cx="45.2" cy="44" r="5" fill="#F0B429"/></svg>';
   const SPIN = '<span class="spin" aria-hidden="true"></span>';
   // colori dell'app (gli stessi di stile.css)
-  const C = { brand: '#102A43', testo2: '#486581', testo3: '#829AB1', linea: '#E1E7EE', lineaForte: '#CBD5E0', tenue: '#F0F4F8', verde: '#1E8A5A', verdeSc: '#146C46', verdeCh: '#A6D9BC', blu: '#2F6BDB', ambra: '#F0B429', ambraSc: '#8D5A00', rosso: '#D64545', viola: '#7A4FC4' };
+  const C = { brand: '#102A43', testo2: '#486581', testo3: '#829AB1', linea: '#E1E7EE', lineaForte: '#CBD5E0', tenue: '#F0F4F8', visto: '#334E68', vistoCh: '#9FB3C8', blu: '#2F6BDB', ambra: '#F0B429', ambra2: '#DE911D', ambraSc: '#8D5A00', rosso: '#D64545', viola: '#7A4FC4' };
   const FRECCIA = {
     dritto: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 42V10M12 21 24 8l12 13" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     destra: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 42V24a6 6 0 0 1 6-6h18M30 9l9 9-9 9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -79,16 +79,16 @@
 
   // stati delle case: colore e simbolo del segnaposto
   const STATI = [
-    { k: 'Da valutare', c: '#627D98', g: '<text x="15" y="18.6" text-anchor="middle" font-size="12.5" font-weight="700" fill="#627D98" font-family="Inter, sans-serif">?</text>' },
-    { k: 'Cartello vendita', c: '#D64545', g: '<text x="15" y="18.6" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D64545" font-family="Inter, sans-serif">€</text>' },
+    { k: 'Da valutare', c: '#627D98', g: '<text x="15" y="18.6" text-anchor="middle" font-size="12.5" font-weight="700" fill="#627D98" font-family="IBM Plex Sans, sans-serif">?</text>' },
+    { k: 'Cartello vendita', c: '#D64545', g: '<text x="15" y="18.6" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D64545" font-family="IBM Plex Sans, sans-serif">€</text>' },
     { k: 'Cartello affitto', c: '#7A4FC4', g: '<g transform="translate(8 7) scale(.58)" fill="none" stroke="#7A4FC4" stroke-width="3" stroke-linecap="round"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v2"/></g>' },
-    { k: 'Interessante', c: '#1E8A5A', g: '<g transform="translate(8 7) scale(.58)"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" fill="#1E8A5A"/></g>' },
-    { k: 'Da ricontattare', c: '#DE911D', g: '<g transform="translate(8.5 7.5) scale(.55)"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#DE911D"/></g>' },
+    { k: 'Interessante', c: '#DE911D', g: '<g transform="translate(8 7) scale(.58)"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" fill="#DE911D"/></g>' },
+    { k: 'Da ricontattare', c: '#2F6BDB', g: '<g transform="translate(8.5 7.5) scale(.55)"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#2F6BDB"/></g>' },
     { k: 'Scartata', c: '#9FB3C8', g: '<g transform="translate(8 7) scale(.58)" fill="none" stroke="#9FB3C8" stroke-width="3.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></g>' }
   ];
   const statoInfo = k => STATI.find(s => s.k === k) || STATI[0];
   const pinSVG = k => { const s = statoInfo(k); return `<svg viewBox="0 0 30 38" width="30" height="38" aria-hidden="true"><path d="M15 36.5S2.5 22.6 2.5 14.2a12.5 12.5 0 0 1 25 0c0 8.4-12.5 22.3-12.5 22.3z" fill="${s.c}" stroke="#fff" stroke-width="2"/><circle cx="15" cy="14.2" r="8.6" fill="#fff"/>${s.g}</svg>`; };
-  const statoPill = k => { const s = statoInfo(k); return `<span class="stato-pill" style="background:${s.c}"><i></i>${esc(s.k)}</span>`; };
+  const statoPill = k => { const s = statoInfo(k), chiaro = s.c === '#DE911D' || s.c === '#9FB3C8'; return `<span class="stato-pill" style="background:${s.c}${chiaro ? ';color:#102A43' : ''}"><i${chiaro ? ' style="background:#102A43"' : ''}></i>${esc(s.k)}</span>`; };
   const TIPI = ['Villa', 'Villetta a schiera', 'Appartamento', 'Rustico o cascina', 'Terreno', 'Negozio o ufficio', 'Altro'];
 
   // ---------- utilità ----------
@@ -222,6 +222,7 @@
 
   async function preparaComune(scarica = true) {
     R = G = visti = null; pulisciMappa();
+    limitaMappa(); aggiornaVelo();
     if (!cfg.comune) { aggiorna(true); return; }
     caricaStato(); anteprima = null; zone = null;
     const nome = cfg.comune;
@@ -234,6 +235,7 @@
       if (r) attivaRete(r, await DB.get('visti', nome));
     } catch (e) { caricamento = { nome, errore: e.message, log: [] }; }
     aggiorna(true); caricaCase();
+    setTimeout(() => { caricaConfini(); precaricaAree(); }, 1200); // confini veri e altre aree, in sottofondo
     if (G && !LS.get('aiutoVisto', false) && !$('fBenvenuto').classList.contains('aperto')) { LS.set('aiutoVisto', true); apriAiuto(); }
   }
   async function scaricaComune(nome) {
@@ -267,7 +269,8 @@
       S.migrato = true; salvaStato(); salvaVisti();
       if (n) setTimeout(() => toast('Le strade dei giri già fatti sono segnate come viste.', 'ok', 5000), 800);
     }
-    primaVista = true; disegnaRete(); aggiornaStatArea(); disegnaNote();
+    primaVista = true; versioneVisti++; griglie.delete(cfg.comune); disegnaRete(); aggiornaStatArea(); disegnaNote();
+    limitaMappa(); aggiornaVelo();
     sincronizzaCopertura(false);
   }
 
@@ -301,8 +304,9 @@
   const lRete = L.layerGroup().addTo(map), lRotta = L.layerGroup().addTo(map), lExtra = L.layerGroup().addTo(map), lCase = L.layerGroup().addTo(map), lIo = L.layerGroup().addTo(map);
   let segui = true, primaVista = true;
   map.on('dragstart', () => { segui = false; });
-  const VERDE = C.verde, VERDE_SC = C.verdeSc, VERDE_CH = C.verdeCh, BLU = C.blu, OCRA = C.ambra, GRIGIO = C.testo3, ARANCIO = '#E8590C';
+  const VERDE = C.brand, VERDE_SC = C.visto, VERDE_CH = C.vistoCh, BLU = C.blu, OCRA = C.ambra, GRIGIO = C.testo3, ARANCIO = '#E8590C';
   const GG = () => G;
+  const TESTATA = () => Math.round($('testata').getBoundingClientRect().bottom);
   const pEtichetta = (testo, altro) => L.divIcon({ className: '', html: `<div class="etichetta-p${altro ? ' altro' : typeof testo === 'number' ? ' numero' : ''}">${testo}</div>`, iconSize: altro ? [34, 34] : [40, 40], iconAnchor: altro ? [17, 17] : [20, 20] });
   const iconaAuto = () => L.divIcon({ className: '', html: `<div class="etichetta-p altro" style="width:36px;height:36px">${ICO.auto.replace('<svg', '<svg width="22" height="22"')}</div>`, iconSize: [36, 36], iconAnchor: [18, 18] });
   function pulisciMappa() { lRete.clearLayers(); lRotta.clearLayers(); lExtra.clearLayers(); lCase.clearLayers(); marcatori.clear(); }
@@ -327,8 +331,8 @@
     }
     return out;
   }
-  // colori delle strade: blu = case da vedere; verde scuro = percorse negli ultimi 3 mesi (il "segno");
-  // verde chiaro = viste più di 3 mesi fa. Durante il giro la rete resta sbiadita e risalta solo il percorso.
+  // colori delle strade: blu = case da vedere; blu notte = percorse negli ultimi 3 mesi (il "segno");
+  // grigio chiaro = viste più di 3 mesi fa. Durante il giro la rete resta sbiadita e risalta solo il percorso.
   function disegnaReteDi(Gx, vx, px, fx, layer, cammino) {
     const da = Planner.daVedereFn(Gx, vx, cfg.rivedi), o = Planner.oggi();
     const recente = e => px[e] > 0 && o - px[e] <= 90;
@@ -348,18 +352,13 @@
     disegnaReteDi(G, visti, passi, volant, lRete, S.fase === 'cammino');
   }
   let tRete = null;
-  const ridisegnaRete = () => { if (tRete) return; tRete = setTimeout(() => { tRete = null; disegnaRete(); }, 2500); };
+  const ridisegnaRete = () => { if (tRete) return; tRete = setTimeout(() => { tRete = null; versioneVisti++; disegnaRete(); aggiornaVelo(); }, 2500); };
 
   function disegna(centra) {
     lRotta.clearLayers(); lExtra.clearLayers();
     if (vistaZona) {
-      let b = null;
-      for (const n of cfg.comuni) {
-        const a = cfg.aree[n]; if (!a || !a.bbox) continue;
-        const bb = L.latLngBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]]); (confiniDi(n) || []).forEach(r => bb.extend(L.latLngBounds(r))); b = b ? b.extend(bb) : bb;
-        L.marker(bb.getCenter(), { icon: L.divIcon({ className: '', html: `<div class="etichetta-area${n === cfg.comune ? ' aperta' : ''}">${esc(n)}</div>`, iconSize: [10, 10], iconAnchor: [5, 5] }), zIndexOffset: 300 }).on('click', () => { if (n !== cfg.comune) cambiaComune(n); else mostraZona(false); }).addTo(lExtra);
-      }
-      if (centra && b && b.isValid()) map.fitBounds(b, { paddingTopLeft: [20, 30], paddingBottomRight: [70, Math.min(440, altezzaPannello() + 20)] });
+      const b = confiniZona();
+      if (centra && b && b.isValid()) map.fitBounds(b, { paddingTopLeft: [16, TESTATA() + 16], paddingBottomRight: [16, Math.min(460, altezzaPannello() + 76)] });
       return;
     }
     if (!G) { if (centra && posizione) map.setView([posizione.lat, posizione.lng], 14); return; }
@@ -409,7 +408,7 @@
       }
       bounds = L.latLngBounds(c.slice(p, Math.min(c.length, p + 40)));
     }
-    if (centra && bounds && bounds.isValid()) { map.fitBounds(bounds, { paddingTopLeft: [20, S.fase === 'home' ? 30 : 150], paddingBottomRight: [70, Math.min(440, altezzaPannello() + 20)], maxZoom: 18 }); primaVista = false; }
+    if (centra && bounds && bounds.isValid()) { map.fitBounds(bounds, { paddingTopLeft: [20, TESTATA() + (S.fase === 'home' ? 20 : 150)], paddingBottomRight: [20, Math.min(460, altezzaPannello() + 76)], maxZoom: 18 }); primaVista = false; }
   }
   // frecce di direzione lungo il percorso, a metà dei pezzi (così non coprono gli incroci)
   function frecce(r, p, quanto, passo, colore = '#fff') {
@@ -633,14 +632,15 @@
     aggiorna(true);
   }
   function iniziaSceltaMappa() {
-    scegliendo = true; $('scegliMappa').classList.add('visibile'); chiudiPannello(true);
+    scegliendo = true; sospendiInclinazione(true); $('scegliMappa').classList.add('visibile'); chiudiPannello(true);
     toast('Tocca la mappa nel punto da cui vuoi partire.');
   }
-  $('annullaScelta').onclick = () => { scegliendo = false; $('scegliMappa').classList.remove('visibile'); chiudiPannello(false); };
+  $('annullaScelta').onclick = () => { scegliendo = false; sospendiInclinazione(false); $('scegliMappa').classList.remove('visibile'); chiudiPannello(false); };
   map.on('click', e => {
     if (disegno) { disegno.punti.push([e.latlng.lat, e.latlng.lng]); aggiornaDisegno(); vibra(30); return; }
+    if (vistaZona) { const n = anelliZona().find(x => Planner.dentroPoligono(x.a, e.latlng.lat, e.latlng.lng)); if (n) { if (n.n === cfg.comune) mostraZona(false); else cambiaComune(n.n); } return; }
     if (!scegliendo || !G) return;
-    scegliendo = false; $('scegliMappa').classList.remove('visibile'); chiudiPannello(false);
+    scegliendo = false; sospendiInclinazione(false); $('scegliMappa').classList.remove('visibile'); chiudiPannello(false);
     const { lat, lng } = e.latlng, v = Planner.nodoVicino(G, lat, lng, 400);
     if (v < 0) { toast('Lì non ci sono strade del comune: tocca più vicino al paese.', 'errore'); return; }
     const ind = Planner.indirizzoVicino(G, R.lat[v], R.lon[v]);
@@ -750,22 +750,19 @@
     salvaStato(); salvaVisti(); aggiorna(true); sincronizzaCopertura(true); inviaTraccia();
   }
 
-  function aggiorna(centra) { pannello(); guida(); posizionaTondi(); aggiornaAvatar(); disegna(centra); }
+  function aggiorna(centra) { pannello(); guida(); posizionaTondi(); aggiornaAvatar(); $('testataZona').textContent = cfg.zonaNome || cfg.comune || 'Farming immobiliare'; disegna(centra); }
   function altezzaPannello() { return Math.max(0, Math.round(window.innerHeight - $('pannello').getBoundingClientRect().top)); }
   // barra delle icone: in fila sopra il pannello; se il pannello è tutto aperto, in alto a sinistra del profilo
+  // barra delle icone: attaccata sopra il pannello (si muove con lui); a pannello tutto alzato va nella testata, accanto al profilo
   function posizionaTondi() {
-    const h = altezzaPannello(), T = $('tondi'), gu = $('guida'), guidaOn = gu.classList.contains('visibile');
-    const alto = h + 10 + 54 > window.innerHeight - 76;
-    const sottoGuida = guidaOn ? Math.round(gu.getBoundingClientRect().bottom) + 10 : 0;
-    T.classList.toggle('in-alto', alto);
-    T.style.bottom = alto ? '' : (h + 10) + 'px';
-    T.style.top = alto ? (guidaOn ? sottoGuida + 'px' : 'calc(env(safe-area-inset-top) + 12px)') : '';
-    T.style.right = alto && !guidaOn ? '72px' : '';
-    const st = $('strati');
-    st.style.bottom = alto ? 'auto' : (h + 72) + 'px';
-    st.style.top = alto ? (Math.round(T.getBoundingClientRect().bottom) + 8) + 'px' : '';
-    st.style.maxHeight = (alto ? window.innerHeight - Math.round(T.getBoundingClientRect().bottom) - 20 : window.innerHeight - h - 72 - 16 - (guidaOn ? Math.round(gu.getBoundingClientRect().bottom) : 0)) + 'px';
-    $('invio').style.bottom = (h + 72) + 'px'; if (!document.querySelector('.foglio.aperto')) $('toast').style.bottom = (alto ? h + 12 : h + 74) + 'px';
+    const h = altezzaPannello(), T = $('tondi'), testa = $('testata'), hb = TESTATA(), H = window.innerHeight;
+    const alto = H - h - 8 - 50 < hb + 6;
+    if (T.parentNode !== (alto ? testa : PAN)) { if (alto) testa.insertBefore(T, $('tProfilo')); else PAN.insertBefore(T, PAN.firstChild); }
+    document.body.classList.toggle('barra-in-alto', alto);
+    const gu = $('guida'), sopra = gu.classList.contains('visibile') ? Math.round(gu.getBoundingClientRect().bottom) : hb, st = $('strati');
+    if (alto) { st.style.top = (hb + 8) + 'px'; st.style.bottom = 'auto'; st.style.maxHeight = Math.max(160, H - h - hb - 20) + 'px'; }
+    else { st.style.top = ''; st.style.bottom = (h + 66) + 'px'; st.style.maxHeight = Math.max(160, H - h - 66 - sopra - 12) + 'px'; }
+    if (!document.querySelector('.foglio.aperto') && !$('blocco').classList.contains('aperto')) $('toast').style.bottom = (alto ? h + 12 : h + 70) + 'px';
   }
   function aggiornaAvatar() {
     const n = ((cfg.profilo && cfg.profilo.nome) || '').trim(), b = $('tProfilo');
@@ -773,6 +770,18 @@
     b.innerHTML = ini ? `<span>${esc(ini)}</span>` : svg('<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>', 'stroke-width="1.7"');
     b.setAttribute('aria-label', 'Il mio profilo' + (n ? ': ' + n : ''));
   }
+
+  // ---------- vista inclinata: la mappa in prospettiva (effetto CSS: Leaflet disegna solo dall'alto) ----------
+  function inclina(on) {
+    const el = $('map'), H = window.innerHeight, a = 30 * Math.PI / 180, p = 1.15 * H, su = 0.6 * H;
+    const fSu = p / (p + su * Math.sin(a)), scala = Math.max(1, 1.03 / (Math.cos(a) * fSu));
+    el.style.setProperty('--incl-p', Math.round(p) + 'px'); el.style.setProperty('--incl-s', scala.toFixed(3)); el.style.setProperty('--incl-a', '30deg');
+    el.classList.toggle('inclinata', !!on);
+  }
+  // per toccare un punto preciso (scelta della partenza, disegno della zona) la mappa torna dall'alto
+  const sospendiInclinazione = v => { if (cfg.inclinata) $('map').classList.toggle('inclinata', !v); };
+  window.addEventListener('resize', () => { if (cfg.inclinata) inclina(true); });
+  if (cfg.inclinata) inclina(true);
 
   // ---------- pannello trascinabile ----------
   const PAN = $('pannello'), ZONA = $('maniglia'), CORPO = $('pannelloCorpo'), SBIRCIA = 58;
@@ -812,13 +821,14 @@
     PAN.classList.remove('trascina'); PAN.style.transform = '';
     chiudiPannello(chiudi);
   }
-  PAN.addEventListener('touchstart', e => { if (e.touches.length === 1) trInizio(e.touches[0].clientY, e.target); else tr = null; }, { passive: true });
+  PAN.addEventListener('touchstart', e => { if (e.touches.length === 1 && !$('tondi').contains(e.target)) trInizio(e.touches[0].clientY, e.target); else tr = null; }, { passive: true });
   PAN.addEventListener('touchmove', e => { if (e.touches.length === 1) trMuovi(e.touches[0].clientY, e); }, { passive: false });
   PAN.addEventListener('touchend', trFine); PAN.addEventListener('touchcancel', trFine);
   ZONA.addEventListener('mousedown', e => { trInizio(e.clientY, e.target); e.preventDefault(); });
   window.addEventListener('mousemove', e => { if (tr) trMuovi(e.clientY, null); });
   window.addEventListener('mouseup', trFine);
   PAN.addEventListener('click', e => {
+    if ($('tondi').contains(e.target)) return; // la barra delle icone sta sopra il pannello ma non lo apre
     if (Date.now() - bloccaClick < 450) { e.preventDefault(); e.stopPropagation(); return; }
     if (panChiuso) { e.preventDefault(); e.stopPropagation(); chiudiPannello(false); return; }
     if (ZONA.contains(e.target)) chiudiPannello(true);
@@ -1574,7 +1584,8 @@
     if (S.fase === 'cammino' && !(await chiedi('Interrompere il giro?', 'Per aprire ' + nome + ' chiudo il giro in corso. Le strade viste restano segnate.', 'Interrompi e apri'))) return;
     if (S.fase !== 'home') bastaPerOggi();
     if (G) { aggiornaStatArea(); await DB.put('visti', recVisti(), cfg.comune).catch(() => { }); }
-    zonaCache.delete(cfg.comune); zonaCache.delete(nome); vistaZona = false; grigliaZona = null; riservaConfini.clear(); if (map.hasLayer(stratoZona)) map.removeLayer(stratoZona);
+    if (G && R) zonaCache.set(cfg.comune, { G: Planner.preparaLeggera(R), v: visti, p: passi, f: volant }); // l'area lasciata resta pronta per la nebbia e la vista d'insieme
+    zonaCache.delete(nome); griglie.delete(cfg.comune); griglie.delete(nome); vistaZona = false;
     cfg.comune = nome; salvaCfg();
     caricamento = null; anteprima = null; zone = null;
     await preparaComune(true);
@@ -1608,7 +1619,7 @@
     $('iVoce').onclick = () => { cfg.voce = !cfg.voce; salvaCfg(); if (cfg.voce) parla('Indicazioni a voce accese.'); apriImpost(); };
     $('iTogli').onclick = async () => {
       if (!(await dialogo({ titolo: 'Togliere ' + cfg.comune + '?', testo: 'La mappa e le strade viste di quest\'area si cancellano dal telefono. Le case salvate restano.', ok: 'Togli', pericolo: true }))) return;
-      const n = cfg.comune; await DB.del('reti', n).catch(() => { }); await DB.del('visti', n).catch(() => { }); LS.del('stato4_' + n);
+      const n = cfg.comune; await DB.del('reti', n).catch(() => { }); await DB.del('visti', n).catch(() => { }); LS.del('stato4_' + n); zonaCache.delete(n); griglie.delete(n); riservaConfini.delete(n);
       cfg.comuni = cfg.comuni.filter(x => x !== n); cfg.comune = cfg.comuni[0] || ''; salvaCfg(); chiudi('fImpost'); preparaComune(false);
     };
     $('iBackup').onclick = () => conAttesa($('iBackup'), salvaBackup);
@@ -1639,11 +1650,11 @@
   }
 
   function apriAiuto() {
-    $('aiutoCorpo').innerHTML = `<p><b>La tua zona.</b> È il territorio che lavori: uno o più comuni, un quartiere o una zona disegnata sulla mappa. La aggiungi e la cambi da Menu → La mia zona. Con "Tutta la zona" la vedi intera: il bordo scuro è il confine, dentro il verde è la parte già vista e l'ambra quella da vedere.</p>
+    $('aiutoCorpo').innerHTML = `<p><b>La tua zona.</b> È il territorio che lavori: uno o più comuni, un quartiere o una zona disegnata sulla mappa. La aggiungi e la cambi da Menu → La mia zona. Con "Tutta la zona" la vedi intera: il bordo scuro è il confine, dentro, la nebbia copre la parte da vedere e si dirada dove passi; fuori dalla zona la mappa è sbarrata. Nebbia, sbarre e vista inclinata si accendono e spengono da Legenda e strati.</p>
       <p><b>Gli strumenti</b> sono nella barra sopra il pannello: le tue case, torna dove sei, legenda e strati, menu. In alto a destra c'è il tuo profilo, con obiettivi, PIN e questo aiuto.</p>
       <p><b>1. Scegli quanto tempo hai.</b> L'app prepara un giro a piedi sulle strade con case che non hai ancora visto, partendo da dove sei. Se sei lontano, ti propone le zone più vicine e ti porta a parcheggiare.</p>
       <p><b>2. Segui la linea ambra.</b> Le frecce indicano il verso; in alto c'è dove girare. Il pezzo già fatto diventa grigio tratteggiato; la freccia blu sul tuo pallino è la direzione in cui cammini. Se prendi un'altra strada, il giro si aggiorna da solo.</p>
-      <p><b>3. Il segno delle strade.</b> Le strade dove passi a piedi restano verde scuro per 3 mesi; poi diventano verde chiaro. Le blu hanno case da vedere. In macchina non si segna niente. Il tasto con i fogli sovrapposti sulla mappa mostra la legenda.</p>
+      <p><b>3. Il segno delle strade.</b> Le strade dove passi a piedi restano blu notte per 3 mesi; poi diventano grigio chiaro. Le blu hanno case da vedere. In macchina non si segna niente. Il tasto con i fogli sovrapposti sulla mappa mostra la legenda.</p>
       <p><b>4. Case:</b> "Nuova casa" salva indirizzo, foto, nota vocale, stato, telefono e agenzia. Dalla scheda chiami, condividi su WhatsApp o metti il giorno in cui richiamare.</p>
       <p><b>È già in vendita?</b> Nella scheda della casa i tasti Immobiliare.it, Idealista, Casa.it e "Tutti i siti" cercano quell'indirizzo sui portali. Se trovi l'annuncio, segna agenzia, prezzo e link: restano nella scheda, nell'Excel e nella condivisione. I portali non permettono ad altre app di leggere i loro annunci, per questo il controllo lo fai tu con un tocco.</p>
       <p><b>5. Taccuino:</b> quello che senti al bar, dai negozianti, dai vicini (chi vende, chi eredita, chi si trasferisce) va in "Notizia". Le persone che te le danno finiscono nella rubrica della zona e l'app ti ricorda di ripassare da loro.</p>
@@ -1745,7 +1756,7 @@
   async function apriArea(n) {
     if (zonaCache.has(n)) return zonaCache.get(n);
     const r = await DB.get('reti', n); if (!r) return null;
-    const v = await DB.get('visti', n), g = Planner.prepara(r), ok = v && v.id === r.id;
+    const v = await DB.get('visti', n), g = Planner.preparaLeggera(r), ok = v && v.id === r.id;
     const z = { G: g, v: ok && v.v ? v.v : new Uint16Array(g.m), p: ok && v.p ? v.p : ok && v.v ? v.v : new Uint16Array(g.m), f: ok && v.f ? v.f : null };
     zonaCache.set(n, z);
     return z;
@@ -1797,27 +1808,42 @@
   // ---------- vista di tutta la zona ----------
   async function mostraZona(on) {
     if (on && S.fase !== 'home') { toast('Finisci prima il giro in corso.', 'errore'); return; }
-    if (on) { attesaMappa('Apro tutta la zona'); try { for (const n of cfg.comuni) if (n !== cfg.comune) { try { await apriArea(n); } catch (e) { } } await statTutte(); } finally { attesaMappa(); } }
     vistaZona = on; anteprima = null; zone = null;
-    if (!on) { grigliaZona = null; if (map.hasLayer(stratoZona)) map.removeLayer(stratoZona); }
     caricaMarcatori(); disegnaNote(); disegnaRete(); aggiorna(true);
-    if (!on) disegna(true); else caricaConfini();
+    if (!on) { disegna(true); return; }
+    // si vede subito quello che c'è; le altre aree arrivano una alla volta, senza bloccare
+    const mancano = cfg.comuni.filter(n => n !== cfg.comune && !zonaCache.has(n));
+    if (mancano.length) attesaMappa('Apro le altre aree');
+    try { await precaricaAree(); await statTutte(); } finally { attesaMappa(); }
+    if (vistaZona) { disegnaRete(); pannello(); }
+    caricaConfini();
   }
   function disegnaZona() {
     for (const n of cfg.comuni) {
       if (n === cfg.comune && G) disegnaReteDi(G, visti, passi, volant, lRete, false);
       else { const z = zonaCache.get(n); if (z) disegnaReteDi(z.G, z.v, z.p, z.f, lRete, false); }
     }
-    grigliaZona = calcolaGriglia();
-    if (!map.hasLayer(stratoZona)) stratoZona.addTo(map); else stratoZona.ridisegna();
+  }
+  // le altre aree della zona, lette dal telefono in sottofondo (rete leggera: si disegna e si conta, niente percorsi)
+  let precarico = null;
+  function precaricaAree() {
+    if (precarico) return precarico;
+    precarico = (async () => {
+      for (const n of cfg.comuni.slice()) {
+        if (n === cfg.comune || zonaCache.has(n)) continue;
+        try { if (await apriArea(n)) { aggiornaVelo(); if (vistaZona) disegnaRete(); } } catch (e) { }
+        await pausa(30);
+      }
+    })().finally(() => { precarico = null; });
+    return precarico;
   }
 
-  // ---------- tutta la zona: confine esterno marcato, dentro due colori (già vista / da vedere) ----------
-  // Ogni punto della zona prende il colore della strada con case più vicina: verde se vista, ocra se da vedere.
+  // ---------- velo sulla mappa: fuori zona sbarrato, nebbia sulla parte da vedere, confini sottili ----------
   map.createPane('zonaFondo').style.zIndex = 380;
-  const COL_VISTA = [30, 138, 90], COL_DAFARE = [240, 180, 41], ALFA_ZONA = 0.24;
+  map.getPane('zonaFondo').style.pointerEvents = 'none';
   const riservaConfini = new Map();   // involucro dei nodi, finché il confine vero non è scaricato
-  let grigliaZona = null;
+  const griglie = new Map();          // nebbia di ogni area, calcolata una volta (e di nuovo quando cambiano le strade viste)
+  let versioneVisti = 0;
   const reteArea = n => n === cfg.comune && G ? { G, v: visti } : zonaCache.get(n) || null;
   function confiniDi(n) {
     const a = cfg.aree[n]; if (!a) return null;
@@ -1825,34 +1851,31 @@
     if (a.confine && a.confine.length) return a.confine;
     if (riservaConfini.has(n)) return riservaConfini.get(n);
     const z = reteArea(n); if (!z) return null;
-    const pts = [], passo = Math.max(1, Math.floor(z.G.n / 5000));
-    for (let i = 0; i < z.G.n; i += passo) pts.push([z.G.R.lat[i], z.G.R.lon[i]]);
+    const R0 = z.G.R, pts = [], passo = Math.max(1, Math.floor(R0.lat.length / 5000));
+    for (let i = 0; i < R0.lat.length; i += passo) pts.push([R0.lat[i], R0.lon[i]]);
     const h = Planner.involucro(pts); if (h.length < 3) return null;
     riservaConfini.set(n, [h]); return [h];
   }
   const anelliZona = () => cfg.comuni.flatMap(n => (confiniDi(n) || []).map(a => ({ n, a })));
-  function calcolaGriglia() {
-    const anelli = anelliZona(); if (!anelli.length) return null;
+  // nebbia di un'area: ogni punto prende lo stato della strada con case più vicina (vista / da vedere)
+  function grigliaDi(n) {
+    const z = reteArea(n), anelli = confiniDi(n); if (!z || !anelli) return null;
+    const firma = z.G.id + ':' + cfg.rivedi + ':' + (n === cfg.comune ? versioneVisti : 0) + ':' + Planner.oggi();
+    const c0 = griglie.get(n); if (c0 && c0.firma === firma) return c0;
     let s = 90, w = 180, nn = -90, e = -180;
-    anelli.forEach(({ a }) => a.forEach(p => { if (p[0] < s) s = p[0]; if (p[0] > nn) nn = p[0]; if (p[1] < w) w = p[1]; if (p[1] > e) e = p[1]; }));
+    anelli.forEach(a => a.forEach(p => { if (p[0] < s) s = p[0]; if (p[0] > nn) nn = p[0]; if (p[1] < w) w = p[1]; if (p[1] > e) e = p[1]; }));
     const kx = 111320 * Math.cos((s + nn) / 2 * Math.PI / 180), ky = 110540;
-    const cs = Math.max(20, Math.sqrt((e - w) * kx * (nn - s) * ky / 300000));
+    const cs = Math.max(12, Math.sqrt((e - w) * kx * (nn - s) * ky / 90000));
     const dLon = cs / kx, dLat = cs / ky, W = Math.max(1, Math.ceil((e - w) / dLon) + 2), H = Math.max(1, Math.ceil((nn - s) / dLat) + 2);
-    const w0 = w - dLon, n0 = nn + dLat;
-    const vista = new Float32Array(W * H), fare = new Float32Array(W * H);
-    let mVista = 0, mFare = 0;
-    for (const nome of cfg.comuni) {
-      const z = reteArea(nome); if (!z) continue;
-      const Gx = z.G, da = Planner.daVedereFn(Gx, z.v, cfg.rivedi);
-      for (let ed = 0; ed < Gx.m; ed++) {
-        if (!Gx.ER[ed]) continue;
-        const a = Gx.EU[ed], b = Gx.EV[ed], la1 = Gx.R.lat[a], lo1 = Gx.R.lon[a], la2 = Gx.R.lat[b], lo2 = Gx.R.lon[b];
-        const lung = Gx.EL[ed], k = Math.max(1, Math.ceil(lung / (cs * 0.5))), dafare = da(ed), arr = dafare ? fare : vista, peso = lung / (k + 1);
-        if (dafare) mFare += lung; else mVista += lung;
-        for (let t = 0; t <= k; t++) {
-          const f = t / k, x = Math.floor((lo1 + (lo2 - lo1) * f - w0) / dLon), y = Math.floor((n0 - (la1 + (la2 - la1) * f)) / dLat);
-          if (x >= 0 && x < W && y >= 0 && y < H) arr[y * W + x] += peso;
-        }
+    const w0 = w - dLon, n0 = nn + dLat, vista = new Float32Array(W * H), fare = new Float32Array(W * H);
+    const Gx = z.G, R0 = Gx.R, da = Planner.daVedereFn(Gx, z.v, cfg.rivedi);
+    for (let ed = 0; ed < Gx.m; ed++) {
+      if (!Gx.ER[ed]) continue;
+      const a = Gx.EU[ed], b = Gx.EV[ed], la1 = R0.lat[a], lo1 = R0.lon[a], la2 = R0.lat[b], lo2 = R0.lon[b];
+      const k = Math.max(1, Math.ceil(Gx.EL[ed] / (cs * 0.5))), arr = da(ed) ? fare : vista, peso = Gx.EL[ed] / (k + 1);
+      for (let t = 0; t <= k; t++) {
+        const f = t / k, x = Math.floor((lo1 + (lo2 - lo1) * f - w0) / dLon), y = Math.floor((n0 - (la1 + (la2 - la1) * f)) / dLat);
+        if (x >= 0 && x < W && y >= 0 && y < H) arr[y * W + x] += peso;
       }
     }
     const lab = new Uint8Array(W * H), q = new Int32Array(W * H); let qh = 0, qt = 0;
@@ -1866,11 +1889,24 @@
     }
     const img = document.createElement('canvas'); img.width = W; img.height = H;
     const ctx = img.getContext('2d'), id = ctx.createImageData(W, H);
-    for (let i = 0; i < W * H; i++) { const c = lab[i] === 1 ? COL_VISTA : lab[i] === 2 ? COL_DAFARE : null; if (!c) continue; id.data[i * 4] = c[0]; id.data[i * 4 + 1] = c[1]; id.data[i * 4 + 2] = c[2]; id.data[i * 4 + 3] = 255; }
+    for (let i = 0; i < W * H; i++) if (lab[i] !== 1) { id.data[i * 4] = 244; id.data[i * 4 + 1] = 247; id.data[i * 4 + 2] = 250; id.data[i * 4 + 3] = 255; }
     ctx.putImageData(id, 0, 0);
-    return { anelli, img, nord: n0, ovest: w0, sud: n0 - H * dLat, est: w0 + W * dLon, kmVista: mVista / 1000, kmFare: mFare / 1000, semi: qt > 0 && (mVista + mFare) > 0 };
+    const g = { firma, img, nord: n0, ovest: w0, sud: n0 - H * dLat, est: w0 + W * dLon };
+    griglie.set(n, g); return g;
   }
-  const StratoZona = L.Layer.extend({
+  const NEBBIA = 'rgb(244,247,250)';
+  let trattoSbarra = null;
+  const sbarre = ctx => {
+    if (!trattoSbarra) {
+      const t = document.createElement('canvas'); t.width = t.height = 9; const c = t.getContext('2d');
+      c.fillStyle = 'rgba(16,42,67,.05)'; c.fillRect(0, 0, 9, 9);
+      c.strokeStyle = 'rgba(16,42,67,.30)'; c.lineWidth = 1.1; c.beginPath();
+      for (const o of [-9, 0, 9]) { c.moveTo(o, 9); c.lineTo(o + 9, 0); } c.stroke();
+      trattoSbarra = t;
+    }
+    return ctx.createPattern(trattoSbarra, 'repeat');
+  };
+  const Velo = L.Layer.extend({
     onAdd(m) {
       this._c = L.DomUtil.create('canvas', 'strato-zona'); this._c.style.pointerEvents = 'none';
       this._f = document.createElement('canvas'); this._b = document.createElement('canvas');
@@ -1882,48 +1918,84 @@
     _nascondi() { this._c.style.visibility = 'hidden'; },
     ridisegna() {
       if (!this._map) return;
-      const m = this._map, sz = m.getSize(), r = window.devicePixelRatio || 1, c = this._c, g = grigliaZona;
-      [c, this._f, this._b].forEach(k => { k.width = Math.round(sz.x * r); k.height = Math.round(sz.y * r); });
-      c.style.width = sz.x + 'px'; c.style.height = sz.y + 'px'; c.style.visibility = 'visible';
-      L.DomUtil.setPosition(c, m.containerPointToLayerPoint([0, 0]));
-      if (!g) return;
-      const percorsi = g.anelli.map(({ a }) => a.map(p => m.latLngToContainerPoint(p)));
-      const anello = (ctx, pts) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); };
-      const ctx = c.getContext('2d'); ctx.setTransform(r, 0, 0, r, 0, 0);
-      // 1. colori dentro la zona (l'unione delle aree fa da maschera)
-      if (g.semi) {
-        const f = this._f.getContext('2d'); f.setTransform(r, 0, 0, r, 0, 0); f.fillStyle = '#000';
-        percorsi.forEach(p => { anello(f, p); f.fill(); });
-        f.globalCompositeOperation = 'source-in'; f.imageSmoothingEnabled = true; f.imageSmoothingQuality = 'high';
-        const no = m.latLngToContainerPoint([g.nord, g.ovest]), se = m.latLngToContainerPoint([g.sud, g.est]);
-        f.drawImage(g.img, no.x, no.y, se.x - no.x, se.y - no.y);
-        f.globalCompositeOperation = 'source-over';
-        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = ALFA_ZONA; ctx.drawImage(this._f, 0, 0); ctx.restore();
+      const m = this._map, sz = m.getSize(), P = 0.35, ox = Math.round(sz.x * P), oy = Math.round(sz.y * P), Wc = sz.x + 2 * ox, Hc = sz.y + 2 * oy;
+      const r = Math.min(2, window.devicePixelRatio || 1), c = this._c;
+      [c, this._f, this._b].forEach(k => { k.width = Math.round(Wc * r); k.height = Math.round(Hc * r); });
+      c.style.width = Wc + 'px'; c.style.height = Hc + 'px'; c.style.visibility = 'visible';
+      L.DomUtil.setPosition(c, m.containerPointToLayerPoint([-ox, -oy]));
+      const ctx = c.getContext('2d'); ctx.setTransform(r, 0, 0, r, 0, 0); ctx.clearRect(0, 0, Wc, Hc);
+      const anelli = anelliZona(); if (!anelli.length) return;
+      const pt = ll => { const p = m.latLngToContainerPoint(ll); return [p.x + ox, p.y + oy]; };
+      const percorsi = anelli.map(({ n, a }) => ({ n, p: a.map(pt) }));
+      const anello = (k, pts) => { k.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) k.lineTo(pts[i][0], pts[i][1]); k.closePath(); };
+      const tutti = k => { k.beginPath(); percorsi.forEach(x => anello(k, x.p)); };
+      // 1. fuori dalla zona: barre parallele
+      if (cfg.sbarra !== false) {
+        const b = this._b.getContext('2d'); b.setTransform(r, 0, 0, r, 0, 0); b.clearRect(0, 0, Wc, Hc);
+        b.fillStyle = sbarre(b); b.fillRect(0, 0, Wc, Hc);
+        b.globalCompositeOperation = 'destination-out'; b.fillStyle = '#000'; tutti(b); b.fill('nonzero'); b.globalCompositeOperation = 'source-over';
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(this._b, 0, 0); ctx.restore();
       }
-      // 2. confini tra un'area e l'altra: sottili, tratteggiati
-      if (percorsi.length > 1) { ctx.save(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(16,42,67,.45)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore(); }
-      // 3. confine esterno di tutta la zona: si tolgono le parti interne, restano solo i bordi verso fuori
-      const b = this._b.getContext('2d'); b.setTransform(r, 0, 0, r, 0, 0); b.lineJoin = 'round';
-      b.strokeStyle = 'rgba(255,255,255,.95)'; b.lineWidth = 2 * 7.5; percorsi.forEach(p => { anello(b, p); b.stroke(); });
-      b.strokeStyle = C.brand; b.lineWidth = 2 * 5; percorsi.forEach(p => { anello(b, p); b.stroke(); });
-      b.globalCompositeOperation = 'destination-out'; b.fillStyle = '#000'; percorsi.forEach(p => { anello(b, p); b.fill(); }); b.globalCompositeOperation = 'source-over';
-      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(this._b, 0, 0); ctx.restore();
-      ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(16,42,67,.9)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore();
+      // 2. nebbia sulla parte da vedere (morbida dentro, netta sul confine)
+      if (cfg.nebbia !== false) {
+        const f = this._f.getContext('2d'); f.setTransform(r, 0, 0, r, 0, 0); f.clearRect(0, 0, Wc, Hc);
+        for (const n of cfg.comuni) {
+          const mie = percorsi.filter(x => x.n === n); if (!mie.length) continue;
+          f.save(); f.beginPath(); mie.forEach(x => anello(f, x.p)); f.clip();
+          const g = grigliaDi(n);
+          if (g) {
+            const no = pt([g.nord, g.ovest]), se = pt([g.sud, g.est]), cella = (se[0] - no[0]) / g.img.width;
+            f.imageSmoothingEnabled = true; f.imageSmoothingQuality = 'high';
+            f.filter = `blur(${Math.max(1.5, Math.min(16, cella * 0.9)).toFixed(1)}px)`;
+            f.drawImage(g.img, no[0], no[1], se[0] - no[0], se[1] - no[1]); f.filter = 'none';
+          } else { f.fillStyle = NEBBIA; f.fillRect(0, 0, Wc, Hc); }
+          f.restore();
+        }
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 0.74; ctx.drawImage(this._f, 0, 0); ctx.restore();
+      }
+      // 3. confini tra un'area e l'altra: sottili e tratteggiati
+      if (percorsi.length > 1) { ctx.save(); ctx.setLineDash([5, 4]); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(16,42,67,.42)'; tutti(ctx); ctx.stroke(); ctx.restore(); }
+      // 4. confine esterno della zona: linea sottile e precisa, solo verso fuori
+      const b = this._b.getContext('2d'); b.setTransform(r, 0, 0, r, 0, 0); b.clearRect(0, 0, Wc, Hc); b.lineJoin = 'round';
+      b.strokeStyle = C.brand; b.lineWidth = 3.2; percorsi.forEach(x => { b.beginPath(); anello(b, x.p); b.stroke(); });
+      b.globalCompositeOperation = 'destination-out'; b.fillStyle = '#000'; tutti(b); b.fill('nonzero'); b.globalCompositeOperation = 'source-over';
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 0.9; ctx.drawImage(this._b, 0, 0); ctx.restore();
     }
   });
-  const stratoZona = new StratoZona();
-  // confini veri dei comuni (OpenStreetMap), scaricati una volta e tenuti nelle impostazioni
+  const velo = new Velo().addTo(map);
+  let tVelo = 0;
+  function aggiornaVelo() { if (tVelo) return; tVelo = requestAnimationFrame(() => { tVelo = 0; velo.ridisegna(); }); }
+  // la mappa non va oltre il doppio della zona intera (né come spostamento né come zoom indietro)
+  function confiniZona() {
+    let b = null; const add = bb => { if (bb && bb.isValid()) b = b ? b.extend(bb) : L.latLngBounds(bb.getSouthWest(), bb.getNorthEast()); };
+    for (const n of cfg.comuni) { const a = cfg.aree[n]; if (a && a.bbox) add(L.latLngBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]])); (confiniDi(n) || []).forEach(r => add(L.latLngBounds(r))); }
+    if (G && G.confini) add(G.confini);
+    return b;
+  }
+  function limitaMappa() {
+    const b = confiniZona();
+    if (!b) { map.setMaxBounds(null); map.setMinZoom(0); return; }
+    const doppio = b.pad(0.5);
+    map.setMinZoom(0); map.setMaxBounds(doppio);
+    map.setMinZoom(Math.max(0, map.getBoundsZoom(doppio, false)));
+  }
+  // confini veri dei comuni (OpenStreetMap), tutti con una sola richiesta, tenuti nelle impostazioni
+  const VERS_CONFINE = 2;
   let confiniInCorso = false;
   async function caricaConfini() {
     if (confiniInCorso) return; confiniInCorso = true;
     try {
-      for (const n of cfg.comuni.slice()) {
-        const a = cfg.aree[n] || (cfg.aree[n] = { tipo: 'comune' });
-        if ((a.tipo && a.tipo !== 'comune') || a.poly || (a.confine && a.confine.length)) continue;
-        if (a.confineProvato && Date.now() - a.confineProvato < 6 * 3600e3) continue;
-        try { a.confine = await Planner.confineComune(n); delete a.confineProvato; riservaConfini.delete(n); salvaCfg(); if (vistaZona) { grigliaZona = calcolaGriglia(); stratoZona.ridisegna(); } }
-        catch (e) { a.confineProvato = Date.now(); salvaCfg(); }
+      const daFare = cfg.comuni.filter(n => { const a = cfg.aree[n] || (cfg.aree[n] = { tipo: 'comune' }); return !(a.tipo && a.tipo !== 'comune') && !a.poly && !(a.confine && a.confine.length && a.confineV === VERS_CONFINE) && !(a.confineProvato && Date.now() - a.confineProvato < 6 * 3600e3); });
+      if (!daFare.length) return;
+      const centri = {}; daFare.forEach(n => { const bb = cfg.aree[n].bbox; if (bb) centri[n] = [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2]; });
+      let trovati = {};
+      try { trovati = await Planner.confiniComuni(daFare, centri); } catch (e) { }
+      for (const n of daFare) {
+        const a = cfg.aree[n];
+        if (trovati[n] && trovati[n].length) { a.confine = trovati[n]; a.confineV = VERS_CONFINE; delete a.confineProvato; riservaConfini.delete(n); griglie.delete(n); }
+        else a.confineProvato = Date.now();
       }
+      salvaCfg(); aggiornaVelo(); limitaMappa();
     } finally { confiniInCorso = false; }
   }
   function caricaMarcatori() { lCase.clearLayers(); marcatori.clear(); [...case_.values()].forEach(h => marcatore(h)); }
@@ -1937,7 +2009,7 @@
     const righe = cfg.comuni.map(n => { const st = statArea(n); return `<button class="zona" data-a="${esc(n)}"><span class="num-giro">${ICO.mappa}</span><div><b>${esc(n)}</b><span>${st ? Math.round(st.perc * 100) + '% viste · ' + nCaseArea(n) + ' case' : tipoArea(n) + ' · mappa da scaricare'}</span></div>${n === cfg.comune ? '<span class="dist">aperta</span>' : ''}</button>`; }).join('');
     box.innerHTML = `<p class="ciao">${esc(cfg.zonaNome || 'La mia zona')}</p><h1>Tutta la zona</h1>
       <div class="avanz-testo"><span><b>${perc}%</b> delle strade con case viste</span><span>${kmBreve(z.fatti)} su ${kmBreve(z.tot)}</span></div><div class="avanz"><div style="width:${perc}%"></div></div>
-      <div class="legenda-zona"><span><i style="background:rgba(${COL_VISTA},.5)"></i>Già vista</span><span><i style="background:rgba(${COL_DAFARE},.55)"></i>Da vedere</span><span><i class="bordo"></i>Confine</span></div>
+      <div class="legenda-zona"><span><i class="nebbia"></i>Da vedere</span><span><i class="sbarrato"></i>Fuori zona</span><span><i class="confine" style="width:18px"></i>Confine</span></div><p class="aiuto" style="margin:0 0 4px">Tocca un'area sulla mappa o qui sotto per aprirla.</p>
       ${righe || '<p>Nessuna area nella zona.</p>'}
       <button class="tasto primario" id="bChiudiZona">Torna a ${esc(cfg.comune || 'la mappa')}</button>
       <div class="riga"><button class="link" id="bGestZona">Aggiungi un'area</button><button class="link" id="bPanZ">Pannello</button></div>`;
@@ -1951,7 +2023,7 @@
   function iniziaDisegno(dopo) {
     if (S.fase === 'cammino') { toast('Finisci prima il giro in corso.', 'errore'); return; }
     ['fComuni', 'fBenvenuto', 'fMenu', 'fPannello'].forEach(chiudi);
-    disegno = { punti: [], dopo }; chiudiPannello(true); $('disegna').classList.add('visibile'); aggiornaDisegno();
+    disegno = { punti: [], dopo }; sospendiInclinazione(true); chiudiPannello(true); $('disegna').classList.add('visibile'); aggiornaDisegno();
     if (posizione) map.setView([posizione.lat, posizione.lng], Math.max(map.getZoom(), 15));
     toast('Tocca la mappa lungo il confine della zona, un punto alla volta.', '', 5000);
   }
@@ -1965,7 +2037,7 @@
     $('disegnaFatto').disabled = pts.length < 3; $('disegnaTogli').disabled = !pts.length;
   }
   function fineDisegno(ok) {
-    const d = disegno; disegno = null; lDisegno.clearLayers(); $('disegna').classList.remove('visibile'); chiudiPannello(false);
+    const d = disegno; disegno = null; sospendiInclinazione(false); lDisegno.clearLayers(); $('disegna').classList.remove('visibile'); chiudiPannello(false);
     const esci = nome => { if (d && d.dopo) d.dopo(nome); else if (nome) aggiungiComune(nome); };
     if (!ok || !d) return esci(null);
     const poly = d.punti.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]), km2 = Planner.areaKm2(poly);
@@ -2084,7 +2156,7 @@
     uscite.forEach(u => { const k = giornoISO(u.inizio); perGiorno.set(k, (perGiorno.get(k) || 0) + u.minuti); });
     if (S.sessione) { const k = giornoISO(S.sessione.inizio); perGiorno.set(k, (perGiorno.get(k) || 0) + Math.round(((S.sessione.ultimo || S.sessione.inizio) - S.sessione.inizio) / 60e3)); }
     const s0 = settimanaPrima(inizioSettimana(), 11), CEL = 22, oggi = giornoISO(Date.now());
-    const colore = m => !m ? C.tenue : m < 30 ? '#C8E8D6' : m < 60 ? '#8DD0AC' : m < 120 ? '#3FA574' : C.verdeSc;
+    const colore = m => !m ? C.tenue : m < 30 ? '#D9E2EC' : m < 60 ? '#9FB3C8' : m < 120 ? '#486581' : C.brand;
     let celle = '';
     for (let w = 0; w < 12; w++) for (let d = 0; d < 7; d++) {
       const g = new Date(s0); g.setDate(g.getDate() + w * 7 + d); const k = giornoISO(g.getTime()); if (k > oggi) continue;
@@ -2326,10 +2398,16 @@
         <div><i style="background:${VERDE_CH}"></i>Viste più di 3 mesi fa</div>
         ${S.fase === 'cammino' ? `<div><i style="background:${OCRA}"></i>Prossimi 300 m, con le frecce</div><div><i class="tratteggio" style="border-color:${GRIGIO}"></i>Già fatto oggi</div>` : ''}
         ${cfg.mostraVolantini ? `<div><i class="tratteggio" style="border-color:${ARANCIO}"></i>Volantini (3 mesi)</div>` : ''}
-        ${vistaZona ? `<div><i class="campitura" style="background:rgba(${COL_VISTA},.45)"></i>Parte della zona già vista</div><div><i class="campitura" style="background:rgba(${COL_DAFARE},.45)"></i>Parte della zona da vedere</div><div><i style="background:${C.brand};height:5px"></i>Confine della zona</div>` : ''}
+        ${cfg.nebbia !== false ? '<div><i class="nebbia"></i>Nebbia: parte della zona da vedere</div>' : ''}
+        ${cfg.sbarra !== false ? '<div><i class="sbarrato"></i>Fuori dalla zona</div>' : ''}
+        <div><i class="confine"></i>Confine della zona</div>
       </div><div class="sep"></div><h4>Strati</h4>
+      ${voce('sNebbia', 'Nebbia sulla parte da vedere<small>Si dirada dove sei già passato</small>', cfg.nebbia !== false)}${voce('sSbarra', 'Fuori zona sbarrato', cfg.sbarra !== false)}${voce('sIncl', 'Vista inclinata<small>La mappa leggermente in prospettiva</small>', !!cfg.inclinata)}
       ${voce('sNote', 'Notizie sulla mappa', cfg.mostraNote !== false)}${voce('sVol', 'Strade con volantini', !!cfg.mostraVolantini)}${voce('sCat', 'Mappa catastale<small>Particelle e fabbricati, da vicino</small>', !!(stratoCatasto && map.hasLayer(stratoCatasto)))}${S.fase === 'home' ? voce('sZona', 'Tutta la zona', vistaZona) : ''}`;
     box.classList.add('aperto'); posizionaTondi();
+    $('sNebbia').onclick = () => { cfg.nebbia = cfg.nebbia === false; salvaCfg(); aggiornaVelo(); box.classList.remove('aperto'); apriStrati(); };
+    $('sSbarra').onclick = () => { cfg.sbarra = cfg.sbarra === false; salvaCfg(); aggiornaVelo(); box.classList.remove('aperto'); apriStrati(); };
+    $('sIncl').onclick = () => { cfg.inclinata = !cfg.inclinata; salvaCfg(); inclina(cfg.inclinata); box.classList.remove('aperto'); apriStrati(); };
     $('sNote').onclick = () => { cfg.mostraNote = cfg.mostraNote === false; salvaCfg(); disegnaNote(); box.classList.remove('aperto'); apriStrati(); };
     $('sVol').onclick = () => { cfg.mostraVolantini = !cfg.mostraVolantini; salvaCfg(); disegnaRete(); box.classList.remove('aperto'); apriStrati(); };
     $('sCat').onclick = () => { mostraCatasto(!(stratoCatasto && map.hasLayer(stratoCatasto))); box.classList.remove('aperto'); apriStrati(); };
@@ -2490,7 +2568,7 @@
     { t: 'I colori della mappa', d: `<span class="tut-leg"><i style="background:${BLU}"></i>case da vedere</span><span class="tut-leg"><i style="background:${VERDE_SC}"></i>percorse negli ultimi 3 mesi</span><span class="tut-leg"><i style="background:${VERDE_CH}"></i>viste più di 3 mesi fa</span>Durante il giro segui la linea ambra con le frecce.` },
     { sel: '#tondi', t: 'La barra degli strumenti', d: `<span class="tut-ico">${ICO.casa}Le tue case</span><span class="tut-ico">${svg('<path d="M20.5 3.5 3.8 10.4a.5.5 0 0 0 .05.94l6.65 1.96 1.96 6.65a.5.5 0 0 0 .94.05z"/>', 'stroke-width="1.8"')}Torna dove sei</span><span class="tut-ico">${ICO.strati}Legenda e strati, anche "Tutta la zona"</span><span class="tut-ico">${svg('<rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="3.25"/>', 'stroke-width="1.8"')}Menu: pannello, taccuino, esporta</span>` },
     { sel: '#tProfilo', t: 'Il tuo profilo', d: 'In alto a destra: i tuoi dati, gli obiettivi della settimana, il PIN, gli altri agenti e queste indicazioni.' },
-    { sel: '#bZona', apri: true, t: 'Tutta la zona', d: `Mostra tutte le tue aree insieme: il confine scuro è quello della zona; dentro, <b style="color:${C.verdeSc}">verde</b> la parte già vista e <b style="color:${C.ambraSc}">ambra</b> quella da vedere.` },
+    { sel: '#bZona', apri: true, t: 'Tutta la zona', d: `Mostra tutte le tue aree insieme dentro il confine della zona. La <b>nebbia</b> copre la parte che non hai ancora visto e si dirada dove passi; fuori dalla zona la mappa è <b>sbarrata</b>. Si spengono da Legenda e strati.` },
     { t: 'Durante il giro', d: '"Nuova casa" salva indirizzo, foto, nota vocale e stato. Nella scheda della casa "In vendita?" cerca l\'indirizzo su Immobiliare.it, Idealista e Casa.it, e lì segni agenzia e prezzo. Alla fine premi "Basta per oggi".' }
   ];
   let tut = null;

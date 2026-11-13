@@ -1,8 +1,8 @@
 // Service worker di Zona: rende l'app installabile e utilizzabile anche con poca rete.
 // File dell'app: prima la rete (versione più recente), la copia salvata solo senza rete.
 // Leaflet e caratteri: dalla copia salvata, aggiornata in sottofondo.
-const CACHE = 'zona-v14';
-const APP = ['./', 'stile.css?v=14', 'planner.js?v=14', 'app.js?v=14', 'manifest.webmanifest', 'favicon.svg', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
+const CACHE = 'zona-v15';
+const APP = ['./', 'stile.css?v=15', 'planner.js?v=15', 'app.js?v=15', 'manifest.webmanifest', 'favicon.svg', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
 const LEAFLET = 'https://unpkg.com/leaflet@1.9.4/dist/';
 const FONT = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => Promise.all(APP.map(u => c.add(new Request(u, { cache: 'reload' })).catch(() => { })))).then(() => self.skipWaiting())); });

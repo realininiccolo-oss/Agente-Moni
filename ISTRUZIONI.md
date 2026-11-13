@@ -1,8 +1,19 @@
-# Zona — versione 14
+# Zona — versione 15
 
 L'app per il **farming immobiliare**: l'agente lavora sempre la stessa zona (alcuni comuni, oppure un quartiere in città), la gira a piedi, conosce le case e raccoglie notizie dalle persone del posto. Zona tiene tutto in ordine. Funziona in qualsiasi zona italiana presente su OpenStreetMap; i dati restano sul telefono.
 
-## Cosa c'è di nuovo nella 14
+## Cosa c'è di nuovo nella 15
+- **Carattere IBM Plex Sans** al posto di Inter: più sobrio e "da ufficio".
+- **Niente più verde**: conferme, interruttori, barre e tasti usano il blu notte; le strade percorse negli ultimi 3 mesi sono blu notte, quelle viste da più di 3 mesi grigio chiaro; "Interessante" è ambra (stella), "Da ricontattare" blu (telefono). Restano i colori ufficiali delle classi energetiche (A verde → G rosso).
+- **Testata sottile** in alto con il logo e il nome della zona; il profilo è nella testata.
+- **Barra delle icone attaccata al pannello**: si muove insieme a lui quando lo trascini, larga quanto lo schermo. Con il pannello tutto alzato le icone salgono nella testata, accanto al profilo, e la riempiono.
+- **Confini precisi e sottili**: i confini dei comuni sono scaricati con 2 m di tolleranza (prima fino a decine di metri), tutti con una sola richiesta e subito dopo aver aggiunto l'area; se due comuni hanno lo stesso nome si prende quello giusto. Contorno sottile, niente più etichette con i nomi dei paesi (ci sono già sulla mappa): per aprire un'area in "Tutta la zona" si tocca dentro il suo confine.
+- **"Tutta la zona" veloce**: si apre subito, le altre aree arrivano da sole in sottofondo (rete leggera, senza calcolare i percorsi).
+- **Fuori zona sbarrato e nebbia** (accesi di serie, si spengono da Legenda e strati): fuori dalla zona la mappa è coperta da barre parallele; dentro, la nebbia copre la parte non ancora vista e si dirada dove passi.
+- **La mappa non va oltre il doppio della zona**: non si può allontanare la vista né spostarsi oltre.
+- **Vista inclinata** (Legenda e strati): la mappa leggermente in prospettiva. È un effetto grafico (la libreria della mappa disegna solo dall'alto): per scegliere un punto o disegnare una zona la mappa torna dall'alto da sola.
+
+## Cosa c'era nella 14
 - **Nuovo aspetto, più professionale**: una sola palette in tutta l'app (blu notte del marchio, ambra per il percorso e le cose da guardare, verde per il già visto), ombre, angoli e caratteri coerenti, mappa di fondo più tenue così risaltano strade e case.
 - **Marchio Zona**: logo nuovo (una Z disegnata come un percorso, dal punto di partenza all'arrivo ambra), icone dell'app nuove (anche "maskable" per Android), icona piccola per le notifiche, schermata di avvio.
 - **Finestre dell'app al posto di quelle del browser**: conferme, eliminazioni, PIN, nome della zona disegnata, modifica delle cose da fare; "Esporta in Excel" chiede con tre tasti cosa esportare (case dell'area, case di tutta la zona, notizie).
@@ -41,7 +52,7 @@ L'app per il **farming immobiliare**: l'agente lavora sempre la stessa zona (alc
 - **Più agenti sullo stesso telefono** e **PIN** facoltativo (Profilo).
 - **Agenzia sul cartello** nella scheda casa.
 
-## Aggiornare il telefono (da Agente Moni 8, 9, 10 o Zona 11-13)
+## Aggiornare il telefono (da Agente Moni 8, 9, 10 o Zona 11-14)
 Niente da fare: l'app si aggiorna da sola dal collegamento di GitHub Pages. Aprila, chiudila del tutto e riaprila. Le case, le mappe e le strade viste restano; le strade viste diventano subito il "segno" dei 3 mesi. Al primo avvio compare il benvenuto con la zona già pronta: basta scrivere il nome e premere Avanti.
 
 Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e l'icona nuovi bisogna toglierlo e rimetterlo (Chrome ⋮ → Aggiungi a schermata Home).
@@ -54,13 +65,13 @@ Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e
 
 ## Colori sulla mappa
 - **blu**: strade con case da vedere
-- **verde scuro**: percorse a piedi negli ultimi 3 mesi
-- **verde chiaro**: viste più di 3 mesi fa
+- **blu notte**: percorse a piedi negli ultimi 3 mesi
+- **grigio chiaro**: viste più di 3 mesi fa
 - **ambra con frecce**: i prossimi 300 m del giro; **blu con frecce**: il resto del giro
 - **grigio tratteggiato**: il pezzo di giro già fatto oggi
 - **arancione a puntini**: volantini (se lo strato è acceso)
 - **fumetto ambra**: notizia del taccuino; **P**: la macchina
-- in "Tutta la zona": **bordo scuro** = confine della zona, **verde chiaro** = parte già vista, **ambra chiaro** = parte da vedere
+- **linea sottile scura**: confine della zona; **nebbia**: parte della zona da vedere; **barre parallele**: fuori dalla zona
 
 ## Problemi comuni
 | Problema | Soluzione |
