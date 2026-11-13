@@ -3,473 +3,52 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#17262b">
+<meta name="theme-color" content="#102A43">
 <meta name="description" content="Zona: l'app per il farming immobiliare. La tua zona sulla mappa, giri a piedi guidati, case con foto e note vocali, taccuino delle notizie e pannello dell'attività.">
 <title>Zona</title>
 <meta name="apple-mobile-web-app-title" content="Zona">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>
-  :root {
-    --ardesia: #17262b; --ardesia-2: #4a5a60; --nebbia: #eef2f1; --linea: #d5dcda; --bianco: #ffffff;
-    --vigna: #2e7d4f; --vigna-chiaro: #e3f1e8; --lago: #1d5fd1; --lago-scuro: #0f3f96; --lago-chiaro: #e6efff;
-    --ocra: #f2a900; --ocra-scuro: #8a5d00; --ocra-chiaro: #fff4d6; --cartello: #d23a2e; --cartello-chiaro: #fde8e6;
-    --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --r-pannello: 22px; --r-tasto: 16px;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; font-family: var(--font); color: var(--ardesia); background: var(--nebbia); font-size: 18px; line-height: 1.4; overscroll-behavior: none; }
-  button { font-family: inherit; color: inherit; cursor: pointer; }
-  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--ocra); outline-offset: 2px; }
-  #map { position: fixed; inset: 0; z-index: 0; background: #e9ecea; }
-  .leaflet-control-attribution { font-size: 11px; }
-
-  /* ---------- indicazione in alto: il cuore dell'app ---------- */
-  #guida { position: fixed; z-index: 600; top: calc(env(safe-area-inset-top) + 10px); left: 10px; right: 10px; display: none; }
-  #guida.visibile { display: block; }
-  .guida-card { background: var(--ardesia); color: #fff; border-radius: var(--r-pannello); padding: 14px 16px 14px 14px; display: flex; gap: 14px; align-items: center; box-shadow: 0 6px 24px rgba(23,38,43,.35); }
-  .guida-card.parcheggio { background: var(--ocra); color: var(--ardesia); }
-  .guida-card.fuori { background: var(--cartello); }
-  .guida-card.fatto { background: var(--vigna); }
-  .guida-icona { width: 64px; height: 64px; flex: none; border-radius: 16px; background: rgba(255,255,255,.12); display: grid; place-items: center; }
-  .guida-card.parcheggio .guida-icona { background: rgba(23,38,43,.1); }
-  .guida-icona svg { width: 44px; height: 44px; }
-  .guida-testi { min-width: 0; }
-  .guida-dist { font-size: 30px; font-weight: 700; line-height: 1.05; }
-  .guida-azione { font-size: 21px; font-weight: 700; line-height: 1.2; margin-top: 2px; }
-  .guida-sotto { margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 15px; color: rgba(255,255,255,.85); }
-  .guida-card.parcheggio .guida-sotto { color: var(--ardesia-2); }
-  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 15px; font-weight: 700; white-space: nowrap; }
-  .badge.guarda { background: var(--ocra); color: var(--ardesia); }
-  .badge.passa { background: rgba(255,255,255,.16); color: #fff; }
-
-  /* ---------- pannello in basso ---------- */
-  #pannello { position: fixed; z-index: 600; left: 0; right: 0; bottom: 0; background: var(--bianco); border-radius: var(--r-pannello) var(--r-pannello) 0 0; padding: 10px 18px calc(env(safe-area-inset-bottom) + 16px); box-shadow: 0 -6px 30px rgba(23,38,43,.18); transition: transform .25s ease; }
-  #pannello { display: flex; flex-direction: column; max-height: calc(100% - env(safe-area-inset-top) - 70px); }
-  #pannello.chiuso { transform: translateY(calc(100% - 58px - env(safe-area-inset-bottom))); }
-  #pannello.trascina { transition: none; }
-  .maniglia-zona { flex: none; position: relative; margin: -10px -18px 0; padding: 12px 18px 12px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
-  #pannello .maniglia { width: 56px; height: 6px; border-radius: 3px; background: var(--ardesia-2); opacity: .45; margin: 0 auto; }
-  .maniglia-testo { display: none; position: absolute; left: 0; right: 0; top: 24px; text-align: center; font-size: 16px; font-weight: 700; color: var(--ardesia-2); }
-  #pannello.chiuso .maniglia-testo { display: block; }
-  #pannelloCorpo { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; transition: opacity .2s ease; }
-  #pannello.chiuso #pannelloCorpo { opacity: 0; pointer-events: none; }
-  #pannello h1 { font-size: 26px; line-height: 1.15; margin: 4px 0 6px; }
-  #pannello p { margin: 0 0 12px; color: var(--ardesia-2); }
-  .tasto { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 60px; padding: 14px 18px; border: 0; border-radius: var(--r-tasto); font-size: 20px; font-weight: 700; background: var(--nebbia); color: var(--ardesia); margin-top: 10px; text-decoration: none; }
-  .tasto svg { width: 26px; height: 26px; flex: none; }
-  .tasto.primario { background: var(--ardesia); color: #fff; }
-  .tasto.verde { background: var(--vigna); color: #fff; }
-  .tasto.ocra { background: var(--ocra); color: var(--ardesia); }
-  .tasto.piccolo { min-height: 48px; font-size: 17px; }
-  .tasto:active { transform: scale(.985); }
-  .tasto:disabled { opacity: .5; }
-  .link { background: none; border: 0; color: var(--lago-scuro); font-size: 17px; font-weight: 700; padding: 12px 4px; text-decoration: underline; text-underline-offset: 3px; }
-  .riga { display: flex; gap: 10px; align-items: stretch; } .riga > * { flex: 1; }
-  .riga .tasto { margin-top: 10px; }
-
-  .avanz { height: 12px; border-radius: 6px; background: var(--nebbia); overflow: hidden; margin: 6px 0 8px; }
-  .avanz > div { height: 100%; background: var(--vigna); border-radius: 6px; transition: width .4s ease; }
-  .avanz-testo { display: flex; justify-content: space-between; font-size: 16px; color: var(--ardesia-2); }
-  .avanz-testo b { color: var(--ardesia); }
-
-  .giorni { display: flex; gap: 8px; margin: 4px 0 6px; }
-  .giorni span { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 16px; background: var(--nebbia); color: var(--ardesia-2); }
-  .giorni span.fatto { background: var(--vigna); color: #fff; }
-  .giorni span.oggi { background: var(--ardesia); color: #fff; }
-
-  /* tasti rotondi sulla mappa */
-  .tondi { position: fixed; z-index: 590; right: 12px; display: flex; flex-direction: column; gap: 10px; }
-  .tondo { width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--bianco); box-shadow: 0 2px 10px rgba(23,38,43,.25); display: grid; place-items: center; position: relative; }
-  .tondo svg { width: 28px; height: 28px; }
-  .tondo .num[hidden] { display: none; }
-  .tondo .num { position: absolute; top: -4px; right: -4px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--ardesia); color: #fff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
-  #invio { position: fixed; z-index: 590; left: 12px; display: none; background: var(--ocra-chiaro); color: var(--ocra-scuro); font-weight: 700; font-size: 15px; padding: 8px 12px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-
-  /* ---------- fogli a tutto schermo (nuova casa, case, menu) ---------- */
-  .foglio { position: fixed; inset: 0; z-index: 900; background: var(--bianco); display: flex; flex-direction: column; transform: translateY(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1); visibility: hidden; }
-  .foglio.aperto { transform: none; visibility: visible; }
-  .foglio-testa { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 10px) 12px 10px 18px; border-bottom: 1px solid var(--linea); }
-  .foglio-testa h2 { flex: 1; margin: 0; font-size: 24px; }
-  .chiudi { width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--nebbia); display: grid; place-items: center; }
-  .chiudi svg { width: 24px; height: 24px; }
-  .foglio-corpo { flex: 1; overflow-y: auto; padding: 8px 18px 24px; -webkit-overflow-scrolling: touch; }
-  .foglio-piede { padding: 12px 18px calc(env(safe-area-inset-bottom) + 14px); border-top: 1px solid var(--linea); background: var(--bianco); }
-  .foglio-piede .tasto { margin-top: 0; }
-  .sezione { margin-top: 22px; }
-  .sezione > h3 { font-size: 18px; margin: 0 0 10px; }
-  .aiuto { font-size: 15px; color: var(--ardesia-2); margin: 6px 0 0; }
-
-  /* indirizzo */
-  .indirizzo { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; }
-  .indirizzo textarea { flex: 1; font-family: inherit; font-size: 22px; font-weight: 700; line-height: 1.25; border: 2px solid var(--linea); border-radius: 14px; padding: 10px 12px; resize: none; color: var(--ardesia); min-height: 64px; }
-  .indirizzo textarea:focus { border-color: var(--ardesia); }
-  .indirizzo .tondo { box-shadow: none; background: var(--nebbia); flex: none; }
-
-  /* foto */
-  .foto-griglia { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .foto-griglia .cella { aspect-ratio: 1; border-radius: 14px; overflow: hidden; position: relative; background: var(--nebbia); }
-  .foto-griglia img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .foto-griglia .togli { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(23,38,43,.8); color: #fff; display: grid; place-items: center; }
-  .foto-griglia .togli svg { width: 18px; height: 18px; }
-  .aggiungi-foto { border: 2px dashed var(--ardesia-2); background: var(--bianco); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 700; font-size: 16px; width: 100%; height: 100%; border-radius: 14px; }
-  .aggiungi-foto svg { width: 34px; height: 34px; }
-
-  /* nota vocale */
-  .voce { background: var(--nebbia); border-radius: 18px; padding: 16px; display: flex; align-items: center; gap: 16px; }
-  .mic { width: 78px; height: 78px; border-radius: 50%; border: 0; background: var(--ardesia); color: #fff; display: grid; place-items: center; flex: none; position: relative; }
-  .mic svg { width: 36px; height: 36px; }
-  .mic.rec { background: var(--cartello); }
-  .mic.rec::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 4px solid var(--cartello); opacity: .45; animation: pulsa 1.2s ease-out infinite; }
-  @keyframes pulsa { from { transform: scale(.9); opacity: .6; } to { transform: scale(1.18); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .mic.rec::after { animation: none; } .foglio, #pannello, .avanz > div { transition: none; } }
-  .voce-testi { flex: 1; min-width: 0; }
-  .voce-titolo { font-size: 20px; font-weight: 700; }
-  .voce-sotto { font-size: 15px; color: var(--ardesia-2); margin-top: 2px; }
-  .livelli { display: flex; gap: 3px; align-items: center; height: 34px; margin-top: 6px; }
-  .livelli i { flex: 1; background: var(--cartello); border-radius: 2px; height: 4px; transition: height .08s linear; }
-  .ascolta { display: flex; align-items: center; gap: 12px; }
-  .ascolta .play { width: 60px; height: 60px; border-radius: 50%; border: 0; background: var(--vigna); color: #fff; display: grid; place-items: center; flex: none; }
-  .ascolta .play svg { width: 28px; height: 28px; }
-  .barra-audio { flex: 1; height: 8px; border-radius: 4px; background: var(--linea); overflow: hidden; }
-  .barra-audio > div { height: 100%; width: 0; background: var(--vigna); }
-  .voce-azioni { display: flex; gap: 10px; margin-top: 10px; }
-  .voce-azioni .tasto { margin-top: 0; }
-
-  /* scelte a bottoni (stato, tipo) */
-  .scelte { display: flex; flex-wrap: wrap; gap: 10px; }
-  .scelte.griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .scelte.griglia .scelta { min-height: 56px; padding-right: 8px; font-size: 16px; line-height: 1.15; text-align: left; }
-  .scelta { display: inline-flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 14px 8px 10px; border-radius: 14px; border: 2px solid var(--linea); background: var(--bianco); font-size: 17px; font-weight: 700; }
-  .scelta svg { width: 30px; height: 36px; flex: none; }
-  .scelta[aria-pressed="true"] { border-color: var(--ardesia); background: var(--ardesia); color: #fff; }
-  .scelta.senza-icona { padding-left: 14px; }
-  textarea.note { width: 100%; font-family: inherit; font-size: 18px; border: 2px solid var(--linea); border-radius: 14px; padding: 12px; min-height: 90px; resize: vertical; }
-
-  /* lista case */
-  .filtri { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px; }
-  .filtri .scelta { min-height: 44px; font-size: 15px; white-space: nowrap; }
-  .casa-riga { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 12px 0; border-bottom: 1px solid var(--linea); }
-  .casa-riga svg { width: 34px; height: 42px; flex: none; }
-  .casa-riga b { display: block; font-size: 18px; }
-  .casa-riga span { font-size: 15px; color: var(--ardesia-2); }
-  .casa-riga img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; margin-left: auto; flex: none; }
-  .vuoto { text-align: center; color: var(--ardesia-2); padding: 40px 10px; }
-
-  /* menu e impostazioni */
-  .voce-menu { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 62px; border: 0; background: none; border-bottom: 1px solid var(--linea); font-size: 19px; font-weight: 700; text-align: left; padding: 8px 2px; }
-  .voce-menu svg { width: 28px; height: 28px; flex: none; color: var(--ardesia-2); }
-  .voce-menu small { display: block; font-weight: 400; font-size: 15px; color: var(--ardesia-2); }
-  label.campo { display: block; font-size: 16px; font-weight: 700; margin: 16px 0 6px; }
-  input.campo { width: 100%; font-family: inherit; font-size: 17px; padding: 12px; border: 2px solid var(--linea); border-radius: 12px; }
-  #registro { font-size: 14px; white-space: pre-wrap; background: var(--nebbia); border-radius: 12px; padding: 10px; margin-top: 10px; display: none; max-height: 220px; overflow: auto; }
-  .giorno-scelta { display: block; width: 100%; text-align: left; border: 2px solid var(--linea); background: var(--bianco); border-radius: 16px; padding: 14px; margin-top: 10px; }
-  .giorno-scelta b { font-size: 19px; display: block; }
-  .giorno-scelta span { font-size: 16px; color: var(--ardesia-2); }
-  .giorno-scelta.oggi { border-color: var(--ardesia); }
-  .giorno-scelta.fatto b::after { content: "  ✓ fatto"; color: var(--vigna); }
-
-  /* popup casa sulla mappa */
-  .leaflet-popup-content-wrapper { border-radius: 16px; }
-  .leaflet-popup-content { margin: 14px 16px; font-family: var(--font); font-size: 16px; min-width: 230px; }
-  .pop b { font-size: 18px; display: block; margin-bottom: 2px; }
-  .pop img { width: 100%; height: 110px; object-fit: cover; border-radius: 10px; margin-top: 8px; display: block; }
-  .pop .cambia { font-size: 14px; font-weight: 700; color: var(--ardesia-2); margin: 10px 0 6px; }
-  .pop .scelte.griglia { gap: 6px; }
-  .pop .scelte.griglia .scelta { min-height: 40px; font-size: 13px; padding: 4px 6px 4px 4px; border-width: 1.5px; border-radius: 10px; }
-  .pop .scelta svg { width: 20px; height: 26px; }
-  .pop a { color: var(--lago-scuro); font-weight: 700; }
-
-  /* segnaposti e frecce */
-  .pin { filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
-  .pin.nuovo { animation: cade .45s cubic-bezier(.3,1.6,.5,1); }
-  .pin.in-invio { opacity: .6; }
-  @keyframes cade { from { transform: translateY(-30px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .freccia { width: 18px; height: 18px; }
-  .etichetta-p { width: 40px; height: 40px; border-radius: 12px; background: var(--ocra); color: var(--ardesia); font-weight: 700; font-size: 22px; display: grid; place-items: center; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); }
-  .etichetta-p.altro { background: #fff; color: var(--ardesia-2); border-color: var(--linea); width: 34px; height: 34px; font-size: 17px; }
-  .io { width: 26px; height: 26px; border-radius: 50%; background: var(--lago); border: 4px solid #fff; box-shadow: 0 0 0 2px rgba(29,95,209,.35), 0 2px 6px rgba(0,0,0,.35); }
-
-
-  /* home: comune, tempo disponibile, giri proposti */
-  .chip-comune { display: inline-flex; align-items: center; gap: 8px; border: 2px solid var(--linea); background: var(--bianco); border-radius: 999px; padding: 6px 14px 6px 10px; font-size: 16px; font-weight: 700; }
-  .chip-comune svg { width: 20px; height: 20px; }
-  .tempi { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 4px; }
-  .tempo { min-height: 58px; border-radius: var(--r-tasto); border: 0; background: var(--ardesia); color: #fff; font-size: 20px; font-weight: 700; }
-  .tempo:last-child { grid-column: span 2; background: var(--nebbia); color: var(--ardesia); }
-  .lista-giri, .lista-auto { max-height: 34vh; overflow-y: auto; margin: 4px 0 2px; }
-  .giro-riga { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--linea); }
-  .giro-riga > div { flex: 1; min-width: 0; }
-  .giro-riga b { display: block; font-size: 17px; line-height: 1.2; }
-  .giro-riga span { font-size: 15px; color: var(--ardesia-2); }
-  .num-giro { width: 36px; height: 36px; border-radius: 10px; background: var(--ocra); color: var(--ardesia) !important; font-weight: 700; font-size: 18px !important; display: grid; place-items: center; flex: none; }
-  .num-giro svg { width: 22px; height: 22px; }
-  .togli-giro { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--nebbia); display: grid; place-items: center; flex: none; }
-  .togli-giro svg { width: 20px; height: 20px; }
-  .riprendi { display: flex; align-items: center; gap: 12px; background: var(--vigna-chiaro); border-radius: 16px; padding: 12px 14px; margin: 10px 0 4px; }
-  .riprendi > div { flex: 1; } .riprendi b { display: block; } .riprendi span { font-size: 15px; color: var(--ardesia-2); }
-  .riprendi .tasto { width: auto; margin: 0; padding: 10px 16px; }
-  .nota-ok { background: var(--vigna-chiaro); color: var(--vigna) !important; font-weight: 700; border-radius: 12px; padding: 8px 12px; font-size: 16px; }
-  h3.gruppo { font-size: 19px; margin: 22px 0 6px; display: flex; justify-content: space-between; align-items: baseline; }
-  h3.gruppo span { font-size: 15px; font-weight: 400; color: var(--ardesia-2); }
-  .giro-scelta { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 2px solid var(--linea); background: var(--bianco); border-radius: 14px; padding: 10px 12px; margin-top: 8px; }
-  .giro-scelta[aria-pressed="true"] { border-color: var(--ardesia); background: var(--lago-chiaro); }
-  .giro-scelta .spunta { width: 30px; height: 30px; border-radius: 8px; border: 2px solid var(--ardesia-2); display: grid; place-items: center; flex: none; }
-  .giro-scelta[aria-pressed="true"] .spunta { background: var(--ardesia); border-color: var(--ardesia); color: #fff; }
-  .giro-scelta .spunta svg { width: 20px; height: 20px; }
-  .giro-scelta .testi { flex: 1; min-width: 0; } .giro-scelta b { display: block; font-size: 17px; } .giro-scelta .testi span { font-size: 15px; color: var(--ardesia-2); }
-  .giro-scelta .distanza { font-size: 14px; color: var(--ardesia-2); white-space: nowrap; }
-  .giro-scelta.fatto { opacity: .55; } .giro-scelta.fatto b::after { content: "  ✓"; color: var(--vigna); }
-  .giro-scelta.meta .testi span { color: var(--ocra-scuro); font-weight: 700; }
-
-  /* avvisi */
-  #toast { position: fixed; z-index: 2000; left: 16px; right: 84px; bottom: 200px; background: var(--ardesia); color: #fff; padding: 16px 18px; border-radius: 16px; font-size: 18px; font-weight: 700; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
-  #toast.ok { background: var(--vigna); }
-  #toast.errore { background: var(--cartello); }
-  #festa { position: fixed; inset: 0; z-index: 1500; background: rgba(23,38,43,.55); display: none; align-items: center; justify-content: center; padding: 24px; }
-  #festa.aperto { display: flex; }
-  #festa .scheda { background: var(--bianco); border-radius: 24px; padding: 26px 22px 20px; text-align: center; max-width: 420px; width: 100%; }
-  #festa .scheda svg.grande { width: 86px; height: 86px; }
-  #festa h2 { font-size: 26px; margin: 10px 0 6px; }
-  #festa p { color: var(--ardesia-2); margin: 0 0 8px; }
-
-  /* ---------- v9 ---------- */
-  .tempi { grid-template-columns: repeat(3, 1fr); }
-  .tempo { font-size: 18px; min-height: 56px; }
-  .tempo:last-child { grid-column: span 3; }
-  .tempo.scelto { outline: 3px solid var(--ocra); outline-offset: 2px; }
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 4px; }
-  .stat { background: var(--nebbia); border-radius: 14px; padding: 8px 10px; }
-  .stat b { display: block; font-size: 21px; line-height: 1.1; }
-  .stat span { font-size: 14px; color: var(--ardesia-2); }
-  .zona { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 2px solid var(--linea); background: var(--bianco); border-radius: 14px; padding: 10px 12px; margin-top: 8px; }
-  .zona > div { flex: 1; min-width: 0; } .zona b { display: block; font-size: 17px; line-height: 1.2; } .zona span { font-size: 15px; color: var(--ardesia-2); }
-  .zona .dist { font-size: 14px; color: var(--ardesia-2); white-space: nowrap; }
-  .interruttore { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: var(--nebbia); border-radius: 14px; padding: 10px 12px; margin-top: 10px; text-align: left; font-size: 17px; font-weight: 700; }
-  .interruttore > span:first-child { flex: 1; } .interruttore small { display: block; font-weight: 400; font-size: 14px; color: var(--ardesia-2); }
-  .leva { width: 52px; height: 30px; border-radius: 15px; background: var(--linea); position: relative; flex: none; transition: background .2s; }
-  .leva::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .2s; }
-  .interruttore[aria-checked="true"] .leva { background: var(--vigna); } .interruttore[aria-checked="true"] .leva::after { left: 25px; }
-  .log { font-size: 15px; color: var(--ardesia-2); white-space: pre-wrap; margin-top: 10px; }
-  .vicina { background: var(--ocra-chiaro); color: var(--ocra-scuro); border-radius: 14px; padding: 10px 12px; margin-top: 12px; font-size: 16px; display: flex; gap: 10px; align-items: center; }
-  .vicina > span { flex: 1; } .vicina button { flex: none; width: auto; margin: 0; min-height: 44px; padding: 8px 14px; font-size: 16px; }
-  .tel { display: flex; gap: 10px; } .tel input { flex: 1; font-size: 20px; }
-  .tel a { flex: none; width: 56px; height: 56px; margin: 0; border-radius: 14px; display: grid; place-items: center; background: var(--vigna); color: #fff; }
-  .tel a svg { width: 26px; height: 26px; }
-  .galleria { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 8px -18px 0; padding: 0 18px 6px; }
-  .galleria img { height: 220px; max-width: 86%; border-radius: 14px; object-fit: cover; scroll-snap-align: start; flex: none; }
-  .scheda-ind { font-size: 24px; font-weight: 700; line-height: 1.2; margin: 14px 0 2px; }
-  .scheda-sotto { color: var(--ardesia-2); font-size: 16px; }
-  .azioni { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-  .azioni .tasto { margin-top: 0; font-size: 17px; min-height: 54px; }
-  .pericolo { color: var(--cartello) !important; }
-  .intro { font-size: 17px; color: var(--ardesia-2); }
-  .intro ol { padding-left: 22px; margin: 6px 0 4px; } .intro li { margin: 4px 0; }
-  .versione { text-align: center; font-size: 14px; color: var(--ardesia-2); margin-top: 24px; }
-  .sceglimappa { position: fixed; z-index: 650; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 10px); background: var(--ocra); color: var(--ardesia); border-radius: 18px; padding: 14px 16px; font-weight: 700; font-size: 18px; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
-  .sceglimappa.visibile { display: flex; gap: 10px; align-items: center; } .sceglimappa span { flex: 1; }
-  .sceglimappa button { border: 0; background: rgba(23,38,43,.12); border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 16px; }
-  #fScheda { z-index: 950; } #fCasa { z-index: 960; }
-
-  /* ---------- v11: Zona ---------- */
-  .ciao { margin: 2px 0 6px !important; font-size: 17px; font-weight: 700; color: var(--ardesia) !important; }
-  .scorciatoie { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 2px; }
-  .scorciatoie button { border: 0; background: var(--nebbia); border-radius: 14px; min-height: 50px; padding: 6px 4px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 15px; font-weight: 700; line-height: 1.1; }
-  .scorciatoie svg { width: 22px; height: 22px; flex: none; }
-  .tondi.in-alto { top: calc(env(safe-area-inset-top) + 10px); flex-direction: row; }
-  .tondi.in-alto .tondo { width: 52px; height: 52px; }
-  .io-box { width: 60px; height: 60px; position: relative; display: grid; place-items: center; }
-  .io-box .io { position: relative; z-index: 1; }
-  .io-dir { position: absolute; inset: 0; width: 60px; height: 60px; opacity: 0; transition: transform .4s ease, opacity .3s; }
-  .arrivo-giro { background: var(--ardesia); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; padding: 3px 0; text-align: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
-  .etichetta-area { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; background: rgba(255,255,255,.94); border: 2px solid var(--ardesia); color: var(--ardesia); font-weight: 700; font-size: 15px; padding: 5px 10px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
-  .pin-nota { width: 30px; height: 30px; border-radius: 10px 10px 10px 2px; background: var(--ocra); color: var(--ardesia); display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,.35); }
-  .pin-nota svg { width: 18px; height: 18px; }
-  .pin-nota.chiusa { background: #fff; color: var(--ardesia-2); }
-  #strati { position: fixed; z-index: 640; right: 78px; width: min(300px, calc(100% - 96px)); background: var(--bianco); border-radius: 18px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(23,38,43,.3); display: none; }
-  #strati.aperto { display: block; }
-  .legenda div { display: flex; align-items: center; gap: 10px; font-size: 15px; padding: 3px 0; }
-  .legenda i { width: 28px; height: 7px; border-radius: 4px; flex: none; }
-  .legenda i.tratteggio { height: 0; border-top: 4px dashed; border-radius: 0; }
-  #strati .interruttore { margin-top: 8px; font-size: 16px; }
-  .sceglimappa#disegna { flex-wrap: wrap; }
-  .sceglimappa#disegna span { flex-basis: 100%; }
-  .sceglimappa#disegna button:disabled { opacity: .45; }
-  .sceglimappa#disegna #disegnaFatto { background: var(--ardesia); color: #fff; margin-left: auto; }
-  /* pannello dell'agente */
-  .profilo-testa { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
-  .profilo-testa > div:nth-child(2) { flex: 1; min-width: 0; } .profilo-testa b { display: block; font-size: 21px; } .profilo-testa span { font-size: 15px; color: var(--ardesia-2); }
-  .avatar { width: 54px; height: 54px; border-radius: 50%; background: var(--vigna); color: #fff; font-weight: 700; font-size: 21px; display: grid; place-items: center; flex: none; }
-  .tondo.piccolo { width: 48px; height: 48px; box-shadow: none; background: var(--nebbia); }
-  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .tile { background: var(--nebbia); border-radius: 14px; padding: 10px 12px; }
-  .tile b { display: block; font-size: 24px; line-height: 1.1; } .tile span { font-size: 15px; color: var(--ardesia-2); } .tile small { display: block; font-size: 13px; color: var(--ardesia-2); margin-top: 2px; }
-  .mini-barra { height: 7px; border-radius: 4px; background: #fff; overflow: hidden; margin-top: 8px; } .mini-barra > div { height: 100%; background: var(--ocra); border-radius: 4px; } .mini-barra.fatto > div { background: var(--vigna); }
-  .grafico { width: 100%; height: auto; display: block; font-family: var(--font); }
-  .grafico .barra, .grafico .cella-cal { cursor: pointer; }
-  .agenda-riga { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--linea); }
-  .agenda-ico { width: 46px; height: 46px; border-radius: 12px; border: 0; background: var(--nebbia); display: grid; place-items: center; flex: none; }
-  .agenda-ico svg { width: 24px; height: 24px; }
-  .spunta-vuota { width: 24px; height: 24px; border-radius: 7px; border: 2.5px solid var(--ardesia-2); display: block; }
-  .agenda-testo { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 10px 0; }
-  .agenda-testo b { display: block; font-size: 17px; line-height: 1.25; } .agenda-testo span { font-size: 14px; color: var(--ardesia-2); }
-  .agenda-riga.ritardo .agenda-testo span { color: var(--cartello); font-weight: 700; }
-  .piega summary { font-weight: 700; padding: 12px 0; cursor: pointer; color: var(--lago-scuro); }
-  .aggiungi-compito { display: flex; gap: 8px; margin-top: 10px; align-items: stretch; }
-  .aggiungi-compito .campo:first-child { flex: 2; } .aggiungi-compito input[type=date] { flex: 1.1; min-width: 0; padding: 8px; font-size: 15px; }
-  .aggiungi-compito .tasto { width: 52px; flex: none; margin: 0; padding: 0; }
-  .uscita { padding: 8px 0; border-bottom: 1px solid var(--linea); } .uscita b { display: block; font-size: 16px; text-transform: capitalize; } .uscita span { font-size: 14px; color: var(--ardesia-2); }
-  .area-riga { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 10px 0; border-bottom: 1px solid var(--linea); }
-  .area-nome { display: flex; justify-content: space-between; } .area-nome b { font-size: 17px; } .area-nome span { font-weight: 700; }
-  .area-sotto { font-size: 14px; color: var(--ardesia-2); }
-  .scelta.conteggio { min-height: 44px; font-size: 15px; } .scelta.conteggio b { margin-left: 4px; }
-  /* taccuino */
-  .schede { display: flex; gap: 8px; padding: 10px 18px 0; } .schede .scelta { flex: 1; justify-content: center; }
-  .cerca { padding: 8px 18px 0; }
-  .nota-riga { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 12px 0; border-bottom: 1px solid var(--linea); }
-  .nota-riga b { display: block; font-size: 17px; line-height: 1.3; margin: 2px 0; } .nota-riga > span { display: block; font-size: 14px; color: var(--ardesia-2); }
-  .nota-riga .nota-tipo { display: inline-block; font-size: 13px; font-weight: 700; color: var(--ocra-scuro); background: var(--ocra-chiaro); padding: 2px 8px; border-radius: 999px; }
-  .nota-riga .nota-stato { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 700; color: var(--vigna); background: var(--vigna-chiaro); padding: 2px 8px; border-radius: 999px; }
-  .nota-riga .nota-stato.attesa { color: var(--lago-scuro); background: var(--lago-chiaro); }
-  .interruttore[hidden], .tasto[hidden] { display: none; }
-  /* benvenuto e blocco */
-  .passi { display: flex; gap: 6px; justify-content: center; margin: 14px 0 6px; } .passi span { width: 34px; height: 6px; border-radius: 3px; background: var(--linea); } .passi span.ora { background: var(--ardesia); } .passi span.fatto { background: var(--vigna); }
-  .benv-titolo { font-size: 28px; margin: 10px 0 4px; }
-  .logo-zona svg { width: 64px; height: 64px; display: block; } .logo-zona.grande { margin-top: 12px; } .logo-zona.grande svg { width: 76px; height: 76px; }
-  #blocco { position: fixed; inset: 0; z-index: 3000; background: var(--nebbia); display: none; align-items: center; justify-content: center; padding: 24px; }
-  #blocco.aperto { display: flex; }
-  .blocco-scheda { background: var(--bianco); border-radius: 24px; padding: 24px 20px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 6px 30px rgba(23,38,43,.15); }
-  .blocco-scheda .logo-zona svg { margin: 0 auto; }
-  .blocco-scheda h2 { margin: 12px 0 6px; font-size: 26px; }
-  input.pin { text-align: center; font-size: 30px; letter-spacing: 10px; }
-  #fPannello { z-index: 905; } #fTaccuino { z-index: 910; } #fComuni { z-index: 915; } #fPersona { z-index: 930; } #fNota { z-index: 940; } #fProfilo { z-index: 945; } #fBenvenuto { z-index: 970; }
-  /* ---------- v12 ---------- */
-  #fImpost, #fAiuto { z-index: 952; }
-  /* barra degli strumenti sopra il pannello */
-  .barra-icone { position: fixed; z-index: 590; right: 12px; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 18px; background: rgba(255,255,255,.88); -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 1px 2px rgba(23,38,43,.12), 0 6px 18px rgba(23,38,43,.16); border: 1px solid rgba(23,38,43,.06); transition: bottom .2s ease; }
-  .barra-icone .icona { position: relative; width: 46px; height: 42px; border: 0; border-radius: 14px; background: transparent; display: grid; place-items: center; color: var(--ardesia); }
-  .barra-icone .icona + .icona::before { content: ""; position: absolute; left: -1px; top: 11px; bottom: 11px; width: 1px; background: rgba(23,38,43,.12); }
-  .barra-icone .icona svg { width: 23px; height: 23px; }
-  .barra-icone .icona:active, .barra-icone .icona.attivo { background: var(--ardesia); color: #fff; }
-  .barra-icone .icona.attivo::before, .barra-icone .icona.attivo + .icona::before { display: none; }
-  .barra-icone .num { position: absolute; top: 3px; right: 4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--vigna); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 1.5px solid #fff; }
-  .barra-icone .num[hidden] { display: none; }
-  #strati { right: 12px; }
-  .profilo-tondo { position: fixed; z-index: 595; top: calc(env(safe-area-inset-top) + 12px); right: 12px; width: 48px; height: 48px; border-radius: 50%; border: 2px solid #fff; background: var(--vigna); color: #fff; display: grid; place-items: center; padding: 0; box-shadow: 0 1px 2px rgba(23,38,43,.15), 0 6px 18px rgba(23,38,43,.2); font-weight: 700; font-size: 17px; letter-spacing: .5px; }
-  .profilo-tondo svg { width: 24px; height: 24px; }
-  #guida.visibile ~ .profilo-tondo, .sceglimappa.visibile ~ .profilo-tondo { display: none; }
-  .profilo-testa.grande .avatar { width: 64px; height: 64px; font-size: 24px; }
-  .profilo-testa.grande b { font-size: 23px; }
-  /* selettori degli obiettivi */
-  .selettore { background: var(--nebbia); border-radius: 16px; padding: 12px 14px 8px; margin-top: 10px; }
-  .sel-testa { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 16px; font-weight: 700; }
-  .sel-testa output { font-size: 20px; color: var(--vigna); white-space: nowrap; }
-  .sel-corpo { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
-  .sel-passo { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1.5px solid var(--linea); background: #fff; display: grid; place-items: center; touch-action: manipulation; }
-  .sel-passo svg { width: 20px; height: 20px; }
-  .sel-passo:active { background: var(--ardesia); color: #fff; border-color: var(--ardesia); }
-  .selettore input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 36px; background: transparent; margin: 0; --pieno: 50%; }
-  .selettore input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--vigna) var(--pieno), var(--linea) var(--pieno)); }
-  .selettore input[type=range]::-moz-range-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--vigna) var(--pieno), var(--linea) var(--pieno)); }
-  .selettore input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: #fff; border: 3px solid var(--vigna); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-  .selettore input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid var(--vigna); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-  .sel-scala { display: flex; justify-content: space-between; font-size: 12px; color: var(--ardesia-2); padding: 0 54px; margin-top: -4px; }
-  /* in vendita: ricerca sui portali */
-  .portali { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 4px; }
-  .portale { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 8px 12px; border-radius: 12px; border: 1.5px solid var(--linea); background: #fff; color: var(--lago-scuro); font-weight: 700; font-size: 15px; text-decoration: none; }
-  .portale svg { width: 18px; height: 18px; flex: none; stroke-width: 2; }
-  .portale:active { background: var(--lago-chiaro); }
-  .annuncio { display: flex; align-items: center; gap: 12px; background: var(--cartello-chiaro); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
-  .annuncio > div { flex: 1; min-width: 0; } .annuncio b { display: block; font-size: 22px; color: var(--cartello); } .annuncio span { font-size: 15px; color: var(--ardesia-2); }
-  .annuncio .tasto { width: auto; margin: 0; padding: 8px 12px; min-height: 44px; font-size: 15px; }
-  #sAnnForm .tasto { margin-top: 12px; }
-  /* tutta la zona */
-  .legenda i.campitura { height: 16px; border-radius: 4px; }
-  .legenda-zona { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--ardesia-2); margin: 2px 0 6px; }
-  .legenda-zona span { display: inline-flex; align-items: center; gap: 6px; }
-  .legenda-zona i { width: 18px; height: 14px; border-radius: 4px; display: inline-block; }
-  .legenda-zona i.bordo { background: transparent; border: 3px solid var(--ardesia); border-radius: 3px; }
-  /* tutorial */
-  #tutorial { position: fixed; inset: 0; z-index: 2500; display: none; }
-  #tutorial.aperto { display: block; }
-  .tut-buco { position: fixed; border-radius: 18px; box-shadow: 0 0 0 200vmax rgba(15,25,29,.66); transition: all .3s cubic-bezier(.2,.8,.2,1); pointer-events: none; outline: 2px solid rgba(255,255,255,.9); outline-offset: 0; }
-  .tut-buco[style*="width:0"] { outline: none; }
-  .tut-scheda { position: fixed; left: 14px; right: 14px; max-width: 460px; margin: 0 auto; background: #fff; border-radius: 22px; padding: 16px 18px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
-  .tut-scheda h2 { margin: 8px 0 6px; font-size: 23px; }
-  .tut-testo { font-size: 17px; color: var(--ardesia-2); line-height: 1.45; }
-  .tut-passi { display: flex; gap: 5px; } .tut-passi span { flex: 1; height: 4px; border-radius: 2px; background: var(--linea); } .tut-passi span.ora { background: var(--ardesia); } .tut-passi span.fatto { background: var(--vigna); }
-  .tut-tasti { display: flex; gap: 10px; align-items: center; margin-top: 12px; } .tut-tasti .tasto { margin: 0; min-height: 50px; font-size: 18px; } .tut-tasti .link { flex: none; width: auto; margin-right: auto; padding-left: 0; }
-  .tut-tasti .tasto:only-child { margin-left: auto; }
-  .tut-leg, .tut-ico { display: flex; align-items: center; gap: 10px; margin: 4px 0; color: var(--ardesia); }
-  .tut-leg i { width: 30px; height: 7px; border-radius: 4px; flex: none; }
-  .tut-ico svg { width: 24px; height: 24px; flex: none; }
-  .tut-leg:last-of-type, .tut-ico:last-of-type { margin-bottom: 8px; }
-  /* ---------- v13: carattere Inter, più sobrio ---------- */
-  html, body { font-size: 17px; line-height: 1.45; letter-spacing: -0.006em; font-feature-settings: "cv05", "cv08", "ss03"; -webkit-font-smoothing: antialiased; }
-  h1, h2, h3, .benv-titolo, .scheda-ind, .guida-azione, .guida-dist { letter-spacing: -0.02em; }
-  #pannello h1 { font-weight: 700; font-size: 25px; }
-  .foglio-testa h2 { font-weight: 650; font-size: 21px; }
-  .tasto, .scelta, .voce-menu, .tempo, .portale, .chip-comune, .interruttore, .scorciatoie button { font-weight: 600; }
-  .tasto { font-size: 18px; }
-  .stat b, .tile b, .sel-testa output, .avanz-testo b, .annuncio b, .guida-dist, .dato b, .stats b { font-variant-numeric: tabular-nums; }
-  .voce-menu small, .aiuto, .intro, .giro-riga span, .casa-riga span { font-weight: 400; }
-  label.campo { font-weight: 600; font-size: 15px; color: var(--ardesia-2); }
-  .sezione > h3, h3.gruppo { font-weight: 650; }
-  /* dati della casa */
-  .dati-gruppo { border: 1px solid var(--linea); border-radius: 16px; padding: 10px 14px 8px; margin-top: 10px; }
-  .dati-gruppo h4 { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; font-size: 15px; font-weight: 650; color: var(--ardesia-2); text-transform: uppercase; letter-spacing: .04em; }
-  .dati-gruppo h4 svg { width: 18px; height: 18px; stroke-width: 2; }
-  .dato { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 7px 0; border-top: 1px solid var(--nebbia); }
-  .dato:first-of-type { border-top: 0; }
-  .dato > span { font-size: 15px; color: var(--ardesia-2); } .dato > b { text-align: right; font-size: 16px; font-weight: 650; }
-  .dato > small { grid-column: 1 / -1; font-size: 12.5px; color: var(--ardesia-2); opacity: .85; }
-  small.fonte { display: block; font-size: 12.5px; color: var(--ardesia-2); opacity: .85; margin: 4px 0 2px; }
-  .dati-link { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 6px 0 4px; }
-  .dati-link a { color: var(--lago-scuro); font-weight: 600; font-size: 15px; }
-  .ape { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--nebbia); }
-  .ape:first-of-type { border-top: 0; }
-  .ape b { display: block; font-size: 15px; font-weight: 600; } .ape span { font-size: 14px; color: var(--ardesia-2); }
-  .classe { display: inline-grid; place-items: center; min-width: 38px; height: 32px; padding: 0 6px; border-radius: 8px 4px 4px 8px; color: #fff; font-weight: 700; font-size: 16px; clip-path: polygon(0 0, 82% 0, 100% 50%, 82% 100%, 0 100%); padding-right: 12px; }
-  #sDatiForm .riga > div { flex: 1; min-width: 0; } #sDatiForm select.campo { width: 100%; font-family: inherit; font-size: 17px; padding: 11px 8px; border: 2px solid var(--linea); border-radius: 12px; background: #fff; }
-  #sDatiForm .tasto { margin-top: 12px; }
-  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-</style>
+<link rel="stylesheet" href="stile.css?v=14">
 </head>
 <body>
+<div id="splash" aria-hidden="true"><svg class="marchio" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#102A43"/><rect x=".75" y=".75" width="62.5" height="62.5" rx="14.5" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5"/><path d="M22.6 20H44L20.4 44H40" fill="none" stroke="#fff" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18.6" cy="20" r="4" fill="none" stroke="#fff" stroke-width="3"/><circle cx="45.2" cy="44" r="6.6" fill="#102A43"/><circle cx="45.2" cy="44" r="5" fill="#F0B429"/></svg><div class="marca">Zona</div><div class="barretta"></div></div>
 <div id="map" aria-label="Mappa"></div>
+<div id="attesaMappa" role="status" aria-live="polite"><span class="spin"></span><span id="attesaTesto"></span></div>
 
 <div id="guida" role="status" aria-live="polite"></div>
-<div class="sceglimappa" id="scegliMappa"><span>Tocca la mappa dove vuoi partire</span><button id="annullaScelta">Annulla</button></div>
+<div class="sceglimappa" id="scegliMappa"><span>Tocca la mappa nel punto da cui vuoi partire</span><button id="annullaScelta">Annulla</button></div>
 <div class="sceglimappa" id="disegna"><span id="disegnaTesto">Tocca il confine della zona</span><button id="disegnaTogli">Togli l'ultimo</button><button id="disegnaAnnulla">Annulla</button><button id="disegnaFatto">Fatto</button></div>
 <div id="strati" role="dialog" aria-label="Legenda e strati della mappa"></div>
 <div id="invio"></div>
 
 <div class="barra-icone" id="tondi" role="toolbar" aria-label="Strumenti della mappa">
-  <button class="icona" id="tCase" aria-label="Le mie case" title="Le mie case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.8 12 4l8.5 6.8"/><path d="M5.8 9.3V20h12.4V9.3"/><path d="M10 20v-5.2a2 2 0 0 1 4 0V20"/></svg><span class="num" id="numCase" hidden>0</span></button>
-  <button class="icona" id="tCentra" aria-label="Centra sulla mia posizione" title="La mia posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 3.8 10.4a.5.5 0 0 0 .05.94l6.65 1.96 1.96 6.65a.5.5 0 0 0 .94.05z"/></svg></button>
-  <button class="icona" id="tStrati" aria-label="Legenda e strati della mappa" title="Legenda e strati"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 3 8.2l9 4.7 9-4.7z"/><path d="m3 12.3 9 4.7 9-4.7"/><path d="m3 16.3 9 4.7 9-4.7" opacity=".55"/></svg></button>
-  <button class="icona" id="tMenu" aria-label="Menu" title="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="3.25"/></svg></button>
+  <button class="icona" id="tCase" aria-label="Le mie case" title="Le mie case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.8 12 4l8.5 6.8"/><path d="M5.8 9.3V20h12.4V9.3"/><path d="M10 20v-5.2a2 2 0 0 1 4 0V20"/></svg><span class="num" id="numCase" hidden>0</span></button>
+  <button class="icona" id="tCentra" aria-label="Centra sulla mia posizione" title="La mia posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 3.8 10.4a.5.5 0 0 0 .05.94l6.65 1.96 1.96 6.65a.5.5 0 0 0 .94.05z"/></svg></button>
+  <button class="icona" id="tStrati" aria-label="Legenda e strati della mappa" title="Legenda e strati"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 3 8.2l9 4.7 9-4.7z"/><path d="m3 12.3 9 4.7 9-4.7"/><path d="m3 16.3 9 4.7 9-4.7" opacity=".55"/></svg></button>
+  <button class="icona" id="tMenu" aria-label="Menu" title="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="3.25"/></svg></button>
 </div>
 <button class="profilo-tondo" id="tProfilo" aria-label="Il mio profilo" title="Profilo"></button>
 
-<section id="pannello"><div class="maniglia-zona" id="maniglia" role="button" tabindex="0" aria-expanded="true" aria-label="Apri o chiudi il pannello"><div class="maniglia"></div><div class="maniglia-testo">▲ Tira su per aprire</div></div><div id="pannelloCorpo" aria-live="polite"></div></section>
+<section id="pannello"><div class="maniglia-zona" id="maniglia" role="button" tabindex="0" aria-expanded="true" aria-label="Apri o chiudi il pannello"><div class="maniglia"></div><div class="maniglia-testo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>Tira su per aprire</div></div><div id="pannelloCorpo" aria-live="polite"></div></section>
 
 <!-- Nuova casa / modifica -->
 <div class="foglio" id="fCasa" role="dialog" aria-labelledby="tCasaTitolo">
-  <div class="foglio-testa"><h2 id="tCasaTitolo">Nuova casa</h2><button class="chiudi" data-chiudi aria-label="Chiudi senza salvare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tCasaTitolo">Nuova casa</h2><button class="chiudi" data-chiudi aria-label="Chiudi senza salvare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo">
     <div id="casaVicina"></div>
     <div class="sezione" style="margin-top:12px">
       <h3>Indirizzo</h3>
       <div class="indirizzo">
-        <textarea id="indirizzo" rows="1" placeholder="Cerco l'indirizzo…" aria-label="Indirizzo"></textarea>
+        <textarea id="indirizzo" rows="1" placeholder="Scrivi l'indirizzo" aria-label="Indirizzo"></textarea><span class="cerca-ind" aria-hidden="true"><span class="spin"></span>Cerco l'indirizzo</span>
         <button class="tondo" id="riprovaIndirizzo" aria-label="Cerca di nuovo l'indirizzo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
       </div>
-      <p class="aiuto" id="aiutoIndirizzo">Trovato con il GPS: controlla il numero civico.</p>
+      <p class="aiuto" id="aiutoIndirizzo"></p>
     </div>
     <div class="sezione">
       <h3>Foto</h3>
@@ -518,53 +97,53 @@
 </div>
 
 <div class="foglio" id="fScheda" role="dialog" aria-labelledby="tfScheda">
-  <div class="foglio-testa"><h2 id="tfScheda">Casa</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfScheda">Casa</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="schedaCorpo"></div>
 </div>
 <div class="foglio" id="fCase" role="dialog" aria-labelledby="tfCase">
-  <div class="foglio-testa"><h2 id="tfCase">Le mie case</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-  <div class="foglio-corpo"><div class="filtri" id="filtri"></div><div id="listaCase"></div></div><div class="foglio-piede"><button class="tasto" id="bEsportaLista">Esporta l'elenco (Excel)</button></div>
+  <div class="foglio-testa"><h2 id="tfCase">Le mie case</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo"><div class="filtri" id="filtri"></div><div id="listaCase"></div></div><div class="foglio-piede"><button class="tasto" id="bEsportaLista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v6h16v-6"/></svg>Esporta in Excel</button></div>
 </div>
 <div class="foglio" id="fMenu" role="dialog" aria-labelledby="tfMenu">
-  <div class="foglio-testa"><h2 id="tfMenu">Menu</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfMenu">Menu</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="menuCorpo"></div>
 </div>
 <div class="foglio" id="fComuni" role="dialog" aria-labelledby="tfComuni">
-  <div class="foglio-testa"><h2 id="tfComuni">Comuni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfComuni">Comuni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="comuniCorpo"></div>
 </div>
 <div class="foglio" id="fImpost" role="dialog" aria-labelledby="tfImpost">
-  <div class="foglio-testa"><h2 id="tfImpost">Impostazioni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfImpost">Impostazioni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="impostCorpo"></div>
 </div>
 <div class="foglio" id="fAiuto" role="dialog" aria-labelledby="tfAiuto">
-  <div class="foglio-testa"><h2 id="tfAiuto">Come si usa</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfAiuto">Come si usa</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo intro" id="aiutoCorpo"></div>
 </div>
 
 <div class="foglio" id="fPannello" role="dialog" aria-labelledby="tfPannello">
-  <div class="foglio-testa"><h2 id="tfPannello">Il mio pannello</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfPannello">Il mio pannello</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="pannelloAgente"></div>
 </div>
 <div class="foglio" id="fTaccuino" role="dialog" aria-labelledby="tfTaccuino">
-  <div class="foglio-testa"><h2 id="tfTaccuino">Taccuino</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfTaccuino">Taccuino</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="schede"><button class="scelta senza-icona" id="taccTabNote" aria-pressed="true">Notizie</button><button class="scelta senza-icona" id="taccTabPersone" aria-pressed="false">Persone</button></div>
   <div class="cerca"><input class="campo" id="taccCerca" type="search" placeholder="Cerca: nome, via, parola…" autocomplete="off"></div>
   <div class="foglio-corpo" id="taccCorpo"></div>
-  <div class="foglio-piede"><button class="tasto verde" id="taccNuovo">Nuova notizia</button><button class="link" id="taccEsporta" style="width:100%">Esporta le notizie (Excel)</button></div>
+  <div class="foglio-piede"><button class="tasto verde" id="taccNuovo">Nuova notizia</button><button class="link" id="taccEsporta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v6h16v-6"/></svg>Esporta le notizie in Excel</button></div>
 </div>
 <div class="foglio" id="fNota" role="dialog" aria-labelledby="tfNota">
-  <div class="foglio-testa"><h2 id="tfNota">Nuova notizia</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfNota">Nuova notizia</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="notaCorpo"></div>
   <div class="foglio-piede"><button class="tasto verde" id="salvaNota"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>Salva nel taccuino</button></div>
 </div>
 <div class="foglio" id="fPersona" role="dialog" aria-labelledby="tfPersona">
-  <div class="foglio-testa"><h2 id="tfPersona">Persona</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfPersona">Persona</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="personaCorpo"></div>
-  <div class="foglio-piede"><button class="tasto verde" id="salvaPersona">Salva</button></div>
+  <div class="foglio-piede"><button class="tasto verde" id="salvaPersona"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>Salva la persona</button></div>
 </div>
 <div class="foglio" id="fProfilo" role="dialog" aria-labelledby="tfProfilo">
-  <div class="foglio-testa"><h2 id="tfProfilo">Profilo</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-testa"><h2 id="tfProfilo">Profilo</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="profiloCorpo"></div>
 </div>
 <div class="foglio" id="fBenvenuto" role="dialog" aria-label="Benvenuto">
@@ -574,21 +153,21 @@
 <div id="blocco" role="dialog" aria-label="Accesso"></div>
 
 <input type="file" id="inputBackup" accept=".json,application/json" hidden>
-<div id="festa" role="dialog" aria-live="assertive"><div class="scheda" id="festaScheda"></div></div>
+<div id="festa" class="velo" role="dialog" aria-live="assertive"><div class="scheda" id="festaScheda"></div></div>
+<div id="dialogo" class="velo" role="alertdialog" aria-modal="true" aria-labelledby="dTitolo"><div class="scheda" id="dialogoScheda"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
   window.addEventListener('error', function (e) {
-    if (document.getElementById('erroreApp')) return;
-    var d = document.createElement('div'); d.id = 'erroreApp';
-    d.style.cssText = 'position:fixed;inset:auto 12px 12px 12px;z-index:5000;background:#d23a2e;color:#fff;padding:16px;border-radius:16px;font:700 18px/1.3 system-ui,sans-serif';
-    d.innerHTML = 'Qualcosa non va. Tocca qui per ricaricare l\'app.';
+    if (document.getElementById('erroreApp') || !e || !e.message) return;
+    var d = document.createElement('button'); d.id = 'erroreApp'; d.type = 'button';
+    d.innerHTML = '<span style="flex:1;text-align:left">Qualcosa non ha funzionato.<br><span style="font-weight:500;opacity:.8">Tocca qui per ricaricare Zona.</span></span>';
     d.onclick = function () { if (navigator.serviceWorker) navigator.serviceWorker.getRegistrations().then(function (r) { r.forEach(function (x) { x.unregister(); }); location.reload(); }); else location.reload(); };
     document.body.appendChild(d);
   });
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="planner.js?v=13"></script>
-<script src="app.js?v=13"></script>
+<script src="planner.js?v=14"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

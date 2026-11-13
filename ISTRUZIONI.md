@@ -1,8 +1,16 @@
-# Zona — versione 13
+# Zona — versione 14
 
 L'app per il **farming immobiliare**: l'agente lavora sempre la stessa zona (alcuni comuni, oppure un quartiere in città), la gira a piedi, conosce le case e raccoglie notizie dalle persone del posto. Zona tiene tutto in ordine. Funziona in qualsiasi zona italiana presente su OpenStreetMap; i dati restano sul telefono.
 
-## Cosa c'è di nuovo nella 13
+## Cosa c'è di nuovo nella 14
+- **Nuovo aspetto, più professionale**: una sola palette in tutta l'app (blu notte del marchio, ambra per il percorso e le cose da guardare, verde per il già visto), ombre, angoli e caratteri coerenti, mappa di fondo più tenue così risaltano strade e case.
+- **Marchio Zona**: logo nuovo (una Z disegnata come un percorso, dal punto di partenza all'arrivo ambra), icone dell'app nuove (anche "maskable" per Android), icona piccola per le notifiche, schermata di avvio.
+- **Finestre dell'app al posto di quelle del browser**: conferme, eliminazioni, PIN, nome della zona disegnata, modifica delle cose da fare; "Esporta in Excel" chiede con tre tasti cosa esportare (case dell'area, case di tutta la zona, notizie).
+- **Caricamenti**: rotelle e barre "fantasma" al posto delle scritte "Cerco…": scaricamento della mappa a tappe (strade → case → rete) con l'avviso quando i server sono occupati, dati della casa, indirizzo, collegamento a Google, backup, "Tutta la zona".
+- **Dettagli**: avvisi con icona che non coprono più i tasti dei fogli, liste vuote con spiegazione, menu con icone e frecce, pallino della posizione che pulsa, stato della casa in evidenza nella scheda, legenda della mappa che non esce più dallo schermo (il pannello si abbassa da solo).
+- **Più veloce e leggera**: lista delle case calcolata una volta sola, foto caricate solo quando servono, audio liberato dalla memoria quando chiudi la scheda; l'app si apre anche senza rete fin dalla prima volta (file salvati all'installazione, carattere e Leaflet tenuti in copia).
+
+## Cosa c'era nella 13
 - **Dati della casa** nella scheda, cercati da soli la prima volta che si apre (e ricontrollabili con "Cerca di nuovo"):
   - **Catasto**: foglio e particella dal punto della casa, dalla mappa catastale dell'Agenzia delle Entrate (servizio libero); link a Visura catastale e Geoportale.
   - **Edificio**: tipo, piani, anno di costruzione se presenti su OpenStreetMap.
@@ -33,7 +41,7 @@ L'app per il **farming immobiliare**: l'agente lavora sempre la stessa zona (alc
 - **Più agenti sullo stesso telefono** e **PIN** facoltativo (Profilo).
 - **Agenzia sul cartello** nella scheda casa.
 
-## Aggiornare il telefono (da Agente Moni 8, 9, 10 o Zona 11-12)
+## Aggiornare il telefono (da Agente Moni 8, 9, 10 o Zona 11-13)
 Niente da fare: l'app si aggiorna da sola dal collegamento di GitHub Pages. Aprila, chiudila del tutto e riaprila. Le case, le mappe e le strade viste restano; le strade viste diventano subito il "segno" dei 3 mesi. Al primo avvio compare il benvenuto con la zona già pronta: basta scrivere il nome e premere Avanti.
 
 Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e l'icona nuovi bisogna toglierlo e rimetterlo (Chrome ⋮ → Aggiungi a schermata Home).
@@ -48,11 +56,11 @@ Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e
 - **blu**: strade con case da vedere
 - **verde scuro**: percorse a piedi negli ultimi 3 mesi
 - **verde chiaro**: viste più di 3 mesi fa
-- **giallo con frecce**: i prossimi 300 m del giro; **blu con frecce**: il resto del giro
+- **ambra con frecce**: i prossimi 300 m del giro; **blu con frecce**: il resto del giro
 - **grigio tratteggiato**: il pezzo di giro già fatto oggi
 - **arancione a puntini**: volantini (se lo strato è acceso)
-- **fumetto giallo**: notizia del taccuino; **P**: la macchina
-- in "Tutta la zona": **bordo scuro** = confine della zona, **verde chiaro** = parte già vista, **ocra chiaro** = parte da vedere
+- **fumetto ambra**: notizia del taccuino; **P**: la macchina
+- in "Tutta la zona": **bordo scuro** = confine della zona, **verde chiaro** = parte già vista, **ambra chiaro** = parte da vedere
 
 ## Problemi comuni
 | Problema | Soluzione |
@@ -65,8 +73,9 @@ Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e
 | Non arrivano le notifiche | Chrome ⋮ → Impostazioni → Impostazioni sito → Notifiche: consenti |
 
 ## Note tecniche
-- File: `index.html` (interfaccia), `app.js` (app), `planner.js` (mappe, strade, percorsi, quartieri e zone disegnate), `sw.js`.
-- A ogni modifica alzare `?v=N` in index.html e `zona-vN` in sw.js, e caricare tutti i file insieme.
+- File: `index.html` (struttura), `stile.css` (aspetto), `app.js` (app), `planner.js` (mappe, strade, percorsi, quartieri e zone disegnate), `sw.js`, `manifest.webmanifest`, icone (`favicon.svg`, `icon-*.png`, `icon-maskable-*.png`, `apple-touch-icon.png`, `badge-96.png`).
+- A ogni modifica alzare `?v=N` in index.html (anche per `stile.css`) e `zona-vN` e la lista `APP` in sw.js, e caricare tutti i file insieme.
+- Palette: variabili in cima a `stile.css` e oggetto `C` in `app.js` (stessi valori).
 - Profili in `localStorage.zona_profili`. Il primo profilo usa i dati di prima (IndexedDB `agente-moni`, ora versione 3); gli altri `zona-<id>` e chiavi con prefisso `<id>_`.
 - Archivio: `reti`, `visti` (`v` strade con case viste, `p` tutte le strade percorse, `f` volantini: giorno dell'ultimo passaggio), `case`, `note`, `persone`, `agenda`, `uscite`.
 - Case: campi nuovi `prezzo` (numero), `annuncio` (link), `annuncioTs`. Aree: `confine` (anelli del comune da OSM, semplificati).

@@ -1,9 +1,9 @@
-/* Zona v13 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
+/* Zona v14 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
    case con foto e note vocali, taccuino delle notizie raccolte in zona, pannello dell'attività.
    Tutto resta sul telefono, un profilo per ogni agente. Il collegamento a Google (foglio e cartella Drive) è facoltativo. */
 (() => {
   'use strict';
-  const VERSIONE = 13;
+  const VERSIONE = 14;
   const $ = id => document.getElementById(id);
   // profili: ogni agente ha i suoi dati. Il primo profilo usa i dati delle versioni precedenti (nessun prefisso).
   const PROFILI = (() => { try { const p = JSON.parse(localStorage.getItem('zona_profili')); if (p && p.lista && p.lista.length) return p; } catch (e) { } return { attivo: 'p0', lista: [{ id: 'p0', nome: '' }] }; })();
@@ -24,7 +24,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   // ---------- icone ----------
-  const svg = (d, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
+  const svg = (d, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${d}</svg>`;
   const ICO = {
     piu: svg('<path d="M12 5v14M5 12h14"/>'),
     casa: svg('<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>'),
@@ -54,9 +54,20 @@
     lista: svg('<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>'),
     persona: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
     strati: svg('<path d="M12 3 2 8l10 5 10-5z"/><path d="M2 13l10 5 10-5"/>'),
-    festa: '<svg class="grande" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="#2e7d4f"/><path d="M14 25l7 7 14-15" fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    festa: '<svg class="grande" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="#E7F6EE"/><circle cx="24" cy="24" r="16" fill="#1E8A5A"/><path d="M17 24.5l5 5 9-10" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    giu: svg('<path d="m6 9 6 6 6-6"/>', 'class="giu"'),
+    lucchetto: svg('<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+    attenzione: svg('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17.2v.3"/>'),
+    info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.3"/>'),
+    esporta: svg('<path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 14v6h16v-6"/>'),
+    stella: svg('<path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/>'),
+    bussola: svg('<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8z"/>')
   };
-  const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#17262b"/><path d="M14 46 22 18l14 6 14-8-6 30-14-4z" fill="#2e7d4f" opacity=".9"/><path d="M14 46 22 18l14 6 14-8-6 30-14-4z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round" stroke-dasharray="5 4"/><circle cx="33" cy="33" r="7" fill="#f2a900" stroke="#fff" stroke-width="3"/></svg>';
+  // marchio: una Z disegnata come un percorso, dal punto di partenza (cerchio) all'arrivo (punto ambra)
+  const LOGO = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#102A43"/><path d="M22.6 20H44L20.4 44H40" fill="none" stroke="#fff" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18.6" cy="20" r="4" fill="none" stroke="#fff" stroke-width="3"/><circle cx="45.2" cy="44" r="6.6" fill="#102A43"/><circle cx="45.2" cy="44" r="5" fill="#F0B429"/></svg>';
+  const SPIN = '<span class="spin" aria-hidden="true"></span>';
+  // colori dell'app (gli stessi di stile.css)
+  const C = { brand: '#102A43', testo2: '#486581', testo3: '#829AB1', linea: '#E1E7EE', lineaForte: '#CBD5E0', tenue: '#F0F4F8', verde: '#1E8A5A', verdeSc: '#146C46', verdeCh: '#A6D9BC', blu: '#2F6BDB', ambra: '#F0B429', ambraSc: '#8D5A00', rosso: '#D64545', viola: '#7A4FC4' };
   const FRECCIA = {
     dritto: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 42V10M12 21 24 8l12 13" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     destra: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 42V24a6 6 0 0 1 6-6h18M30 9l9 9-9 9" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -68,15 +79,16 @@
 
   // stati delle case: colore e simbolo del segnaposto
   const STATI = [
-    { k: 'Da valutare', c: '#4a5a60', g: '<text x="15" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#4a5a60" font-family="Inter, sans-serif">?</text>' },
-    { k: 'Cartello vendita', c: '#d23a2e', g: '<text x="15" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#d23a2e" font-family="Inter, sans-serif">€</text>' },
-    { k: 'Cartello affitto', c: '#7b3fb0', g: '<g transform="translate(8 7) scale(.58)" fill="none" stroke="#7b3fb0" stroke-width="3" stroke-linecap="round"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v2"/></g>' },
-    { k: 'Interessante', c: '#2e7d4f', g: '<g transform="translate(8 7) scale(.58)"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" fill="#2e7d4f"/></g>' },
-    { k: 'Da ricontattare', c: '#c27c00', g: '<g transform="translate(8.5 7.5) scale(.55)"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#c27c00"/></g>' },
-    { k: 'Scartata', c: '#9aa5a8', g: '<g transform="translate(8 7) scale(.58)" fill="none" stroke="#9aa5a8" stroke-width="3.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></g>' }
+    { k: 'Da valutare', c: '#627D98', g: '<text x="15" y="18.6" text-anchor="middle" font-size="12.5" font-weight="700" fill="#627D98" font-family="Inter, sans-serif">?</text>' },
+    { k: 'Cartello vendita', c: '#D64545', g: '<text x="15" y="18.6" text-anchor="middle" font-size="12.5" font-weight="700" fill="#D64545" font-family="Inter, sans-serif">€</text>' },
+    { k: 'Cartello affitto', c: '#7A4FC4', g: '<g transform="translate(8 7) scale(.58)" fill="none" stroke="#7A4FC4" stroke-width="3" stroke-linecap="round"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v2"/></g>' },
+    { k: 'Interessante', c: '#1E8A5A', g: '<g transform="translate(8 7) scale(.58)"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" fill="#1E8A5A"/></g>' },
+    { k: 'Da ricontattare', c: '#DE911D', g: '<g transform="translate(8.5 7.5) scale(.55)"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#DE911D"/></g>' },
+    { k: 'Scartata', c: '#9FB3C8', g: '<g transform="translate(8 7) scale(.58)" fill="none" stroke="#9FB3C8" stroke-width="3.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></g>' }
   ];
   const statoInfo = k => STATI.find(s => s.k === k) || STATI[0];
-  const pinSVG = k => { const s = statoInfo(k); return `<svg viewBox="0 0 30 38" width="30" height="38" aria-hidden="true"><path d="M15 37S2 22.5 2 14a13 13 0 0 1 26 0c0 8.5-13 23-13 23z" fill="${s.c}" stroke="#fff" stroke-width="2"/><circle cx="15" cy="14" r="9" fill="#fff"/>${s.g}</svg>`; };
+  const pinSVG = k => { const s = statoInfo(k); return `<svg viewBox="0 0 30 38" width="30" height="38" aria-hidden="true"><path d="M15 36.5S2.5 22.6 2.5 14.2a12.5 12.5 0 0 1 25 0c0 8.4-12.5 22.3-12.5 22.3z" fill="${s.c}" stroke="#fff" stroke-width="2"/><circle cx="15" cy="14.2" r="8.6" fill="#fff"/>${s.g}</svg>`; };
+  const statoPill = k => { const s = statoInfo(k); return `<span class="stato-pill" style="background:${s.c}"><i></i>${esc(s.k)}</span>`; };
   const TIPI = ['Villa', 'Villetta a schiera', 'Appartamento', 'Rustico o cascina', 'Terreno', 'Negozio o ufficio', 'Altro'];
 
   // ---------- utilità ----------
@@ -93,7 +105,49 @@
     const ore = H === 1 ? '1 ora' : H + ' ore';
     return M === 0 ? ore : M === 30 ? ore + ' e mezza' : ore + ' e ' + M;
   }
-  function toast(msg, tipo = '', ms = 3200) { const t = $('toast'); t.textContent = msg; t.className = tipo; t.style.display = 'block'; if (document.querySelector('.foglio.aperto')) t.style.bottom = 'calc(env(safe-area-inset-bottom) + 96px)'; else if (typeof posizionaTondi === 'function') try { posizionaTondi(); } catch (e) { } clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
+  // avviso breve in basso: sopra il pannello, oppure sopra il piede del foglio aperto
+  function toast(msg, tipo = '', ms = 3200) {
+    const t = $('toast'), ico = tipo === 'ok' ? ICO.ok : tipo === 'errore' ? ICO.attenzione : tipo === 'attesa' ? SPIN : ICO.info;
+    t.innerHTML = `<span class="t-ico">${ico}</span><span>${esc(msg)}</span>`; t.className = (tipo || 'info') + ' visibile';
+    t.setAttribute('role', tipo === 'errore' ? 'alert' : 'status');
+    const f = [...document.querySelectorAll('.foglio.aperto')].pop();
+    if ($('blocco').classList.contains('aperto')) t.style.bottom = 'calc(env(safe-area-inset-bottom) + 24px)';
+    else if (f) { const piede = f.querySelector('.foglio-piede'); t.style.bottom = `calc(env(safe-area-inset-bottom) + ${(piede ? piede.offsetHeight : 0) + 12}px)`; }
+    else if (typeof posizionaTondi === 'function') try { posizionaTondi(); } catch (e) { }
+    clearTimeout(toast._t); if (ms > 0) toast._t = setTimeout(() => t.classList.remove('visibile'), ms);
+  }
+  const togliToast = () => { clearTimeout(toast._t); $('toast').classList.remove('visibile'); };
+  // finestre di dialogo dell'app (al posto di confirm e prompt del browser)
+  // dialogo({ titolo, testo, ok, annulla, pericolo, icona, campo: { valore, placeholder, tipo, inputmode, max }, scelte: [{ t, v, primario }] })
+  function dialogo(o) {
+    return new Promise(fine => {
+      const box = $('dialogo'), sc = $('dialogoScheda'), prima = document.activeElement;
+      const ico = o.icona === false ? '' : `<div class="d-ico${o.pericolo ? ' rosso' : ''}">${o.icona || (o.pericolo ? ICO.cestino : o.campo ? ICO.matita : ICO.info)}</div>`;
+      const tasti = o.scelte
+        ? `<div class="d-tasti colonna">${o.scelte.map((x, i) => `<button class="tasto${x.primario ? ' primario' : ''}" data-s="${i}">${esc(x.t)}</button>`).join('')}<button class="link" data-no>${esc(o.annulla || 'Annulla')}</button></div>`
+        : `<div class="d-tasti">${o.soloOk ? '' : `<button class="tasto" data-no>${esc(o.annulla || 'Annulla')}</button>`}<button class="tasto ${o.pericolo ? 'pericolo pieno' : 'primario'}" data-ok>${esc(o.ok || 'Va bene')}</button></div>`;
+      const f = o.campo;
+      sc.innerHTML = `${ico}<h2 id="dTitolo">${esc(o.titolo)}</h2>${o.testo ? `<p class="d-testo">${esc(o.testo)}</p>` : ''}${f ? `<input class="campo${f.tipo === 'password' ? ' pin' : ''}" id="dCampo" type="${f.tipo || 'text'}" ${f.inputmode ? `inputmode="${f.inputmode}"` : ''} ${f.max ? `maxlength="${f.max}"` : ''} placeholder="${esc(f.placeholder || '')}" value="${esc(f.valore || '')}" autocomplete="off">` : ''}${tasti}`;
+      box.classList.add('aperto');
+      const esci = v => { box.classList.remove('aperto'); document.removeEventListener('keydown', tasto, true); try { prima && prima.focus && prima.focus(); } catch (e) { } fine(v); };
+      const tasto = e => { if (e.key === 'Escape') { e.stopPropagation(); esci(f ? null : false); } else if (e.key === 'Enter' && f) { e.preventDefault(); esci($('dCampo').value); } };
+      document.addEventListener('keydown', tasto, true);
+      sc.querySelectorAll('[data-s]').forEach(b => b.onclick = () => esci(o.scelte[+b.dataset.s].v));
+      sc.querySelector('[data-no]') && (sc.querySelector('[data-no]').onclick = () => esci(o.scelte ? null : f ? null : false));
+      sc.querySelector('[data-ok]') && (sc.querySelector('[data-ok]').onclick = () => esci(f ? $('dCampo').value : true));
+      box.onclick = e => { if (e.target === box) esci(o.scelte || f ? null : false); };
+      setTimeout(() => { const el = f ? $('dCampo') : sc.querySelector('[data-ok], [data-s]'); if (el) { el.focus(); if (f && el.select) el.select(); } }, 60);
+    });
+  }
+  const chiedi = (titolo, testo, ok, pericolo) => dialogo({ titolo, testo, ok, pericolo });
+  // un tasto che lavora: rotella al posto dell'icona finché la promessa non finisce
+  async function conAttesa(btn, fn) {
+    if (!btn || btn.dataset.lavora) return; btn.dataset.lavora = '1';
+    const prima = btn.innerHTML; btn.disabled = true; btn.innerHTML = SPIN + btn.textContent.trim();
+    try { return await fn(); } finally { if (btn.isConnected) { btn.innerHTML = prima; btn.disabled = false; } delete btn.dataset.lavora; }
+  }
+  // pillola in alto sulla mappa mentre l'app lavora
+  function attesaMappa(testo) { const el = $('attesaMappa'); if (testo) { $('attesaTesto').textContent = testo; el.classList.add('visibile'); } else el.classList.remove('visibile'); }
   function parla(testo) { if (!cfg.voce || !('speechSynthesis' in window)) return; try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(testo); u.lang = 'it-IT'; speechSynthesis.speak(u); } catch (e) { } }
   const vibra = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } };
   // notifiche del telefono: arrivano anche con lo schermo spento o con un'altra app davanti
@@ -107,7 +161,7 @@
   async function notifica(titolo, testo, tag = 'giro', sempre = false) {
     vibra([200, 100, 200]);
     if (!notificheOk() || (!sempre && document.visibilityState === 'visible')) return false; // con l'app davanti basta l'avviso nell'app
-    const o = { body: testo, tag, renotify: true, icon: 'icon-192.png', badge: 'icon-192.png', vibrate: [200, 100, 200], data: { url: location.href.split('#')[0] } };
+    const o = { body: testo, tag, renotify: true, icon: 'icon-192.png', badge: 'badge-96.png', vibrate: [200, 100, 200], data: { url: location.href.split('#')[0] } };
     try {
       const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
       if (reg) await reg.showNotification(titolo, o); else new Notification(titolo, o);
@@ -184,7 +238,7 @@
   }
   async function scaricaComune(nome) {
     caricamento = { nome, log: [] }; pannello();
-    const log = m => { caricamento.log.push(m); const el = $('logCarica'); if (el) el.textContent = caricamento.log.slice(-3).join('\n'); };
+    const log = m => { caricamento.log.push(m); const el = $('logCarica'); if (el) el.innerHTML = fasiHTML(caricamento); };
     const r = await Planner.scaricaRete(nome, log, cfg.aree[nome]);
     await DB.put('reti', r, nome);
     if (conGoogle()) api('saveRoutes', { comune: nome + ' (rete v4)', plan: r }).catch(() => { });
@@ -239,16 +293,17 @@
 
   // ---------- mappa ----------
   const map = L.map('map', { zoomControl: false }).setView([42.6, 12.4], 6);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>' }).addTo(map);
   map.createPane('rete').style.zIndex = 405;
   const tela = L.canvas({ padding: 0.4, pane: 'rete' });
   map.createPane('dafare').style.zIndex = 420; map.createPane('prossimo').style.zIndex = 430;
   const lRete = L.layerGroup().addTo(map), lRotta = L.layerGroup().addTo(map), lExtra = L.layerGroup().addTo(map), lCase = L.layerGroup().addTo(map), lIo = L.layerGroup().addTo(map);
   let segui = true, primaVista = true;
   map.on('dragstart', () => { segui = false; });
-  const VERDE = '#2e7d4f', VERDE_SC = '#1f6b42', VERDE_CH = '#9fd3b0', BLU = '#1d5fd1', OCRA = '#f2a900', GRIGIO = '#6b7a80', ARANCIO = '#e8590c';
+  const VERDE = C.verde, VERDE_SC = C.verdeSc, VERDE_CH = C.verdeCh, BLU = C.blu, OCRA = C.ambra, GRIGIO = C.testo3, ARANCIO = '#E8590C';
   const GG = () => G;
-  const pEtichetta = (testo, altro) => L.divIcon({ className: '', html: `<div class="etichetta-p${altro ? ' altro' : ''}">${testo}</div>`, iconSize: altro ? [34, 34] : [40, 40], iconAnchor: altro ? [17, 17] : [20, 20] });
+  const pEtichetta = (testo, altro) => L.divIcon({ className: '', html: `<div class="etichetta-p${altro ? ' altro' : typeof testo === 'number' ? ' numero' : ''}">${testo}</div>`, iconSize: altro ? [34, 34] : [40, 40], iconAnchor: altro ? [17, 17] : [20, 20] });
   const iconaAuto = () => L.divIcon({ className: '', html: `<div class="etichetta-p altro" style="width:36px;height:36px">${ICO.auto.replace('<svg', '<svg width="22" height="22"')}</div>`, iconSize: [36, 36], iconAnchor: [18, 18] });
   function pulisciMappa() { lRete.clearLayers(); lRotta.clearLayers(); lExtra.clearLayers(); lCase.clearLayers(); marcatori.clear(); }
 
@@ -302,7 +357,7 @@
       for (const n of cfg.comuni) {
         const a = cfg.aree[n]; if (!a || !a.bbox) continue;
         const bb = L.latLngBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]]); (confiniDi(n) || []).forEach(r => bb.extend(L.latLngBounds(r))); b = b ? b.extend(bb) : bb;
-        L.marker(bb.getCenter(), { icon: L.divIcon({ className: '', html: `<div class="etichetta-area">${esc(n)}</div>`, iconSize: [10, 10], iconAnchor: [5, 5] }), zIndexOffset: 300 }).on('click', () => { if (n !== cfg.comune) cambiaComune(n); else mostraZona(false); }).addTo(lExtra);
+        L.marker(bb.getCenter(), { icon: L.divIcon({ className: '', html: `<div class="etichetta-area${n === cfg.comune ? ' aperta' : ''}">${esc(n)}</div>`, iconSize: [10, 10], iconAnchor: [5, 5] }), zIndexOffset: 300 }).on('click', () => { if (n !== cfg.comune) cambiaComune(n); else mostraZona(false); }).addTo(lExtra);
       }
       if (centra && b && b.isValid()) map.fitBounds(b, { paddingTopLeft: [20, 30], paddingBottomRight: [70, Math.min(440, altezzaPannello() + 20)] });
       return;
@@ -348,7 +403,7 @@
         }
         let j = p; while (j < c.length - 1 && I.cc[j] - I.cc[p] < 300) j++;
         L.polyline(c.slice(p, j + 1), { pane: 'prossimo', color: OCRA, weight: 10, opacity: 1, interactive: false }).addTo(lRotta);
-        frecce(r, p, I.cc[j] - I.cc[p], 32, '#17262b');      // frecce scure fitte sul tratto giallo
+        frecce(r, p, I.cc[j] - I.cc[p], 32, C.brand);      // frecce scure fitte sul tratto giallo
         frecce(r, j, 2500, 70);                               // poi frecce bianche più rade sul resto
         if (c.length - 1 > p) L.marker(c[c.length - 1], { interactive: false, keyboard: false, pane: 'prossimo', icon: L.divIcon({ className: '', html: '<div class="arrivo-giro">Fine</div>', iconSize: [46, 26], iconAnchor: [23, 13] }) }).addTo(lRotta);
       }
@@ -408,13 +463,12 @@
     const box = $('guida');
     const mostra = html => { box.className = 'visibile'; box.innerHTML = html; };
     if (!G || S.fase === 'home') { box.className = ''; box.innerHTML = ''; return; }
-    if (S.fase === 'macchina') return mostra(`<div class="guida-card fatto"><div class="guida-icona">${ICO.auto.replace('<svg', '<svg style="color:#fff"')}</div><div class="guida-testi"><div class="guida-azione">Case isolate</div><div class="guida-sotto">Guardale passando in macchina.</div></div></div>`);
+    if (S.fase === 'macchina') return mostra(`<div class="guida-card fatto"><div class="guida-icona">${ICO.auto}</div><div class="guida-testi"><div class="guida-azione">Case isolate</div><div class="guida-sotto">Guardale passando in macchina.</div></div></div>`);
     if (S.fase === 'verso') return mostra(`<div class="guida-card parcheggio"><div class="guida-icona">${FRECCIA.arrivo}</div><div class="guida-testi"><div class="guida-azione">Parcheggia ${S.meta.via ? 'in ' + esc(S.meta.via) : 'al punto P'}</div><div class="guida-sotto">${esc(S.meta.frazione || '')}${S.meta.nome ? ', ' + esc(S.meta.nome) : ''}</div></div></div>`);
     const r = S.rotta; if (!r) { box.className = ''; return; }
     const c = r.coords, p = S.prog, I = info(r);
     if (fuori >= 3) {
-      let d = Infinity; if (posizione) for (let i = p; i < Math.min(c.length, p + 40); i++) d = Math.min(d, dist([posizione.lat, posizione.lng], c[i]));
-      return mostra(`<div class="guida-card fuori"><div class="guida-icona">${FRECCIA.fuori}</div><div class="guida-testi"><div class="guida-azione">Strada diversa</div><div class="guida-sotto">Aggiorno il percorso da dove sei…</div></div></div>`);
+      return mostra(`<div class="guida-card fuori"><div class="guida-icona">${SPIN}</div><div class="guida-testi"><div class="guida-azione">Strada diversa</div><div class="guida-sotto">Aggiorno il percorso da dove sei</div></div></div>`);
     }
     const k = Math.max(0, I.steps.findIndex(s => p >= s.i0 && p < s.i1));
     const s = I.steps[k], dopo = I.steps[k + 1], d = I.cc[s.i1] - I.cc[p];
@@ -439,7 +493,7 @@
   function pannello() {
     const box = $('pannelloCorpo');
     if (S.fase !== ultimaFase) { if (ultimaFase !== null && panChiuso) chiudiPannello(false); const cambiaRete = (S.fase === 'cammino') !== (ultimaFase === 'cammino'); ultimaFase = S.fase; if (cambiaRete && G) disegnaRete(); }
-    const comuneChip = `<button class="chip-comune" id="bComune">${ICO.mappa}<span>${esc(cfg.comune || 'Scegli il comune')}</span><span aria-hidden="true">▾</span></button>`;
+    const comuneChip = `<button class="chip-comune" id="bComune">${ICO.mappa}<span>${esc(cfg.comune || 'Scegli il comune')}</span>${ICO.giu}</button>`;
     const on = (id, f) => { const el = $(id); if (el) el.onclick = f; };
     if (vistaZona) { pannelloZona(box, on); return; }
     if (!cfg.comune) {
@@ -447,32 +501,33 @@
         <button class="tasto primario" id="bQui">${ICO.posizione}Usa il posto dove sono</button>
         <label class="campo" for="nomeComune">Oppure scrivi il nome del comune</label><input class="campo" id="nomeComune" placeholder="Per esempio Cazzago San Martino" autocomplete="off">
         <button class="tasto" id="bNome">Scarica questo comune</button>
-        <div class="riga"><button class="link" id="bQuart">Un quartiere di una città</button><button class="link" id="bDisegna">Disegna sulla mappa</button></div><div class="log" id="logQui"></div>`;
+        <div class="log" id="logQui"></div><div class="riga"><button class="link" id="bQuart">Un quartiere di una città</button><button class="link" id="bDisegna">Disegna sulla mappa</button></div>`;
       on('bQui', () => comuneDaPosizione('logQui'));
-      on('bNome', () => { const n = $('nomeComune').value.trim(); if (n) aggiungiComune(n); });
+      on('bNome', () => { const n = $('nomeComune').value.trim(); if (n) aggiungiComune(n); else $('nomeComune').focus(); });
+      $('nomeComune').onkeydown = e => { if (e.key === 'Enter') $('bNome').click(); };
       on('bQuart', () => apriComuni('quartiere')); on('bDisegna', () => iniziaDisegno());
       return;
     }
     if (caricamento) {
       if (caricamento.errore) {
-        box.innerHTML = `${comuneChip}<h1>Mappa non scaricata</h1><p>${esc(caricamento.errore)}</p><button class="tasto primario" id="bRiprova">${ICO.rifai}Riprova</button><button class="tasto" id="bAltro">Scegli un altro comune</button>`;
+        box.innerHTML = `${comuneChip}<h1>Mappa non scaricata</h1><p>${esc(caricamento.errore)}</p><button class="tasto primario" id="bRiprova">${ICO.rifai}Riprova</button><button class="tasto" id="bAltro">Scegli un'altra area</button>`;
         on('bRiprova', () => { caricamento = null; preparaComune(true); }); on('bAltro', apriComuni); on('bComune', apriComuni);
       } else {
-        box.innerHTML = `<h1>Preparo la mappa di ${esc(caricamento.nome)}</h1><p>Si fa una volta sola per ogni comune e ci vogliono 1-3 minuti. Lascia l'app aperta.</p><div class="avanz"><div style="width:100%;opacity:.35"></div></div><div class="log" id="logCarica">${esc(caricamento.log.slice(-3).join('\n'))}</div>`;
+        box.innerHTML = `<h1>Preparo la mappa di ${esc(caricamento.nome)}</h1><p>Si fa una volta sola per ogni area: 1-3 minuti. Lascia l'app aperta.</p><div class="indet"></div><div id="logCarica">${fasiHTML(caricamento)}</div>`;
       }
       return;
     }
-    if (!G) { box.innerHTML = `${comuneChip}<h1>Un momento…</h1><p>Apro la mappa di ${esc(cfg.comune)}.</p>`; on('bComune', apriComuni); return; }
+    if (!G) { box.innerHTML = `${comuneChip}<div style="margin-top:14px" aria-busy="true" aria-label="Apro la mappa di ${esc(cfg.comune)}"><span class="sk corta"></span><span class="sk" style="margin-top:10px;height:8px"></span><span class="sk t" style="margin-top:20px"></span><div class="tempi" style="margin-top:12px">${'<span class="sk blocco"></span>'.repeat(6)}</div></div>`; on('bComune', apriComuni); return; }
     const av = avanzamento(), perc = Math.round(av.perc * 100);
     const testa = `${S.fase === 'home' ? `<p class="ciao">${esc(saluto())}${nomeAgente() ? ', ' + esc(nomeAgente()) : ''}</p>` : ''}${comuneChip}<div class="avanz-testo" style="margin-top:8px"><span><b>${perc}%</b> delle strade con case viste</span><span>${kmTesto(av.kmFatti * 1000)} su ${kmTesto(av.kmTot * 1000)}</span></div><div class="avanz"><div style="width:${perc}%"></div></div>`;
 
     if (S.fase === 'home') {
       let html = testa;
       if (!anteprima && !zone) html += `<div class="scorciatoie"><button id="bPan">${ICO.grafico}<span>Pannello</span></button><button id="bTacc">${ICO.nota}<span>Taccuino</span></button><button id="bZona">${ICO.mappa}<span>Tutta la zona</span></button></div>`;
-      const altra = areaQui(); if (altra && !anteprima) html += `<button class="vicina" id="bAltraArea" style="width:100%;border:0;text-align:left">${ICO.posizione.replace('<svg', '<svg width="26" height="26"')}<span>Sei a <b>${esc(altra)}</b>, nella tua zona.<br>Tocca per aprire la sua mappa.</span></button>`;
-      const oggiN = cosePerOggi().length; if (oggiN && !anteprima && !zone) html += `<button class="vicina" id="bOggi" style="width:100%;border:0;text-align:left;background:var(--lago-chiaro);color:var(--lago-scuro)">${ICO.lista.replace('<svg', '<svg width="26" height="26"')}<span><b>${oggiN === 1 ? '1 cosa da fare oggi' : oggiN + ' cose da fare oggi'}</b><br>${esc(taglia(cosePerOggi()[0].titolo, 48))}</span></button>`;
-      const rich = oggiN ? [] : daRichiamare(); if (rich.length) html += `<button class="vicina" id="bRichiami" style="width:100%;border:0;text-align:left">${ICO.telefono.replace('<svg', '<svg width="26" height="26"')}<span><b>${rich.length === 1 ? '1 casa da richiamare' : rich.length + ' case da richiamare'}</b><br>${esc(rich[0].address || 'Casa')}${rich.length > 1 ? ' e altre' : ''}</span></button>`;
-      if (S.ultima && Date.now() - S.ultima.quando < 14 * 3600e3) html += `<p class="nota-ok">Ultima uscita: ${kmTesto(S.ultima.kmNuovi * 1000)} di strade nuove, ${S.ultima.case === 1 ? '1 casa salvata' : S.ultima.case + ' case salvate'}.</p>`;
+      const altra = areaQui(); if (altra && !anteprima) html += `<button class="vicina" id="bAltraArea">${ICO.posizione}<span>Sei a <b>${esc(altra)}</b>, nella tua zona.<br>Tocca per aprire la sua mappa.</span></button>`;
+      const oggiL = anteprima || zone ? [] : cosePerOggi(), oggiN = oggiL.length; if (oggiN) html += `<button class="vicina blu" id="bOggi">${ICO.lista}<span><b>${oggiN === 1 ? '1 cosa da fare oggi' : oggiN + ' cose da fare oggi'}</b><br>${esc(taglia(oggiL[0].titolo, 48))}</span></button>`;
+      const rich = oggiN || anteprima || zone ? [] : daRichiamare(); if (rich.length) html += `<button class="vicina" id="bRichiami">${ICO.telefono}<span><b>${rich.length === 1 ? '1 casa da richiamare' : rich.length + ' case da richiamare'}</b><br>${esc(rich[0].address || 'Casa')}${rich.length > 1 ? ' e altre' : ''}</span></button>`;
+      if (S.ultima && Date.now() - S.ultima.quando < 14 * 3600e3) html += `<p class="nota-ok">${ICO.ok}<span>Ultima uscita: ${kmTesto(S.ultima.kmNuovi * 1000)} di strade nuove, ${S.ultima.case === 1 ? '1 casa salvata' : S.ultima.case + ' case salvate'}.</span></p>`;
       if (anteprima) {
         const a = anteprima, r = a.rotta, lontano = a.meta && !(posizione && dist([posizione.lat, posizione.lng], [a.meta.lat, a.meta.lon]) < 200);
         html += `<h1>Giro di ${oreTesto(r.ore)}</h1><p>${kmTesto(r.km * 1000)} a piedi, di cui <b>${kmTesto(r.kmNuovi * 1000)}</b> di case da vedere${r.via ? ', soprattutto ' + esc(inVia(r.via)) : ''}. ${a.torna ? 'Finisci dove hai lasciato la macchina.' : 'Finisci dove capita: poi ti riporto alla macchina quando vuoi.'}</p>
@@ -484,7 +539,7 @@
         on('bCambiaTempo', () => { const m = a.meta; anteprima = null; scegliTempoPoi = m || a.da; aggiorna(false); });
         on('bTorna', () => { cfg.tornaAuto = !a.torna; salvaCfg(); calcolaAnteprima(a.da, a.minuti, cfg.tornaAuto, a.meta); });
       } else if (zone) {
-        html += `<h1>Dove vuoi andare?</h1>${avvisoZone ? `<p>${esc(avvisoZone)}</p>` : ''}` + (zone.length ? zone.map((z, i) => `<button class="zona" data-z="${i}"><span class="num-giro">${i + 1}</span><div><b>${esc(z.frazione)}${z.via ? ', ' + esc(z.via) : ''}</b><span>${kmTesto(z.km * 1000)} di case da vedere</span></div>${z.distanza != null ? `<span class="dist">${kmTesto(z.distanza)}</span>` : ''}</button>`).join('') : '<p>Hai visto tutte le strade con case del comune.</p>') +
+        html += `<h1>Dove vuoi andare?</h1>${avvisoZone ? `<p>${esc(avvisoZone)}</p>` : ''}` + (zone.length ? zone.map((z, i) => `<button class="zona" data-z="${i}"><span class="num-giro">${i + 1}</span><div><b>${esc(z.frazione)}${z.via ? ', ' + esc(z.via) : ''}</b><span>${kmTesto(z.km * 1000)} di strade con case da vedere</span></div>${z.distanza != null ? `<span class="dist">${kmTesto(z.distanza)}</span>` : ''}</button>`).join('') : '<p>Hai visto tutte le strade con case di quest\'area.</p>') +
           `<div class="riga"><button class="link" id="bMappa">Scegli sulla mappa</button><button class="link" id="bAnnulla">Indietro</button></div>`;
         box.innerHTML = html;
         box.querySelectorAll('[data-z]').forEach(b => b.onclick = () => sceltaZona(zone[+b.dataset.z]));
@@ -493,7 +548,7 @@
         const nIso = (R.isolate || []).filter((_, i) => !S.isolateViste[i]).length;
         if (av.perc >= 0.995) html += `<h1>Hai visto tutto ${esc(cfg.comune)}</h1><p>Puoi passare a un altro comune toccando il nome qui sopra${cfg.rivedi ? '' : ', oppure nelle impostazioni scegli dopo quanto tempo ripassare'}.</p>`;
         else html += `<h1>Quanto tempo hai?</h1><div class="tempi">${TEMPI.map(t => `<button class="tempo${t.m === cfg.minuti ? ' scelto' : ''}" data-min="${t.m}">${t.t}</button>`).join('')}</div>`;
-        html += `<div class="riga"><button class="link" id="bMappa">Scegli sulla mappa</button><button class="link" id="bCasaQui">Salva una casa qui</button></div>${nIso ? `<button class="link" id="bAuto" style="width:100%">Case isolate da vedere in macchina (${nIso})</button>` : ''}`;
+        html += `<div class="riga"><button class="link" id="bMappa">Scegli sulla mappa</button><button class="link" id="bCasaQui">Salva una casa qui</button></div>${nIso ? `<button class="link" id="bAuto" style="width:100%">${ICO.auto}Case isolate da vedere in macchina · ${nIso}</button>` : ''}`;
         box.innerHTML = html;
         box.querySelectorAll('.tempo').forEach(b => b.onclick = () => scegliTempo(+b.dataset.min));
         on('bMappa', iniziaSceltaMappa); on('bAuto', () => { S.fase = 'macchina'; salvaStato(); aggiorna(true); }); on('bCasaQui', () => apriNuovaCasa());
@@ -524,7 +579,7 @@
         <div class="avanz" role="progressbar" aria-valuenow="${perc}" aria-valuemin="0" aria-valuemax="100"><div style="width:${perc}%"></div></div>
         <p style="margin:0">${fineTxt}${S.fine && Date.now() > S.fine ? ' · il tempo che avevi è finito' : ''}</p>
         <div class="riga"><button class="tasto verde" id="bNuova">${ICO.piu}Nuova casa</button><button class="tasto" id="bNotaG" style="flex:.7">${ICO.nota}Notizia</button></div>
-        <button class="interruttore" id="bVol" role="switch" aria-checked="${!!(S.sessione && S.sessione.volantini)}" style="padding:6px 12px"><span>Sto lasciando volantini</span><span class="leva"></span></button>
+        <button class="interruttore compatto" id="bVol" role="switch" aria-checked="${!!(S.sessione && S.sessione.volantini)}"><span>Sto lasciando volantini</span><span class="leva"></span></button>
         <div class="riga">${S.auto && !(r && r.ritorno) ? `<button class="tasto piccolo" id="bTornaAuto">${ICO.auto}Torno alla macchina</button>` : ''}<button class="tasto piccolo" id="bRicalcola">${ICO.rifai}Ricalcola</button></div>
         <button class="link" id="bStop">Basta per oggi</button>`;
       on('bNuova', () => apriNuovaCasa());
@@ -532,7 +587,7 @@
       on('bVol', () => { if (!S.sessione) return; S.sessione.volantini = !S.sessione.volantini; salvaStato(); toast(S.sessione.volantini ? 'Volantinaggio: segno le strade dove passi' : 'Volantinaggio spento', 'ok'); pannello(); });
       on('bTornaAuto', () => { const rr = Planner.versoPunto(G, visti, pos4() || (r ? { lat: r.coords[S.prog][0], lon: r.coords[S.prog][1] } : S.auto), S.auto, cfg.rivedi); if (rr) { impostaRotta(rr); toast('Ti porto alla macchina: ' + kmTesto(rr.km * 1000), 'ok'); } });
       on('bRicalcola', () => ricalcola('mano'));
-      on('bStop', () => { if (confirm('Finisci per oggi? Le strade viste restano segnate.')) bastaPerOggi(); });
+      on('bStop', async () => { if (await dialogo({ titolo: 'Finisci per oggi?', testo: 'Le strade che hai visto restano segnate e l\'uscita va nel tuo pannello.', ok: 'Basta per oggi', annulla: 'Continuo', icona: ICO.ok })) bastaPerOggi(); });
       return;
     }
     if (S.fase === 'macchina') {
@@ -540,11 +595,20 @@
       const da = posizione ? [posizione.lat, posizione.lng] : [lista[0] ? lista[0].s.lat : 0, lista[0] ? lista[0].s.lon : 0];
       lista.sort((a, b) => dist(da, [a.s.lat, a.s.lon]) - dist(da, [b.s.lat, b.s.lon]));
       box.innerHTML = `<h1>Case isolate</h1><p>${lista.length ? 'Cascine e case lontane dal paese: guardale passando in macchina. Quando ci passi vicino si segnano da sole.' : 'Le hai viste tutte.'}</p><div class="lista-auto">` +
-        lista.slice(0, 40).map(o => `<div class="giro-riga"><span class="num-giro">${ICO.auto}</span><div><b>${esc(Planner.frazione(G, o.s.lat, o.s.lon))}</b><span>${posizione ? kmTesto(dist(da, [o.s.lat, o.s.lon])) + ' da qui' : ''}</span></div><a class="tasto piccolo" style="width:auto;margin:0" target="_blank" rel="noopener" href="${mapsAuto(o.s.lat, o.s.lon)}">Portami</a><button class="togli-giro" data-vista="${o.i}" aria-label="Segna come vista">${ICO.ok}</button></div>`).join('') +
+        lista.slice(0, 40).map(o => `<div class="giro-riga"><span class="num-giro neutro">${ICO.auto}</span><div><b>${esc(Planner.frazione(G, o.s.lat, o.s.lon))}</b><span>${posizione ? kmTesto(dist(da, [o.s.lat, o.s.lon])) + ' da qui' : ''}</span></div><a class="tasto piccolo" style="width:auto;margin:0" target="_blank" rel="noopener" href="${mapsAuto(o.s.lat, o.s.lon)}">${ICO.posizione}Portami</a><button class="togli-giro" data-vista="${o.i}" aria-label="Segna come vista">${ICO.ok}</button></div>`).join('') +
         `</div><button class="tasto primario" id="bFineAuto">Ho finito</button>`;
       box.querySelectorAll('[data-vista]').forEach(b => b.onclick = () => { S.isolateViste[b.dataset.vista] = true; salvaStato(); aggiorna(false); });
       on('bFineAuto', () => { S.fase = 'home'; salvaStato(); aggiorna(true); });
     }
+  }
+
+  // fasi dello scaricamento di una mappa, ricavate dai messaggi del planner
+  const FASI = [{ k: 'strade', t: 'Strade', re: /strade|confine/i }, { k: 'case', t: 'Case, frazioni e parcheggi', re: /case/i }, { k: 'rete', t: 'Rete per i giri a piedi', re: /rete/i }];
+  function fasiHTML(c) {
+    const log = c.log || [];
+    let ora = 0; log.forEach(m => FASI.forEach((f, i) => { if (f.re.test(m) && i > ora) ora = i; }));
+    const ult = log[log.length - 1] || '', attesa = /riprovo/i.test(ult) ? ult.replace(/…$/, '') : '';
+    return `<ol class="fasi">${FASI.map((f, i) => `<li class="${i < ora ? 'fatta' : i === ora ? 'ora' : ''}"><span class="pallino">${i < ora ? ICO.ok : i === ora ? SPIN : ''}</span><span>${esc(f.t)}${i === ora && attesa ? `<small>${esc(attesa)}</small>` : ''}</span></li>`).join('')}</ol>`;
   }
 
   // ---------- scelta del giro ----------
@@ -604,7 +668,7 @@
     if (cfg.notifiche == null) chiediNotifiche();
     if (rotta && rotta.coords.length && dist(rotta.coords[0], [p.lat, p.lon]) < 80) impostaRotta(rotta, true); else ricalcola('inizio');
     segui = true; if (posizione) map.setView([posizione.lat, posizione.lng], 18);
-    parla('Si parte. Segui la linea gialla.');
+    parla('Si parte. Segui la linea colorata.');
   }
   function impostaRotta(r, silenzioso) {
     S.rotta = snella(r); S.prog = 0; S.calcolo = Date.now(); fuori = 0; giaDetto = {}; avanza.salto = 0;
@@ -700,7 +764,8 @@
     const st = $('strati');
     st.style.bottom = alto ? 'auto' : (h + 72) + 'px';
     st.style.top = alto ? (Math.round(T.getBoundingClientRect().bottom) + 8) + 'px' : '';
-    $('invio').style.bottom = (h + 72) + 'px'; $('toast').style.bottom = (alto ? h + 12 : h + 74) + 'px';
+    st.style.maxHeight = (alto ? window.innerHeight - Math.round(T.getBoundingClientRect().bottom) - 20 : window.innerHeight - h - 72 - 16 - (guidaOn ? Math.round(gu.getBoundingClientRect().bottom) : 0)) + 'px';
+    $('invio').style.bottom = (h + 72) + 'px'; if (!document.querySelector('.foglio.aperto')) $('toast').style.bottom = (alto ? h + 12 : h + 74) + 'px';
   }
   function aggiornaAvatar() {
     const n = ((cfg.profilo && cfg.profilo.nome) || '').trim(), b = $('tProfilo');
@@ -797,7 +862,7 @@
 
   // ---------- GPS ----------
   let posizione = null, ultimaCopertura = null, bufferTraccia = LS.get('buffer_traccia', []), ultimoPunto = null;
-  const io = L.marker([0, 0], { icon: L.divIcon({ className: '', html: '<div class="io-box"><svg class="io-dir" viewBox="0 0 60 60" aria-hidden="true"><path d="M30 2 41 22a13 13 0 0 0-22 0z" fill="#1d5fd1" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg><div class="io"></div></div>', iconSize: [60, 60], iconAnchor: [30, 30] }), interactive: false, zIndexOffset: 1000 });
+  const io = L.marker([0, 0], { icon: L.divIcon({ className: '', html: `<div class="io-box"><svg class="io-dir" viewBox="0 0 60 60" aria-hidden="true"><path d="M30 2 41 22a13 13 0 0 0-22 0z" fill="${C.blu}" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg><div class="io"></div></div>`, iconSize: [60, 60], iconAnchor: [30, 30] }), interactive: false, zIndexOffset: 1000 });
   // direzione di marcia: dalla bussola del GPS se c'è, altrimenti dagli ultimi spostamenti
   let rotta0 = null, direzione = null;
   function aggiornaDirezione(p, lat, lng) {
@@ -849,7 +914,7 @@
     if (S.fase === 'cammino') avanza(pt);
   }
   if (navigator.geolocation) navigator.geolocation.watchPosition(suPosizione, e => { if (e.code === 1) toast('Serve il permesso della posizione: attivalo per Chrome nelle impostazioni del telefono.', 'errore', 7000); }, { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 });
-  $('tCentra').onclick = () => { segui = true; if (posizione) map.setView([posizione.lat, posizione.lng], Math.max(map.getZoom(), 17)); else toast('Sto cercando la posizione GPS…'); };
+  $('tCentra').onclick = () => { segui = true; if (posizione) map.setView([posizione.lat, posizione.lng], Math.max(map.getZoom(), 17)); else toast('Cerco la posizione GPS', 'attesa', 3000); };
   const aspettaGPS = (ms = 20000) => new Promise(ok => { if (posizione) return ok(pos4()); const t0 = Date.now(), i = setInterval(() => { if (posizione || Date.now() - t0 > ms) { clearInterval(i); ok(pos4()); } }, 400); });
 
   async function tieniAcceso() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible') await navigator.wakeLock.request('screen'); } catch (e) { } }
@@ -864,14 +929,14 @@
   setInterval(() => { if (S.fase === 'cammino') sincronizzaCopertura(true); }, 10 * 60000);
 
   // ---------- fogli ----------
-  function apri(id) { $(id).classList.add('aperto'); }
+  function apri(id) { $(id).classList.add('aperto'); if ($('toast').classList.contains('visibile')) { const p = $(id).querySelector('.foglio-piede'); $('toast').style.bottom = `calc(env(safe-area-inset-bottom) + ${(p ? p.offsetHeight : 0) + 12}px)`; } }
   function chiudi(id) { $(id).classList.remove('aperto'); }
-  document.querySelectorAll('[data-chiudi]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-chiudi]').forEach(b => b.onclick = async () => {
     const f = b.closest('.foglio');
-    if (f.id === 'fCasa' && casaModificata() && !confirm('Vuoi uscire senza salvare questa casa?')) return;
+    if (f.id === 'fCasa' && casaModificata() && !(await dialogo({ titolo: 'Uscire senza salvare?', testo: 'Foto, nota vocale e dati di questa casa andranno persi.', ok: 'Esci senza salvare', annulla: 'Resta', pericolo: true, icona: ICO.attenzione }))) return;
     if (f.id === 'fCasa') fermaRegistrazione(true);
     if (f.id === 'fScheda') fermaAudioScheda();
-    f.classList.remove('aperto');
+    f.classList.remove('aperto'); togliToast();
   });
 
   // ---------- case ----------
@@ -912,44 +977,50 @@
   function apriCase() { disegnaLista(); apri('fCase'); }
   $('tCase').onclick = apriCase;
   const casePerComune = () => [...case_.values()].filter(h => h.comune === cfg.comune).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  const versioneHTML = () => `<p class="versione">${LOGO}Zona · versione ${VERSIONE}</p>`;
+  const VUOTO = (ico, titolo, testo) => `<div class="vuoto"><div class="vuoto-ico">${ico}</div><b>${esc(titolo)}</b>${esc(testo)}</div>`;
   function disegnaLista() {
-    const tutte = filtro === '__richiamo' ? daRichiamare() : casePerComune();
+    const qui = casePerComune(), rich = daRichiamare(), tutte = filtro === '__richiamo' ? rich : qui;
     $('tfCase').textContent = 'Le mie case' + (cfg.comune ? ' a ' + cfg.comune : '');
     const f = $('filtri'); f.innerHTML = '';
-    const nRich = daRichiamare().length;
-    if (nRich) { const b = document.createElement('button'); b.className = 'scelta senza-icona'; b.setAttribute('aria-pressed', filtro === '__richiamo'); b.textContent = 'Da richiamare (' + nRich + ')'; b.onclick = () => { filtro = '__richiamo'; disegnaLista(); }; f.appendChild(b); }
+    if (rich.length) { const b = document.createElement('button'); b.className = 'scelta senza-icona'; b.setAttribute('aria-pressed', filtro === '__richiamo'); b.textContent = 'Da richiamare · ' + rich.length; b.onclick = () => { filtro = '__richiamo'; disegnaLista(); }; f.appendChild(b); }
     else if (filtro === '__richiamo') filtro = '';
-    [{ k: '', n: 'Tutte' }, ...STATI.map(s => ({ k: s.k, n: s.k }))].forEach(o => {
-      const n = o.k ? casePerComune().filter(h => h.stato === o.k).length : casePerComune().length; if (o.k && !n) return;
+    const perStato = new Map(); qui.forEach(h => perStato.set(h.stato, (perStato.get(h.stato) || 0) + 1));
+    if (qui.length) [{ k: '', n: 'Tutte' }, ...STATI.map(s => ({ k: s.k, n: s.k }))].forEach(o => {
+      const n = o.k ? perStato.get(o.k) || 0 : qui.length; if (o.k && !n) return;
       const b = document.createElement('button'); b.className = 'scelta' + (o.k ? '' : ' senza-icona'); b.setAttribute('aria-pressed', filtro === o.k);
-      b.innerHTML = (o.k ? pinSVG(o.k) : '') + esc(o.n) + ' (' + n + ')'; b.onclick = () => { filtro = o.k; disegnaLista(); }; f.appendChild(b);
+      b.innerHTML = (o.k ? pinSVG(o.k) : '') + esc(o.n) + ' · ' + n; b.onclick = () => { filtro = o.k; disegnaLista(); }; f.appendChild(b);
     });
     const l = $('listaCase'), vis = tutte.filter(h => !filtro || filtro === '__richiamo' || h.stato === filtro);
-    l.innerHTML = vis.length ? '' : `<div class="vuoto">${tutte.length ? 'Nessuna casa con questo stato.' : 'Non hai ancora salvato case qui. Mentre cammini, premi "Nuova casa".'}</div>`;
+    $('bEsportaLista').hidden = !qui.length;
+    l.innerHTML = vis.length ? '' : tutte.length ? VUOTO(ICO.casa, 'Nessuna casa con questo stato', 'Scegli un altro filtro qui sopra.') : VUOTO(ICO.casa, 'Ancora nessuna casa qui', 'Durante il giro premi "Nuova casa": indirizzo, foto e nota vocale restano sul telefono.');
+    const frag = document.createDocumentFragment();
     vis.forEach(h => {
       const b = document.createElement('button'); b.className = 'casa-riga';
       const data = h.ts ? new Date(h.ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : '';
       const img = h.mini || fotoDi(h)[0];
-      b.innerHTML = `${pinSVG(h.stato)}<div><b>${esc(h.address || 'Casa senza indirizzo')}</b><span>${esc(h.stato || '')}${h.tipo ? ', ' + esc(h.tipo.toLowerCase()) : ''}${data ? ', ' + data : ''}${h.sync === 'attesa' && conGoogle() ? ', in invio' : ''}${h.richiamo ? ', richiamare ' + new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : ''}</span></div>${img ? `<img src="${img}" alt="">` : ''}`;
+      b.innerHTML = `${pinSVG(h.stato)}<div><b>${esc(h.address || 'Casa senza indirizzo')}</b><span>${esc([h.stato, h.tipo && h.tipo.toLowerCase(), data, h.sync === 'attesa' && conGoogle() ? 'in invio' : '', h.prezzo ? prezzoTesto(h.prezzo) : '', h.richiamo ? 'richiamare ' + new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : ''].filter(Boolean).join(' · '))}</span></div>${img ? `<img src="${img}" alt="" loading="lazy">` : ''}`;
       b.onclick = () => apriScheda(h.id);
-      l.appendChild(b);
+      frag.appendChild(b);
     });
+    l.appendChild(frag);
   }
   $('bEsportaLista').onclick = () => esportaCSV(casePerComune(), cfg.comune);
 
   // scheda di una casa
   let audioScheda = null;
-  const fermaAudioScheda = () => { if (audioScheda) { audioScheda.pause(); audioScheda = null; } };
+  let urlScheda = null;
+  const fermaAudioScheda = () => { if (audioScheda) { audioScheda.pause(); audioScheda = null; } if (urlScheda) { URL.revokeObjectURL(urlScheda); urlScheda = null; } };
   function apriScheda(id) {
     const h = case_.get(id); if (!h) return;
     fermaAudioScheda();
-    const c = $('schedaCorpo'), foto = fotoDi(h);
+    const c = $('schedaCorpo'), foto = fotoDi(h), sueNote = notizieCasa(h);
     const data = h.ts ? new Date(h.ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-    c.innerHTML = `${foto.length ? `<div class="galleria">${foto.map((u, i) => `<img src="${u}" alt="Foto ${i + 1}">`).join('')}</div>` : ''}
+    c.innerHTML = `${foto.length ? `<div class="galleria">${foto.map((u, i) => `<img src="${u}" alt="Foto ${i + 1}" ${i ? 'loading="lazy"' : ''}>`).join('')}</div>` : ''}
       <div class="scheda-ind">${esc(h.address || 'Casa senza indirizzo')}</div>
-      <div class="scheda-sotto">${esc([h.tipo, data, h.comune].filter(Boolean).join(' · '))}</div>
-      <div class="sezione"><h3 class="gruppo" style="margin-top:0">In vendita?<span>${h.annuncioTs ? 'segnato ' + esc(giorniFa(h.annuncioTs)) : ''}</span></h3>
-        ${h.prezzo || h.annuncio || h.agenzia ? `<div class="annuncio"><div><b>${h.prezzo ? esc(prezzoTesto(h.prezzo)) : h.annuncio ? 'Annuncio trovato' : 'Cartello'}</b><span>${esc(h.agenzia || 'Agenzia non segnata')}</span></div>${h.annuncio ? `<a class="tasto piccolo" target="_blank" rel="noopener" href="${esc(/^https?:/i.test(h.annuncio) ? h.annuncio : 'https://' + h.annuncio)}">Apri l'annuncio</a>` : ''}</div>` : '<p class="aiuto" style="margin-top:0">Non ancora controllato. Cerca l\'indirizzo sui portali:</p>'}
+      <div class="scheda-sotto">${statoPill(h.stato)}<span>${esc([h.tipo, data, h.comune].filter(Boolean).join(' · '))}</span></div>
+      <div class="sezione"><h3 class="gruppo" style="margin-top:0">È già in vendita?<span>${h.annuncioTs ? 'segnato ' + esc(giorniFa(h.annuncioTs)) : ''}</span></h3>
+        ${h.prezzo || h.annuncio || h.agenzia ? `<div class="annuncio"><div><b>${h.prezzo ? esc(prezzoTesto(h.prezzo)) : h.annuncio ? 'Annuncio trovato' : 'Cartello'}</b><span>${esc(h.agenzia || 'Agenzia non segnata')}</span></div>${h.annuncio ? `<a class="tasto piccolo" target="_blank" rel="noopener" href="${esc(/^https?:/i.test(h.annuncio) ? h.annuncio : 'https://' + h.annuncio)}">Apri l'annuncio</a>` : ''}</div>` : '<p class="aiuto" style="margin:0 0 8px">Non ancora controllato. Cerca l\'indirizzo sui portali:</p>'}
         <div class="portali">${portaliHTML(h.address, h.comune)}</div>
         ${h.remota ? '' : `<button class="link" id="sAnnApri">${h.prezzo || h.annuncio ? 'Cambia prezzo o annuncio' : 'Segna agenzia, prezzo e annuncio'}</button>
         <div id="sAnnForm" hidden><label class="campo" for="sAnnAg">Agenzia</label><input class="campo" id="sAnnAg" list="listaAgenzie" value="${esc(h.agenzia || '')}" autocomplete="off">
@@ -958,11 +1029,11 @@
           <button class="tasto verde piccolo" id="sAnnSalva">${ICO.ok}Salva</button></div>`}
       </div>
       <div class="sezione"><h3 class="gruppo">Dati della casa<span>fonti pubbliche</span></h3><div id="sDati"></div></div>
-      ${notizieCasa(h).length ? `<div class="sezione"><h3>Notizie su questa casa</h3>${notizieCasa(h).map(n => `<button class="nota-riga" data-nota="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 120))}</b><span>${esc([n.chi, dataBreve(n.ts), n.stato].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
-      ${h.remota && (h.photos || []).length ? `<p><a class="link" target="_blank" rel="noopener" href="${esc(h.photos[0])}">Apri le foto</a></p>` : ''}
+      ${sueNote.length ? `<div class="sezione"><h3>Notizie su questa casa</h3>${sueNote.map(n => `<button class="nota-riga" data-nota="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 120))}</b><span>${esc([n.chi, dataBreve(n.ts), n.stato].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
+      ${h.remota && (h.photos || []).length ? `<a class="tasto piccolo" target="_blank" rel="noopener" href="${esc(h.photos[0])}">${ICO.foto}Apri le foto</a>` : ''}
       ${h.telefono ? `<a class="tasto verde" href="tel:${esc(h.telefono.replace(/[^\d+]/g, ''))}">${ICO.telefono}Chiama ${esc(h.telefono)}</a>` : ''}
       ${h.richiamo ? `<div class="vicina" style="margin-top:12px"><span>Da richiamare <b>${esc(dataTesto(h.richiamo))}</b></span><button class="tasto ocra" id="sRichiamato">Fatto</button></div>
-        <a class="tasto piccolo" target="_blank" rel="noopener" href="${calendario(h)}">Metti il promemoria nel calendario</a>` : ''}
+        <a class="tasto piccolo" target="_blank" rel="noopener" href="${calendario(h)}">${ICO.lista}Metti il promemoria nel calendario</a>` : ''}
       ${h.audio ? `<div class="sezione"><h3>Nota vocale</h3><div class="voce"><div class="ascolta" style="flex:1"><button class="play" id="sPlay" aria-label="Ascolta">${ICO.play}</button><div class="barra-audio"><div id="sBarra"></div></div></div></div></div>` : ''}
       ${h.note ? `<div class="sezione"><h3>Note</h3><p style="white-space:pre-wrap;margin:0">${esc(h.note)}</p></div>` : ''}
       <div class="sezione"><h3>Stato</h3><div class="scelte griglia" id="sStati"></div></div>
@@ -975,7 +1046,7 @@
     const sc = $('sStati');
     STATI.forEach(s => { const b = document.createElement('button'); b.className = 'scelta'; b.setAttribute('aria-pressed', h.stato === s.k); b.innerHTML = pinSVG(s.k) + esc(s.k); b.onclick = () => cambiaStato(h, s.k); sc.appendChild(b); });
     if (h.audio) {
-      const src = h.audio instanceof Blob ? URL.createObjectURL(h.audio) : h.audio;
+      const src = h.audio instanceof Blob ? (urlScheda = URL.createObjectURL(h.audio)) : h.audio;
       if (typeof src === 'string' && !/^blob:/.test(src) && !/\.(webm|mp4|m4a|ogg|mp3)(\?|$)/i.test(src)) { $('sPlay').onclick = () => window.open(src, '_blank'); }
       else {
         const a = new Audio(src);
@@ -999,9 +1070,9 @@
     if ($('sRichiamato')) $('sRichiamato').onclick = async () => { h.richiamo = ''; await DB.put('case', h); toast('Promemoria tolto', 'ok'); apriScheda(h.id); pannello(); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
     if (!h.remota) {
       $('sModifica').onclick = () => { chiudi('fScheda'); apriNuovaCasa(h); };
-      $('sElimina').onclick = async () => { if (!confirm('Eliminare questa casa dal telefono?' + (h.sync === 'ok' ? ' Nel foglio Google resta.' : ''))) return; await DB.del('case', h.id); case_.delete(h.id); if (marcatori.has(h.id)) lCase.removeLayer(marcatori.get(h.id)); marcatori.delete(h.id); contaCase(); chiudi('fScheda'); toast('Casa eliminata'); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
+      $('sElimina').onclick = async () => { if (!(await dialogo({ titolo: 'Eliminare questa casa?', testo: (h.address || 'La casa') + ' sparisce dal telefono, con foto e nota vocale.' + (h.sync === 'ok' ? ' Nel foglio Google resta.' : ''), ok: 'Elimina', pericolo: true }))) return; await DB.del('case', h.id); case_.delete(h.id); if (marcatori.has(h.id)) lCase.removeLayer(marcatori.get(h.id)); marcatori.delete(h.id); contaCase(); fermaAudioScheda(); chiudi('fScheda'); toast('Casa eliminata', 'ok'); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
     }
-    $('tfScheda').textContent = h.stato || 'Casa';
+    $('tfScheda').textContent = h.tipo || 'Scheda della casa';
     schedaAperta = h.id; disegnaDati(h);
     apri('fScheda');
     cercaDati(h);
@@ -1157,12 +1228,13 @@
     const cat = h.catMan && (h.catMan.foglio || h.catMan.particella) ? Object.assign({}, d.catasto || {}, h.catMan, { manuale: true }) : d.catasto;
     const rendita = +h.rendita || 0, sup = +h.superficie || +h.superficieDa || 0, omiMin = +h.omiMin || 0, omiMax = +h.omiMax || 0;
     const riga = (k, v, fonte) => `<div class="dato"><span>${k}</span><b>${v}</b>${fonte ? `<small>${fonte}</small>` : ''}</div>`;
+    const sk = n => `<div aria-busy="true">${Array.from({ length: n }, (_, i) => `<div class="sk-riga"><span class="sk" style="width:${[38, 30, 44][i % 3]}%"></span><span class="sk" style="width:${[30, 22, 18][i % 3]}%"></span></div>`).join('')}</div>`;
     let html = '';
     // catasto
     html += `<div class="dati-gruppo"><h4>${ICO.mappa}Catasto</h4>` +
       (cat && (cat.foglio || cat.particella) ? riga('Foglio e particella', `${cat.foglio ? 'Foglio ' + esc(cat.foglio) + (cat.allegato ? ' all. ' + esc(cat.allegato) : '') : ''}${cat.particella ? (cat.foglio ? ' · ' : '') + 'Particella ' + esc(cat.particella) : ''}${h.sub ? ' · Sub ' + esc(h.sub) : ''}`, cat.manuale ? 'scritti da te' : 'mappa catastale, Agenzia delle Entrate' + (cat.codice ? ' · comune ' + esc(cat.codice) : '')) :
-        carica ? '<p class="aiuto">Cerco la particella sulla mappa catastale…</p>' : `<p class="aiuto">${d.catastoErr ? 'Mappa catastale non raggiungibile adesso (' + esc(d.catastoErr) + ').' : 'Particella non ancora cercata.'} Puoi vederla sulla mappa: strati → "Mappa catastale".</p>`) +
-      (h.categoria || rendita ? riga('Categoria e rendita', `${esc(h.categoria || '—')}${rendita ? ' · rendita ' + euro(rendita).replace('€ ', '€ ') : ''}`, 'dalla visura') : '') +
+        carica ? sk(1) : `<p class="aiuto">${d.catastoErr ? 'Mappa catastale non raggiungibile adesso (' + esc(d.catastoErr) + ').' : 'Particella non ancora cercata.'} Puoi vederla sulla mappa: strati → "Mappa catastale".</p>`) +
+      (h.categoria || rendita ? riga('Categoria e rendita', `${esc(h.categoria || '—')}${rendita ? ' · rendita ' + euro(rendita) : ''}`, 'dalla visura') : '') +
       (rendita ? (cf.abitativa ? riga('Valore catastale', `${euro(rendita * 1.05 * 110)} prima casa<br>${euro(rendita * 1.05 * 120)} altre abitazioni`, 'rendita × 1,05 × 110 / 120 (imposta di registro)') : riga('Valore catastale', euro(rendita * 1.05 * cf.registro), 'rendita × 1,05 × ' + String(cf.registro).replace('.', ',')))
         + (cf.imu ? riga('Base imponibile IMU', euro(rendita * 1.05 * cf.imu), 'rendita × 1,05 × ' + cf.imu) : '') : '') +
       `<div class="dati-link"><a target="_blank" rel="noopener" href="${LINK_VISURA}">Visura catastale</a><a target="_blank" rel="noopener" href="${LINK_GEOPORTALE}">Geoportale catastale</a></div></div>`;
@@ -1170,12 +1242,12 @@
     const o = d.osm;
     html += `<div class="dati-gruppo"><h4>${ICO.casa}Edificio</h4>` +
       (o && (o.tipo || o.piani || o.anno || o.alloggi) ? [o.tipo ? riga('Tipo', esc(o.tipo)) : '', o.piani ? riga('Piani fuori terra', esc(o.piani)) : '', o.alloggi ? riga('Appartamenti', esc(o.alloggi)) : '', o.anno ? riga('Costruito', esc(o.anno)) : ''].join('') + '<small class="fonte">OpenStreetMap</small>' :
-        carica ? '<p class="aiuto">Cerco l\'edificio…</p>' : `<p class="aiuto">${d.osmErr ? 'OpenStreetMap non raggiungibile adesso.' : o === null ? 'Su OpenStreetMap non ci sono dettagli di questo edificio.' : 'Non ancora cercato.'}</p>`) + '</div>';
+        carica ? sk(3) : `<p class="aiuto">${d.osmErr ? 'OpenStreetMap non raggiungibile adesso.' : o === null ? 'Su OpenStreetMap non ci sono dettagli di questo edificio.' : 'Non ancora cercato.'}</p>`) + '</div>';
     // certificati energetici
     const a = d.ape;
     html += `<div class="dati-gruppo"><h4>${svg('<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>')}Certificati energetici (APE)</h4>` +
       (a && a.righe.length ? a.righe.map(r => `<div class="ape"><div>${pillClasse(r.classe)}</div><div><b>${esc(r.indirizzo)}${r.piano ? ' · piano ' + esc(r.piano) : ''}${r.interno ? ' · int. ' + esc(r.interno) : ''}</b><span>${[r.anno ? 'costruito ' + esc(r.anno) : '', r.sup ? Math.round(r.sup) + ' m² riscaldati' : '', r.ep ? Math.round(r.ep) + ' kWh/m² anno' : '', r.data ? 'APE del ' + esc(new Date(r.data + 'T12:00').toLocaleDateString('it-IT', { month: 'short', year: 'numeric' })) : ''].filter(Boolean).join(' · ')}${r.stessaParticella ? ' · <b>stessa particella</b>' : ''}</span></div></div>`).join('') + '<small class="fonte">Regione Lombardia, open data CENED+2</small>' :
-        carica ? '<p class="aiuto">Cerco i certificati energetici…</p>' :
+        carica ? `<div class="ape" aria-busy="true"><span class="sk" style="width:40px;height:30px;border-radius:6px"></span><div style="flex:1"><span class="sk media"></span><span class="sk corta"></span></div></div>` :
         a ? `<p class="aiuto">${a.civico ? 'Nessun certificato per il numero ' + esc(a.civico) + '. ' : 'Aggiungi il numero civico all\'indirizzo per trovare il certificato. '}${a.altre ? a.altre + (a.altre >= 60 ? '+' : '') + ' certificati in via ' + esc(a.via) + '.' : ''}</p>` :
         `<p class="aiuto">${d.apeErr ? 'Archivio dei certificati non raggiungibile adesso. Per ora c\'è solo quello della Lombardia.' : 'Non ancora cercati.'}</p>`) + '</div>';
     // valore di mercato indicativo
@@ -1183,14 +1255,15 @@
       (sup && omiMin && omiMax ? riga('Con le quotazioni OMI', `${euro(sup * omiMin)} – ${euro(sup * omiMax)}`, `${Math.round(sup)} m² × ${omiMin.toLocaleString('it-IT')}–${omiMax.toLocaleString('it-IT')} €/m²`) + (h.prezzo ? riga('Prezzo richiesto', `${esc(prezzoTesto(h.prezzo))} · ${Math.round(h.prezzo / sup).toLocaleString('it-IT')} €/m²`, h.prezzo > sup * omiMax ? 'sopra le quotazioni OMI' : h.prezzo < sup * omiMin ? 'sotto le quotazioni OMI' : 'dentro le quotazioni OMI') : '') :
         `<p class="aiuto">${sup ? 'Superficie ' + Math.round(sup) + ' m²' + (h.superficie ? '' : ' (dal certificato energetico)') + '. ' : ''}Scrivi le quotazioni OMI della zona (min e max €/m²) per avere una forchetta.</p>`) +
       `<div class="dati-link"><a target="_blank" rel="noopener" href="${LINK_OMI}">Quotazioni OMI</a></div></div>`;
-    html += `<button class="link" id="sDatiApri">${h.categoria || rendita || h.omiMin ? 'Cambia rendita, categoria, OMI' : 'Scrivi rendita, categoria, superficie, OMI'}</button>
+    html += `<div class="dati-azioni"><button class="link" id="sDatiApri">${ICO.matita}${h.categoria || rendita || h.omiMin ? 'Cambia rendita e OMI' : 'Scrivi rendita, superficie, OMI'}</button><button class="link" id="sDatiAggiorna" ${carica ? 'disabled' : ''}>${carica ? SPIN + 'Cerco i dati' : ICO.rifai + (d.ts ? 'Cerca di nuovo' : 'Cerca i dati')}</button></div>
+      ${d.ts && !carica ? `<p class="aiuto" style="margin-top:0">Ultimo controllo ${esc(giorniFa(d.ts))}.</p>` : ''}
       <div id="sDatiForm" hidden>
         <div class="riga" style="gap:10px"><div><label class="campo" for="dCat">Categoria</label><select class="campo" id="dCat"><option value="">—</option>${CATEGORIE.map(c => `<option${h.categoria === c ? ' selected' : ''}>${c}</option>`).join('')}</select></div><div><label class="campo" for="dRend">Rendita (€)</label><input class="campo" id="dRend" inputmode="decimal" value="${h.rendita ? esc(String(h.rendita).replace('.', ',')) : ''}" placeholder="dalla visura"></div></div>
         <div class="riga" style="gap:10px"><div><label class="campo" for="dFoglio">Foglio</label><input class="campo" id="dFoglio" inputmode="numeric" value="${esc((h.catMan && h.catMan.foglio) || '')}" placeholder="${esc((d.catasto && d.catasto.foglio) || '')}"></div><div><label class="campo" for="dPart">Particella</label><input class="campo" id="dPart" value="${esc((h.catMan && h.catMan.particella) || '')}" placeholder="${esc((d.catasto && d.catasto.particella) || '')}"></div><div><label class="campo" for="dSub">Sub</label><input class="campo" id="dSub" inputmode="numeric" value="${esc(h.sub || '')}"></div></div>
         <label class="campo" for="dSup">Superficie (m²)</label><input class="campo" id="dSup" inputmode="decimal" value="${h.superficie ? esc(String(h.superficie)) : ''}" placeholder="${h.superficieDa ? Math.round(h.superficieDa) + ' dal certificato' : ''}">
         <div class="riga" style="gap:10px"><div><label class="campo" for="dOmiMin">OMI min €/m²</label><input class="campo" id="dOmiMin" inputmode="numeric" value="${h.omiMin || ''}"></div><div><label class="campo" for="dOmiMax">OMI max €/m²</label><input class="campo" id="dOmiMax" inputmode="numeric" value="${h.omiMax || ''}"></div></div>
         <button class="tasto verde piccolo" id="dSalva">${ICO.ok}Salva</button></div>
-      <button class="link" id="sDatiAggiorna" ${carica ? 'disabled' : ''}>${carica ? 'Cerco…' : d.ts ? 'Cerca di nuovo (ultimo controllo ' + esc(giorniFa(d.ts)) + ')' : 'Cerca i dati della casa'}</button>`;
+`;
     box.innerHTML = html;
     const num = v => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return isFinite(n) && n > 0 ? n : ''; };
     $('sDatiApri').onclick = () => { $('sDatiForm').hidden = !$('sDatiForm').hidden; };
@@ -1266,15 +1339,19 @@
     $('apriVicina').onclick = () => { nc = null; chiudi('fCasa'); apriScheda(b.id); };
   }
   async function cercaIndirizzo() {
-    const t = $('indirizzo'), a = $('aiutoIndirizzo');
-    t.value = ''; t.placeholder = 'Cerco l\'indirizzo…';
-    if (!nc.pos) { t.placeholder = 'Scrivi l\'indirizzo'; a.textContent = 'Il GPS non è ancora pronto: scrivi l\'indirizzo a mano.'; return; }
+    const t = $('indirizzo'), a = $('aiutoIndirizzo'), box = t.parentNode, fine = () => box.classList.remove('cerco');
+    t.value = ''; t.placeholder = 'Scrivi l\'indirizzo';
+    if (!nc.pos) { a.textContent = 'Il GPS non è ancora pronto: scrivi l\'indirizzo a mano.'; return; }
+    box.classList.add('cerco'); a.textContent = '';
+    try { await cercaIndirizzoDa(t, a); } finally { fine(); }
+  }
+  async function cercaIndirizzoDa(t, a) {
     a.textContent = `Trovato con il GPS (precisione ${Math.round(nc.pos.acc)} m): controlla il numero civico.`;
     const offline = () => { if (!G) return false; const s = Planner.indirizzoVicino(G, nc.pos.lat, nc.pos.lng); if (!s.via) return false; t.value = s.via + (s.paese ? ', ' + s.paese : ''); allarga(); if (!s.esatto) a.textContent = 'Via trovata con il GPS: aggiungi il numero civico se lo vedi.'; return true; };
     if (conGoogle()) {
-      try { const r = await api('geocode', { lat: nc.pos.lat, lng: nc.pos.lng }); const s = accorcia(r.address || ''); if (s.via) { t.value = s.via + (s.paese ? ', ' + s.paese : ''); allarga(); if (!r.exact) a.textContent = 'Numero civico non trovato: aggiungilo tu se lo vedi.'; return; } } catch (e) { }
+      try { const r = await api('geocode', { lat: nc.pos.lat, lng: nc.pos.lng }); if (!nc || !nc.pos) return; const s = accorcia(r.address || ''); if (s.via) { t.value = s.via + (s.paese ? ', ' + s.paese : ''); allarga(); if (!r.exact) a.textContent = 'Numero civico non trovato: aggiungilo tu se lo vedi.'; return; } } catch (e) { }
     }
-    if (!offline()) { t.placeholder = 'Scrivi l\'indirizzo'; a.textContent = 'Non trovo l\'indirizzo: scrivilo a mano.'; }
+    if (!offline()) a.textContent = 'Non trovo l\'indirizzo: scrivilo a mano.';
   }
   function accorcia(addr) {
     const parti = addr.split(',').map(s => s.trim());
@@ -1308,7 +1385,7 @@
   function disegnaVoce() {
     const v = $('voce');
     if (rec) {
-      v.innerHTML = `<div class="voce"><button class="mic rec" id="bMic" aria-label="Ferma la registrazione">${ICO.stop}</button><div class="voce-testi"><div class="voce-titolo" id="tempoRec">Registro… 0:00</div><div class="livelli" id="livelli">${'<i></i>'.repeat(18)}</div><div class="voce-sotto">Tocca il quadrato rosso per fermare.</div></div></div>`;
+      v.innerHTML = `<div class="voce"><button class="mic rec" id="bMic" aria-label="Ferma la registrazione">${ICO.stop}</button><div class="voce-testi"><div class="voce-titolo" id="tempoRec">Registro · 0:00</div><div class="livelli" id="livelli">${'<i></i>'.repeat(18)}</div><div class="voce-sotto">Tocca il quadrato per fermare</div></div></div>`;
       $('bMic').onclick = () => fermaRegistrazione(false);
       return;
     }
@@ -1316,7 +1393,8 @@
       const durata = nc.audioSec || 0;
       v.innerHTML = `<div class="voce" style="display:block"><div class="ascolta"><button class="play" id="bPlay" aria-label="Ascolta">${ICO.play}</button><div class="voce-testi"><div class="voce-titolo">Nota registrata</div><div class="barra-audio"><div id="barraAudio"></div></div><div class="voce-sotto" id="tempoAudio">${durata ? Math.floor(durata / 60) + ':' + String(durata % 60).padStart(2, '0') : ''}</div></div></div>
         <div class="voce-azioni"><button class="tasto piccolo" id="bRifai">${ICO.rifai}Rifai</button><button class="tasto piccolo" id="bElimina">${ICO.cestino}Elimina</button></div></div>`;
-      const a = new Audio(nc.audio instanceof Blob ? URL.createObjectURL(nc.audio) : nc.audio);
+      if (disegnaVoce.url) URL.revokeObjectURL(disegnaVoce.url); disegnaVoce.url = nc.audio instanceof Blob ? URL.createObjectURL(nc.audio) : '';
+      const a = new Audio(disegnaVoce.url || nc.audio);
       a.ontimeupdate = () => { const d = isFinite(a.duration) ? a.duration : durata; $('barraAudio').style.width = (100 * a.currentTime / (d || 1)) + '%'; };
       a.onended = () => { $('bPlay').innerHTML = ICO.play; $('barraAudio').style.width = '0'; };
       $('bPlay').onclick = () => { if (a.paused) { a.play(); $('bPlay').innerHTML = ICO.pausa; } else { a.pause(); $('bPlay').innerHTML = ICO.play; } };
@@ -1324,7 +1402,7 @@
       $('bElimina').onclick = () => { a.pause(); nc.audio = null; disegnaVoce(); };
       return;
     }
-    v.innerHTML = `<div class="voce"><button class="mic" id="bMic" aria-label="Registra una nota vocale">${ICO.mic}</button><div class="voce-testi"><div class="voce-titolo">Tocca e parla</div><div class="voce-sotto">Racconta cosa vedi: stato della casa, cartello, agenzia.</div></div></div>`;
+    v.innerHTML = `<div class="voce"><button class="mic" id="bMic" aria-label="Registra una nota vocale">${ICO.mic}</button><div class="voce-testi"><div class="voce-titolo">Tocca e parla</div><div class="voce-sotto">Racconta cosa vedi: stato della casa, cartello, agenzia</div></div></div>`;
     $('bMic').onclick = iniziaRegistrazione;
   }
   async function iniziaRegistrazione() {
@@ -1359,7 +1437,7 @@
     const tick = setInterval(() => {
       if (!rec || rec.mr !== mr) { clearInterval(tick); return; }
       const s = Math.round((Date.now() - rec.t0) / 1000), el = $('tempoRec');
-      if (el) el.textContent = `Registro… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      if (el) el.textContent = `Registro · ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
       if (s >= 180) { fermaRegistrazione(false); toast('Nota fermata dopo 3 minuti.'); }
     }, 250);
   }
@@ -1401,7 +1479,7 @@
   // invio al foglio Google (se collegato)
   let invioInCorso = false;
   const b64 = blob => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = ko; r.readAsDataURL(blob); });
-  function statoInvio() { const n = conGoogle() ? [...case_.values()].filter(h => h.sync === 'attesa').length : 0; const el = $('invio'); el.style.display = n ? 'block' : 'none'; el.textContent = n === 1 ? '1 casa in invio…' : n + ' case in invio…'; }
+  function statoInvio() { const n = conGoogle() ? [...case_.values()].filter(h => h.sync === 'attesa').length : 0; const el = $('invio'); el.style.display = n ? 'flex' : 'none'; el.innerHTML = SPIN + (n === 1 ? '1 casa da inviare' : n + ' case da inviare'); }
   async function svuotaCoda() {
     statoInvio();
     if (invioInCorso || !conGoogle()) return; invioInCorso = true;
@@ -1421,7 +1499,6 @@
 
   // ---------- backup ----------
   async function salvaBackup() {
-    toast('Preparo il backup…');
     const case2 = [];
     for (const h of await DB.all('case')) case2.push({ ...h, audio: h.audio instanceof Blob ? { b64: await b64(h.audio), mime: h.audio.type } : null });
     const reti = {}, copertura = {};
@@ -1465,22 +1542,24 @@
     const c = $('menuCorpo'), voci = [];
     if (S.fase === 'cammino') {
       voci.push({ i: ICO.rifai, t: 'Ricalcola il percorso da qui', s: 'Con il tempo che ti resta', f: () => { chiudi('fMenu'); ricalcola('mano'); } });
-      if (S.auto) voci.push({ i: ICO.auto, t: 'Riportami alla macchina', s: 'La strada più breve', f: () => { chiudi('fMenu'); const r = Planner.versoPunto(G, visti, pos4() || S.auto, S.auto, cfg.rivedi); if (r && r.km > 0.03) impostaRotta(r); else toast('Sei già alla macchina.'); } });
+      if (S.auto) voci.push({ i: ICO.auto, t: 'Riportami alla macchina', s: 'La strada più breve', f: () => { chiudi('fMenu'); const r = Planner.versoPunto(G, visti, pos4() || S.auto, S.auto, cfg.rivedi); if (r && r.km > 0.03) impostaRotta(r); else toast('Sei già alla macchina.', 'ok'); } });
       voci.push({ i: ICO.ok, t: 'Basta per oggi', s: 'Le strade viste restano segnate', f: () => { chiudi('fMenu'); bastaPerOggi(); } });
     }
     voci.push({ i: ICO.grafico, t: 'Il mio pannello', s: 'Da fare oggi, settimana, zona, uscite', f: apriPannello });
     voci.push({ i: ICO.nota, t: 'Taccuino', s: note.size + ' notizie · ' + persone.size + ' persone della zona', f: () => apriTaccuino() });
     voci.push({ i: ICO.casa, t: 'Le mie case', s: casePerComune().length + ' a ' + (cfg.comune || '—'), f: () => { chiudi('fMenu'); apriCase(); } });
     voci.push({ i: ICO.mappa, t: cfg.zonaNome ? 'La mia zona: ' + cfg.zonaNome : 'La mia zona', s: (cfg.comuni.length === 1 ? '1 area' : cfg.comuni.length + ' aree') + ' · cambia o aggiungi', f: () => { chiudi('fMenu'); apriComuni(); } });
-    if (G && (R.isolate || []).length) voci.push({ i: ICO.auto, t: 'Case isolate in macchina', s: (R.isolate.length - Object.keys(S.isolateViste).length) + ' da vedere', f: () => { chiudi('fMenu'); if (S.fase === 'cammino' && !confirm('Interrompo il giro a piedi?')) return; if (S.fase === 'cammino') bastaPerOggi(); S.fase = 'macchina'; salvaStato(); aggiorna(true); } });
-    voci.push({ i: ICO.foglio, t: 'Esporta in Excel', s: 'Case di ' + (cfg.comune || '—') + ' o tutte le notizie', f: () => { if (confirm('Esporto le case di ' + (cfg.comune || 'questa area') + '? (Annulla = esporta le notizie del taccuino)')) esportaCSV(casePerComune(), cfg.comune); else esportaNote(); } });
+    if (G && (R.isolate || []).length) voci.push({ i: ICO.auto, t: 'Case isolate in macchina', s: (R.isolate.length - Object.keys(S.isolateViste).length) + ' da vedere', f: async () => { chiudi('fMenu'); if (S.fase === 'cammino' && !(await chiedi('Interrompere il giro a piedi?', 'Le strade viste restano segnate. Poi ti guido tra le case isolate.', 'Interrompi'))) return; if (S.fase === 'cammino') bastaPerOggi(); S.fase = 'macchina'; salvaStato(); aggiorna(true); } });
+    voci.push({ i: ICO.esporta, t: 'Esporta in Excel', s: 'Case di un\'area, di tutta la zona o le notizie', f: async () => { const v = await dialogo({ titolo: 'Cosa vuoi esportare?', testo: 'Un file che si apre con Excel o Fogli Google.', icona: ICO.esporta, scelte: [{ t: 'Le case di ' + (cfg.comune || 'questa area'), v: 'case', primario: true }, { t: 'Le case di tutta la zona', v: 'tutte' }, { t: 'Le notizie del taccuino', v: 'note' }] }); if (v === 'case') esportaCSV(casePerComune(), cfg.comune); else if (v === 'tutte') esportaCSV([...case_.values()].filter(h => cfg.comuni.includes(h.comune)).sort((a, b) => (b.ts || 0) - (a.ts || 0)), cfg.zonaNome || 'zona'); else if (v === 'note') esportaNote(); } });
     if (conGoogle()) voci.push({ i: ICO.foglio, t: 'Apri il foglio Google', s: 'Tutte le case nel foglio condiviso', f: () => { const u = LS.get('sheetUrl', ''); if (u) window.open(u, '_blank'); else toast('Prova prima il collegamento nelle impostazioni.', 'errore'); } });
+    voci.push(null);
     voci.push({ i: ICO.persona, t: 'Profilo' + (nomeAgente() ? ': ' + nomeAgente() : ''), s: 'Dati, obiettivi, PIN, altri agenti', f: apriProfilo });
     voci.push({ i: ICO.ingranaggio, t: 'Impostazioni', s: 'Ripasso delle strade, avvisi, backup, Google', f: () => { chiudi('fMenu'); apriImpost(); } });
     voci.push({ i: ICO.aiuto, t: 'Tutorial', s: 'Dove sono le cose, in un minuto', f: () => { chiudi('fMenu'); setTimeout(avviaTutorial, 300); } });
     voci.push({ i: ICO.lista, t: 'Come si usa', s: 'Spiegazione in 2 minuti', f: () => { chiudi('fMenu'); apriAiuto(); } });
     c.innerHTML = '';
-    voci.forEach(v => { const b = document.createElement('button'); b.className = 'voce-menu'; b.innerHTML = `${v.i}<span>${esc(v.t)}<small>${esc(v.s)}</small></span>`; b.onclick = v.f; c.appendChild(b); });
+    voci.forEach(v => { if (!v) { const h = document.createElement('h3'); h.className = 'gruppo'; h.textContent = 'Profilo e aiuto'; c.appendChild(h); return; } const b = document.createElement('button'); b.className = 'voce-menu'; b.innerHTML = `${v.i}<span>${esc(v.t)}<small>${esc(v.s)}</small></span>`; b.onclick = v.f; c.appendChild(b); });
+    c.insertAdjacentHTML('beforeend', versioneHTML());
     apri('fMenu');
   }
   $('tMenu').onclick = apriMenu;
@@ -1492,7 +1571,7 @@
     salvaCfg(); cambiaComune(nome);
   }
   async function cambiaComune(nome) {
-    if (S.fase === 'cammino' && !confirm('Interrompo il giro in corso? Le strade viste restano segnate.')) return;
+    if (S.fase === 'cammino' && !(await chiedi('Interrompere il giro?', 'Per aprire ' + nome + ' chiudo il giro in corso. Le strade viste restano segnate.', 'Interrompi e apri'))) return;
     if (S.fase !== 'home') bastaPerOggi();
     if (G) { aggiornaStatArea(); await DB.put('visti', recVisti(), cfg.comune).catch(() => { }); }
     zonaCache.delete(cfg.comune); zonaCache.delete(nome); vistaZona = false; grigliaZona = null; riservaConfini.clear(); if (map.hasLayer(stratoZona)) map.removeLayer(stratoZona);
@@ -1508,7 +1587,7 @@
     c.innerHTML = `<div class="sezione" style="margin-top:8px"><h3>Ripassare le strade già viste</h3><div class="scelte" id="iRiv">${RIV.map(r => `<button class="scelta senza-icona" data-g="${r.g}" aria-pressed="${cfg.rivedi === r.g}">${r.t}</button>`).join('')}</div><p class="aiuto">Con "Dopo 6 mesi" le strade viste da più di 6 mesi tornano blu, da rivedere.</p></div>
       <div class="sezione"><h3>Mappa di ${esc(cfg.comune || '—')}</h3>
         <button class="tasto" id="iAggiorna" ${cfg.comune ? '' : 'disabled'}>${ICO.rifai}Aggiorna la mappa</button><p class="aiuto">Scarica di nuovo strade e case (nuove costruzioni). Le strade già viste restano segnate.</p>
-        <button class="tasto pericolo" id="iTogli" ${cfg.comune ? '' : 'disabled'}>${ICO.cestino}Togli questo comune dal telefono</button><p class="aiuto">Le case salvate restano.</p><div class="log" id="iLog"></div></div>
+        <div id="iLog"></div><button class="tasto pericolo" id="iTogli" ${cfg.comune ? '' : 'disabled'}>${ICO.cestino}Togli quest'area dal telefono</button><p class="aiuto">Le case salvate restano.</p></div>
       <div class="sezione"><h3>Avvisi</h3><button class="interruttore" id="iNotifiche" role="switch" aria-checked="${notificheOk()}"><span>Notifiche sul telefono<small>Tempo che finisce, giro cambiato, arrivo al parcheggio, case da richiamare</small></span><span class="leva"></span></button>
         <button class="interruttore" id="iVoce" role="switch" aria-checked="${!!cfg.voce}"><span>Indicazioni a voce<small>Il telefono dice dove girare</small></span><span class="leva"></span></button></div>
       <div class="sezione"><h3>Backup</h3><div class="riga"><button class="tasto" id="iBackup">${ICO.salva}Salva backup</button><button class="tasto" id="iRipristina">${ICO.rifai}Ripristina</button></div><p class="aiuto">Un file con tutte le case, le foto, le note e le strade viste. Utile per cambiare telefono.</p></div>
@@ -1516,7 +1595,7 @@
         <label class="campo" for="cfgUrl">Indirizzo dello script (finisce con /exec)</label><input class="campo" type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cfg.url)}">
         <label class="campo" for="cfgKey">Chiave segreta</label><input class="campo" type="password" id="cfgKey" value="${esc(cfg.key)}">
         <button class="tasto primario" id="iSalvaG">Salva e prova il collegamento</button>${conGoogle() ? '<button class="link" id="iScollega">Scollega Google</button>' : ''}</div>
-      <p class="versione">Zona · versione ${VERSIONE}</p>`;
+      ${versioneHTML()}`;
     c.querySelectorAll('#iRiv [data-g]').forEach(b => b.onclick = () => { cfg.rivedi = +b.dataset.g; salvaCfg(); apriImpost(); disegnaRete(); pannello(); });
     $('iAggiorna').onclick = aggiornaMappa;
     $('iNotifiche').onclick = async () => {
@@ -1528,42 +1607,42 @@
     };
     $('iVoce').onclick = () => { cfg.voce = !cfg.voce; salvaCfg(); if (cfg.voce) parla('Indicazioni a voce accese.'); apriImpost(); };
     $('iTogli').onclick = async () => {
-      if (!confirm('Togliere ' + cfg.comune + ' dal telefono? Le strade viste si perdono, le case restano.')) return;
+      if (!(await dialogo({ titolo: 'Togliere ' + cfg.comune + '?', testo: 'La mappa e le strade viste di quest\'area si cancellano dal telefono. Le case salvate restano.', ok: 'Togli', pericolo: true }))) return;
       const n = cfg.comune; await DB.del('reti', n).catch(() => { }); await DB.del('visti', n).catch(() => { }); LS.del('stato4_' + n);
       cfg.comuni = cfg.comuni.filter(x => x !== n); cfg.comune = cfg.comuni[0] || ''; salvaCfg(); chiudi('fImpost'); preparaComune(false);
     };
-    $('iBackup').onclick = salvaBackup;
+    $('iBackup').onclick = () => conAttesa($('iBackup'), salvaBackup);
     $('iRipristina').onclick = () => $('inputBackup').click();
-    $('iSalvaG').onclick = async () => {
+    $('iSalvaG').onclick = () => conAttesa($('iSalvaG'), async () => {
       cfg.url = $('cfgUrl').value.trim(); cfg.key = $('cfgKey').value.trim(); salvaCfg();
       if (!conGoogle()) { toast('Collegamento tolto.', 'ok'); apriImpost(); return; }
-      try { const r = await api('ping'); LS.set('sheetUrl', r.sheet); toast('Collegamento riuscito', 'ok'); [...case_.values()].forEach(h => { if (h.sync === 'locale') { h.sync = 'attesa'; DB.put('case', h); } }); svuotaCoda(); caricaCase(); sincronizzaCopertura(false); }
+      try { const r = await conTempo(api('ping'), 20000); LS.set('sheetUrl', r.sheet); toast('Collegamento riuscito', 'ok'); [...case_.values()].forEach(h => { if (h.sync === 'locale') { h.sync = 'attesa'; DB.put('case', h); } }); svuotaCoda(); caricaCase(); sincronizzaCopertura(false); }
       catch (e) { toast('Collegamento non riuscito: ' + e.message, 'errore', 7000); }
-    };
-    if ($('iScollega')) $('iScollega').onclick = () => { if (!confirm('Scollegare Google? Le case restano sul telefono.')) return; cfg.url = ''; cfg.key = ''; salvaCfg(); apriImpost(); caricaCase(); };
+    });
+    if ($('iScollega')) $('iScollega').onclick = async () => { if (!(await chiedi('Scollegare Google?', 'Le case restano sul telefono; il foglio Google non riceve più le nuove.', 'Scollega'))) return; cfg.url = ''; cfg.key = ''; salvaCfg(); apriImpost(); caricaCase(); };
     apri('fImpost');
   }
   async function aggiornaMappa() {
     if (!G) { chiudi('fImpost'); preparaComune(true); return; }
-    const nome = cfg.comune, Gv = G, vv = visti, el = $('iLog'), b = $('iAggiorna');
-    b.disabled = true;
+    const nome = cfg.comune, Gv = G, vv = visti, el = $('iLog'), b = $('iAggiorna'), prima = b.innerHTML, stato = { log: [] };
+    b.disabled = true; b.innerHTML = SPIN + 'Aggiorno la mappa'; el.innerHTML = fasiHTML(stato);
     try {
-      const r = await Planner.scaricaRete(nome, m => { el.textContent = m; }, cfg.aree[nome]);
+      const r = await Planner.scaricaRete(nome, m => { stato.log.push(m); el.innerHTML = fasiHTML(stato); }, cfg.aree[nome]);
       const Gn = Planner.prepara(r), vn = new Uint16Array(Gn.m), pn = new Uint16Array(Gn.m), fn = new Uint16Array(Gn.m);
       Planner.rimappa(Gv, vv, Gn, vn); Planner.rimappaSegno(Gv, passi, Gn, pn); Planner.rimappaSegno(Gv, volant, Gn, fn);
       await DB.put('reti', r, nome); await DB.put('visti', { id: r.id, v: vn, p: pn, f: fn }, nome);
       if (conGoogle()) api('saveRoutes', { comune: nome + ' (rete v4)', plan: r }).catch(() => { });
-      el.textContent = 'Mappa aggiornata.';
+      el.innerHTML = `<p class="nota-ok">${ICO.ok}<span>Mappa aggiornata</span></p>`;
       if (nome === cfg.comune) { S.rotta = null; if (S.fase === 'cammino') S.fase = 'home'; salvaStato(); attivaRete(r, { id: r.id, v: vn, p: pn, f: fn }); aggiorna(true); sincronizzaCopertura(true); }
-    } catch (e) { el.textContent = 'Non riesco: ' + e.message; }
-    b.disabled = false;
+    } catch (e) { el.innerHTML = `<p class="aiuto pericolo">Non riesco ad aggiornare: ${esc(e.message)}</p>`; }
+    b.disabled = false; b.innerHTML = prima;
   }
 
   function apriAiuto() {
-    $('aiutoCorpo').innerHTML = `<p><b>La tua zona.</b> È il territorio che lavori: uno o più comuni, un quartiere o una zona disegnata sulla mappa. La aggiungi e la cambi da Menu → La mia zona. Con "Tutta la zona" la vedi intera: il bordo scuro è il confine, dentro il verde è la parte già vista e l'ocra quella da vedere.</p>
+    $('aiutoCorpo').innerHTML = `<p><b>La tua zona.</b> È il territorio che lavori: uno o più comuni, un quartiere o una zona disegnata sulla mappa. La aggiungi e la cambi da Menu → La mia zona. Con "Tutta la zona" la vedi intera: il bordo scuro è il confine, dentro il verde è la parte già vista e l'ambra quella da vedere.</p>
       <p><b>Gli strumenti</b> sono nella barra sopra il pannello: le tue case, torna dove sei, legenda e strati, menu. In alto a destra c'è il tuo profilo, con obiettivi, PIN e questo aiuto.</p>
       <p><b>1. Scegli quanto tempo hai.</b> L'app prepara un giro a piedi sulle strade con case che non hai ancora visto, partendo da dove sei. Se sei lontano, ti propone le zone più vicine e ti porta a parcheggiare.</p>
-      <p><b>2. Segui la linea gialla.</b> Le frecce indicano il verso; in alto c'è dove girare. Il pezzo già fatto diventa grigio tratteggiato; la freccia blu sul tuo pallino è la direzione in cui cammini. Se prendi un'altra strada, il giro si aggiorna da solo.</p>
+      <p><b>2. Segui la linea ambra.</b> Le frecce indicano il verso; in alto c'è dove girare. Il pezzo già fatto diventa grigio tratteggiato; la freccia blu sul tuo pallino è la direzione in cui cammini. Se prendi un'altra strada, il giro si aggiorna da solo.</p>
       <p><b>3. Il segno delle strade.</b> Le strade dove passi a piedi restano verde scuro per 3 mesi; poi diventano verde chiaro. Le blu hanno case da vedere. In macchina non si segna niente. Il tasto con i fogli sovrapposti sulla mappa mostra la legenda.</p>
       <p><b>4. Case:</b> "Nuova casa" salva indirizzo, foto, nota vocale, stato, telefono e agenzia. Dalla scheda chiami, condividi su WhatsApp o metti il giorno in cui richiamare.</p>
       <p><b>È già in vendita?</b> Nella scheda della casa i tasti Immobiliare.it, Idealista, Casa.it e "Tutti i siti" cercano quell'indirizzo sui portali. Se trovi l'annuncio, segna agenzia, prezzo e link: restano nella scheda, nell'Excel e nella condivisione. I portali non permettono ad altre app di leggere i loro annunci, per questo il controllo lo fai tu con un tocco.</p>
@@ -1694,7 +1773,7 @@
       else if (tipo === 'nota') apriNota(id);
       else if (tipo === 'persona') apriPersona(id);
       else if (tipo === 'compito' && !apriSolo) { const a = agenda.get(id); if (a) { a.fatto = Date.now(); await DB.put('agenda', a); toast('Fatto', 'ok'); ridisegna(); pannello(); } }
-      else if (tipo === 'compito') { const a = agenda.get(id); if (a) { const t = prompt('Cosa devi fare?', a.testo); if (t != null) { if (!t.trim()) { await DB.del('agenda', id); agenda.delete(id); } else { a.testo = t.trim(); await DB.put('agenda', a); } ridisegna(); pannello(); } } }
+      else if (tipo === 'compito') { const a = agenda.get(id); if (a) { const t = await dialogo({ titolo: 'Cosa devi fare?', testo: 'Lascia vuoto per togliere questa cosa da fare.', campo: { valore: a.testo }, ok: 'Salva' }); if (t != null) { if (!t.trim()) { await DB.del('agenda', id); agenda.delete(id); } else { a.testo = t.trim(); await DB.put('agenda', a); } ridisegna(); pannello(); } } }
     };
     box.querySelectorAll('[data-ag]').forEach(b => b.onclick = () => fai(b.dataset.ag, false));
     box.querySelectorAll('[data-apri]').forEach(b => b.onclick = () => fai(b.dataset.apri, true));
@@ -1718,7 +1797,7 @@
   // ---------- vista di tutta la zona ----------
   async function mostraZona(on) {
     if (on && S.fase !== 'home') { toast('Finisci prima il giro in corso.', 'errore'); return; }
-    if (on) { toast('Apro tutta la zona…', '', 1800); for (const n of cfg.comuni) if (n !== cfg.comune) { try { await apriArea(n); } catch (e) { } } await statTutte(); }
+    if (on) { attesaMappa('Apro tutta la zona'); try { for (const n of cfg.comuni) if (n !== cfg.comune) { try { await apriArea(n); } catch (e) { } } await statTutte(); } finally { attesaMappa(); } }
     vistaZona = on; anteprima = null; zone = null;
     if (!on) { grigliaZona = null; if (map.hasLayer(stratoZona)) map.removeLayer(stratoZona); }
     caricaMarcatori(); disegnaNote(); disegnaRete(); aggiorna(true);
@@ -1736,7 +1815,7 @@
   // ---------- tutta la zona: confine esterno marcato, dentro due colori (già vista / da vedere) ----------
   // Ogni punto della zona prende il colore della strada con case più vicina: verde se vista, ocra se da vedere.
   map.createPane('zonaFondo').style.zIndex = 380;
-  const COL_VISTA = [46, 125, 79], COL_DAFARE = [242, 169, 0], ALFA_ZONA = 0.27;
+  const COL_VISTA = [30, 138, 90], COL_DAFARE = [240, 180, 41], ALFA_ZONA = 0.24;
   const riservaConfini = new Map();   // involucro dei nodi, finché il confine vero non è scaricato
   let grigliaZona = null;
   const reteArea = n => n === cfg.comune && G ? { G, v: visti } : zonaCache.get(n) || null;
@@ -1822,14 +1901,14 @@
         ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = ALFA_ZONA; ctx.drawImage(this._f, 0, 0); ctx.restore();
       }
       // 2. confini tra un'area e l'altra: sottili, tratteggiati
-      if (percorsi.length > 1) { ctx.save(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(23,38,43,.5)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore(); }
+      if (percorsi.length > 1) { ctx.save(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(16,42,67,.45)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore(); }
       // 3. confine esterno di tutta la zona: si tolgono le parti interne, restano solo i bordi verso fuori
       const b = this._b.getContext('2d'); b.setTransform(r, 0, 0, r, 0, 0); b.lineJoin = 'round';
       b.strokeStyle = 'rgba(255,255,255,.95)'; b.lineWidth = 2 * 7.5; percorsi.forEach(p => { anello(b, p); b.stroke(); });
-      b.strokeStyle = '#17262b'; b.lineWidth = 2 * 5; percorsi.forEach(p => { anello(b, p); b.stroke(); });
+      b.strokeStyle = C.brand; b.lineWidth = 2 * 5; percorsi.forEach(p => { anello(b, p); b.stroke(); });
       b.globalCompositeOperation = 'destination-out'; b.fillStyle = '#000'; percorsi.forEach(p => { anello(b, p); b.fill(); }); b.globalCompositeOperation = 'source-over';
       ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(this._b, 0, 0); ctx.restore();
-      ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(23,38,43,.9)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore();
+      ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(16,42,67,.9)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore();
     }
   });
   const stratoZona = new StratoZona();
@@ -1879,9 +1958,9 @@
   function aggiornaDisegno() {
     lDisegno.clearLayers(); if (!disegno) return;
     const pts = disegno.punti;
-    if (pts.length >= 3) L.polygon(pts, { color: '#17262b', weight: 3, fillColor: OCRA, fillOpacity: .2, interactive: false }).addTo(lDisegno);
-    else if (pts.length === 2) L.polyline(pts, { color: '#17262b', weight: 3, interactive: false }).addTo(lDisegno);
-    pts.forEach(p => L.circleMarker(p, { radius: 8, color: '#fff', weight: 3, fillColor: '#17262b', fillOpacity: 1, interactive: false }).addTo(lDisegno));
+    if (pts.length >= 3) L.polygon(pts, { color: C.brand, weight: 3, fillColor: OCRA, fillOpacity: .2, interactive: false }).addTo(lDisegno);
+    else if (pts.length === 2) L.polyline(pts, { color: C.brand, weight: 3, interactive: false }).addTo(lDisegno);
+    pts.forEach(p => L.circleMarker(p, { radius: 8, color: '#fff', weight: 3, fillColor: C.brand, fillOpacity: 1, interactive: false }).addTo(lDisegno));
     $('disegnaTesto').textContent = pts.length < 3 ? `Tocca il confine: ${pts.length} di almeno 3 punti` : `${pts.length} punti · ${Planner.areaKm2(pts).toFixed(1).replace('.', ',')} km²`;
     $('disegnaFatto').disabled = pts.length < 3; $('disegnaTogli').disabled = !pts.length;
   }
@@ -1891,11 +1970,12 @@
     if (!ok || !d) return esci(null);
     const poly = d.punti.map(p => [+p[0].toFixed(6), +p[1].toFixed(6)]), km2 = Planner.areaKm2(poly);
     if (km2 > 30) { toast('Zona troppo grande (' + Math.round(km2) + ' km²): disegnane una più piccola o aggiungi il comune intero.', 'errore', 8000); return esci(null); }
-    let nome = prompt('Come chiami questa zona?', 'Zona ' + (cfg.comuni.length + 1));
-    if (!nome || !nome.trim()) return esci(null);
-    nome = nome.replace(/\s+/g, ' ').trim(); while (cfg.comuni.includes(nome)) nome += ' bis';
-    cfg.aree[nome] = { tipo: 'zona', poly }; salvaCfg();
-    esci(nome);
+    dialogo({ titolo: 'Come chiami questa zona?', testo: Math.max(0.1, km2).toFixed(1).replace('.', ',') + ' km². Per esempio il nome della frazione o delle vie principali.', campo: { valore: 'Zona ' + (cfg.comuni.length + 1) }, ok: 'Salva la zona', icona: ICO.mappa }).then(nome => {
+      if (!nome || !nome.trim()) return esci(null);
+      nome = nome.replace(/\s+/g, ' ').trim(); while (cfg.comuni.includes(nome)) nome += ' bis';
+      cfg.aree[nome] = { tipo: 'zona', poly }; salvaCfg();
+      esci(nome);
+    });
   }
   $('disegnaTogli').onclick = () => { if (disegno) { disegno.punti.pop(); aggiornaDisegno(); } };
   $('disegnaAnnulla').onclick = () => fineDisegno(false);
@@ -1904,30 +1984,30 @@
   // ---------- aggiungere aree: posizione, comune, quartiere ----------
   async function comuneDaPosizione(idLog = 'logQui', fatto) {
     const el = () => $(typeof idLog === 'string' ? idLog : 'logQui');
-    const log = m => { if (el()) el().textContent = m; };
-    log('Cerco la tua posizione…');
+    const log = (m, gira) => { if (el()) el().innerHTML = gira ? `<div class="attesa">${SPIN}${esc(m)}</div>` : esc(m); };
+    log('Cerco la tua posizione', true);
     const p = await aspettaGPS(25000);
     if (!p) { log('Il GPS non trova la posizione: scrivi il nome del comune.'); return; }
-    log('Cerco dove sei…');
+    log('Cerco in quale comune sei', true);
     let a; try { a = await Planner.trovaAree(p.lat, p.lon); } catch (e) { log('Server delle mappe occupati: riprova tra poco o scrivi il nome.'); return; }
     if (!a.comune) { log('Non trovo il comune qui: scrivi il nome.'); return; }
     const fine = fatto || (nome => { chiudi('fComuni'); aggiungiComune(nome); });
     const box = el(); if (!box) return;
-    box.innerHTML = `<p style="margin:10px 0 0;color:var(--ardesia)">Sei a <b>${esc(a.quartiere ? a.quartiere + ', ' : '')}${esc(a.comune)}</b>.</p><button class="tasto primario" id="pcCom">${ICO.piu}Aggiungi tutto ${esc(a.comune)}</button>${a.quartiere ? `<button class="tasto" id="pcQ">Solo il quartiere ${esc(a.quartiere)}</button>` : ''}`;
-    $('pcCom').onclick = () => { if (cfg.comuni.includes(a.comune)) { toast(a.comune + ' è già nella tua zona.'); return; } fine(a.comune); };
+    box.innerHTML = `<p style="margin:10px 0 0;color:var(--testo)">Sei a <b>${esc(a.quartiere ? a.quartiere + ', ' : '')}${esc(a.comune)}</b>.</p><button class="tasto primario" id="pcCom">${ICO.piu}Aggiungi tutto ${esc(a.comune)}</button>${a.quartiere ? `<button class="tasto" id="pcQ">Solo il quartiere ${esc(a.quartiere)}</button>` : ''}`;
+    $('pcCom').onclick = () => { if (cfg.comuni.includes(a.comune)) { toast(a.comune + ' è già nella tua zona.', 'ok'); return; } fine(a.comune); };
     if ($('pcQ')) $('pcQ').onclick = () => prendiQuartiere(a.comune, a.quartiere, box, fine);
   }
   async function prendiQuartiere(citta, q, box, fine) {
-    box.innerHTML = '<p class="log">Scarico il confine di ' + esc(q) + '…</p>';
+    box.innerHTML = `<div class="attesa">${SPIN}Scarico il confine di ${esc(q)}</div>`;
     try {
       const poly = await Planner.confineQuartiere(citta, q), nome = q + ' (' + citta + ')';
-      if (cfg.comuni.includes(nome)) { toast(nome + ' è già nella tua zona.'); box.innerHTML = ''; return; }
+      if (cfg.comuni.includes(nome)) { toast(nome + ' è già nella tua zona.', 'ok'); box.innerHTML = ''; return; }
       cfg.aree[nome] = { tipo: 'quartiere', citta, nome: q, poly }; salvaCfg(); fine(nome);
     } catch (e) { box.innerHTML = '<p class="log">' + esc(e.message) + '</p>'; }
   }
   async function cercaQuartieri(citta, box, fine) {
     if (!citta) { toast('Scrivi prima il nome della città.', 'errore'); return; }
-    box.innerHTML = '<p class="log">Cerco i quartieri di ' + esc(citta) + '…</p>';
+    box.innerHTML = `<div class="attesa">${SPIN}Cerco i quartieri di ${esc(citta)}</div>`;
     let nomi = [];
     try { nomi = await Planner.quartieri(citta); } catch (e) { box.innerHTML = '<p class="log">Server delle mappe occupati: riprova tra poco, oppure disegna la zona sulla mappa.</p>'; return; }
     box.innerHTML = nomi.length ? `<p class="aiuto">Tocca il quartiere che lavori:</p><div class="scelte" style="margin-top:8px">${nomi.slice(0, 120).map((n, i) => `<button class="scelta senza-icona" data-q="${i}">${esc(n)}</button>`).join('')}</div>` : `<p class="log">Non trovo quartieri di ${esc(citta)} sulle mappe (controlla il nome ufficiale). Puoi disegnare la zona sulla mappa.</p>`;
@@ -1983,36 +2063,37 @@
   }
   function tile(valore, etichetta, obiettivo, attuale) {
     const p = obiettivo ? Math.min(1, attuale / obiettivo) : 0;
-    return `<div class="tile"><b>${valore}</b><span>${etichetta}</span>${obiettivo ? `<div class="mini-barra${p >= 1 ? ' fatto' : ''}"><div style="width:${Math.round(p * 100)}%"></div></div><small>${p >= 1 ? 'Obiettivo raggiunto' : 'obiettivo ' + obiettivo}</small>` : ''}</div>`;
+    return `<div class="tile"><b>${valore}</b><span>${etichetta}</span>${obiettivo ? `<div class="mini-barra${p >= 1 ? ' fatto' : ''}"><div style="width:${Math.round(p * 100)}%"></div></div><small${p >= 1 ? ' class="ok"' : ''}>${p >= 1 ? '✓ Obiettivo raggiunto' : Math.round(p * 100) + '% di ' + obiettivo}</small>` : ''}</div>`;
   }
   function graficoSettimane() {
     const s0 = inizioSettimana(), dati = [];
     for (let i = 7; i >= 0; i--) { const a = settimanaPrima(s0, i), b = settimanaPrima(s0, i - 1); dati.push({ a, km: settimanaDati(a, b).km }); }
-    const max = Math.max(1, ...dati.map(d => d.km)), W = 320, H = 128, base = 104, bw = 26, gap = (W - 16 - bw * 8) / 7;
+    const max = Math.max(1, ...dati.map(d => d.km)), W = 320, H = 128, base = 104, bw = 26, gap = (W - 16 - bw * 8) / 7, vuoto = dati.every(d => !d.km);
     let barre = '', etich = '';
     dati.forEach((d, i) => {
       const x = 8 + i * (bw + gap), h = d.km > 0 ? Math.max(4, (base - 14) * d.km / max) : 0, ora = i === 7;
-      barre += `<g class="barra" data-i="${i}"><rect x="${x - gap / 2}" y="0" width="${bw + gap}" height="${H}" fill="transparent"/>${h ? `<rect x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="4" fill="${ora ? VERDE : '#8cc7a1'}"/>` : `<rect x="${x}" y="${base - 2}" width="${bw}" height="2" rx="1" fill="#d5dcda"/>`}</g>`;
-      if (i % 2 === 1 || ora) etich += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="#4a5a60">${ora ? 'questa' : esc(dataBreve(d.a))}</text>`;
-      if (ora && d.km > 0) etich += `<text x="${x + bw / 2}" y="${base - h - 5}" text-anchor="middle" font-size="13" font-weight="700" fill="#17262b">${esc(kmBreve(d.km))}</text>`;
+      barre += `<g class="barra" data-i="${i}"><rect x="${x - gap / 2}" y="0" width="${bw + gap}" height="${H}" fill="transparent"/>${h ? `<rect x="${x}" y="${base - h}" width="${bw}" height="${h}" rx="4" fill="${ora ? C.brand : C.lineaForte}"/>` : `<rect x="${x}" y="${base - 2}" width="${bw}" height="2" rx="1" fill="${C.linea}"/>`}</g>`;
+      if (i % 2 === 1 || ora) etich += `<text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" font-size="11.5" fill="${C.testo2}">${ora ? 'questa' : esc(dataBreve(d.a))}</text>`;
+      if (ora && d.km > 0) etich += `<text x="${x + bw / 2}" y="${base - h - 5}" text-anchor="middle" font-size="12.5" font-weight="700" fill="${C.brand}">${esc(kmBreve(d.km))}</text>`;
     });
-    return { svg: `<svg class="grafico" viewBox="0 0 ${W} ${H}" role="img" aria-label="Chilometri a piedi nelle ultime 8 settimane"><line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="#d5dcda"/>${barre}${etich}</svg>`, dati };
+    const svgG = `<svg class="grafico" viewBox="0 0 ${W} ${H}" role="img" aria-label="Chilometri a piedi nelle ultime 8 settimane">${[0.33, 0.66].map(f => `<line x1="0" x2="${W}" y1="${base - (base - 14) * f}" y2="${base - (base - 14) * f}" stroke="${C.tenue}"/>`).join('')}<line x1="0" x2="${W}" y1="${base}" y2="${base}" stroke="${C.lineaForte}"/>${barre}${etich}</svg>`;
+    return { svg: vuoto ? `<div class="grafico-vuoto">${svgG}<div class="nota-graf">Le barre si riempiono con le tue uscite</div></div>` : svgG, dati, vuoto };
   }
   function calendarioAttivita() {
     const perGiorno = new Map();
     uscite.forEach(u => { const k = giornoISO(u.inizio); perGiorno.set(k, (perGiorno.get(k) || 0) + u.minuti); });
     if (S.sessione) { const k = giornoISO(S.sessione.inizio); perGiorno.set(k, (perGiorno.get(k) || 0) + Math.round(((S.sessione.ultimo || S.sessione.inizio) - S.sessione.inizio) / 60e3)); }
-    const s0 = settimanaPrima(inizioSettimana(), 11), C = 22, oggi = giornoISO(Date.now());
-    const colore = m => !m ? '#eef2f1' : m < 30 ? '#cfe8d7' : m < 60 ? '#8cc7a1' : m < 120 ? '#4fa572' : '#1f6b42';
+    const s0 = settimanaPrima(inizioSettimana(), 11), CEL = 22, oggi = giornoISO(Date.now());
+    const colore = m => !m ? C.tenue : m < 30 ? '#C8E8D6' : m < 60 ? '#8DD0AC' : m < 120 ? '#3FA574' : C.verdeSc;
     let celle = '';
     for (let w = 0; w < 12; w++) for (let d = 0; d < 7; d++) {
       const g = new Date(s0); g.setDate(g.getDate() + w * 7 + d); const k = giornoISO(g.getTime()); if (k > oggi) continue;
       const m = perGiorno.get(k) || 0;
-      celle += `<rect class="cella-cal" data-g="${k}" data-m="${m}" x="${24 + w * C}" y="${d * C}" width="${C - 4}" height="${C - 4}" rx="4" fill="${colore(m)}"${k === oggi ? ' stroke="#17262b" stroke-width="2"' : ''}/>`;
+      celle += `<rect class="cella-cal" data-g="${k}" data-m="${m}" x="${24 + w * CEL}" y="${d * CEL}" width="${CEL - 4}" height="${CEL - 4}" rx="4" fill="${colore(m)}"${k === oggi ? ` stroke="${C.brand}" stroke-width="2"` : ''}/>`;
     }
-    const gg = ['L', '', 'M', '', 'V', '', 'D'].map((t, d) => t ? `<text x="0" y="${d * C + 14}" font-size="12" fill="#4a5a60">${t}</text>` : '').join('');
-    const legenda = [0, 20, 45, 90, 150].map((m, i) => `<rect x="${170 + i * 20}" y="${7 * C + 6}" width="16" height="16" rx="4" fill="${colore(m)}"/>`).join('');
-    return `<svg class="grafico" viewBox="0 0 290 ${7 * C + 28}" role="img" aria-label="Giorni con uscite nelle ultime 12 settimane">${gg}${celle}<text x="164" y="${7 * C + 19}" text-anchor="end" font-size="12" fill="#4a5a60">meno</text>${legenda}<text x="274" y="${7 * C + 19}" font-size="12" fill="#4a5a60">più</text></svg>`;
+    const gg = ['L', '', 'M', '', 'V', '', 'D'].map((t, d) => t ? `<text x="0" y="${d * CEL + 14}" font-size="12" fill="${C.testo2}">${t}</text>` : '').join('');
+    const legenda = [0, 20, 45, 90, 150].map((m, i) => `<rect x="${170 + i * 20}" y="${7 * CEL + 6}" width="16" height="16" rx="4" fill="${colore(m)}"/>`).join('');
+    return `<svg class="grafico" viewBox="0 0 290 ${7 * CEL + 28}" role="img" aria-label="Giorni con uscite nelle ultime 12 settimane">${gg}${celle}<text x="164" y="${7 * CEL + 19}" text-anchor="end" font-size="12" fill="${C.testo2}">meno</text>${legenda}<text x="274" y="${7 * CEL + 19}" font-size="12" fill="${C.testo2}">più</text></svg>`;
   }
   function disegnaPannello() {
     const c = $('pannelloAgente'), ob = OB(), pr = cfg.profilo || {};
@@ -2029,15 +2110,15 @@
     c.innerHTML = `
       <div class="profilo-testa"><div class="avatar">${esc(iniziali)}</div><div><b>${esc(saluto())}${nomeAgente() ? ', ' + esc(nomeAgente()) : ''}</b><span>${esc([pr.agenzia, cfg.zonaNome ? 'Zona ' + cfg.zonaNome : ''].filter(Boolean).join(' · ') || 'Il tuo pannello')}</span></div><button class="tondo piccolo" id="pProfilo" aria-label="Profilo">${ICO.persona}</button></div>
 
-      <div class="sezione"><h3 class="gruppo" style="margin-top:0">Da fare oggi<span>${oggiL.length || 'niente'}</span></h3>
-        <div id="pAgenda">${oggiL.length ? oggiL.map(rigaAgenda).join('') : '<p class="aiuto">Niente in scadenza. Buon giro!</p>'}</div>
+      <div class="sezione"><h3 class="gruppo" style="margin-top:0">Da fare oggi<span>${oggiL.length ? oggiL.length + (oggiL.length === 1 ? ' cosa' : ' cose') : ''}</span></h3>
+        <div id="pAgenda">${oggiL.length ? oggiL.map(rigaAgenda).join('') : `<p class="nota-ok">${ICO.ok}<span>Niente in scadenza. Buon giro!</span></p>`}</div>
         ${prossimi.length ? `<details class="piega"><summary>Prossimi 7 giorni (${prossimi.length})</summary><div id="pProssimi">${prossimi.map(rigaAgenda).join('')}</div></details>` : ''}
         <div class="aggiungi-compito"><input class="campo" id="pCompito" placeholder="Aggiungi una cosa da fare…" autocomplete="off"><input class="campo" type="date" id="pCompitoData" aria-label="Per quando"><button class="tasto piccolo" id="pCompitoOk" aria-label="Aggiungi">${ICO.piu}</button></div>
       </div>
 
       <div class="sezione"><h3 class="gruppo">Questa settimana<span>${W.uscite === 1 ? '1 uscita' : W.uscite + ' uscite'}</span></h3>
         <div class="tiles">
-          ${tile(oreTesto(W.ore).replace(' minuti', ' min'), 'a piedi', ob.ore, W.ore)}
+          ${tile(W.ore < 0.1 ? '0 min' : oreTesto(W.ore).replace(' minuti', ' min'), 'a piedi', ob.ore, W.ore)}
           ${tile(String(W.case), W.case === 1 ? 'casa segnata' : 'case segnate', ob.case, W.case)}
           ${tile(String(W.notizie), W.notizie === 1 ? 'notizia raccolta' : 'notizie raccolte', ob.notizie, W.notizie)}
           ${tile(kmBreve(W.kmNuovi), 'di strade nuove', 0, 0)}
@@ -2045,10 +2126,10 @@
         ${W.vol > 0.05 ? `<p class="aiuto">Volantini: ${kmBreve(W.vol)} di strade questa settimana.</p>` : ''}
       </div>
 
-      <div class="sezione"><h3 class="gruppo">Chilometri a piedi<span>ultime 8 settimane</span></h3>${graf.svg}<p class="aiuto" id="pGrafSel">Tocca una barra per vedere la settimana.</p></div>
+      <div class="sezione"><h3 class="gruppo">Chilometri a piedi<span>ultime 8 settimane</span></h3>${graf.svg}${graf.vuoto ? '' : '<p class="aiuto" id="pGrafSel">Tocca una barra per vedere la settimana.</p>'}</div>
 
       <div class="sezione"><h3 class="gruppo">Le tue uscite<span>ultime 12 settimane</span></h3>${calendarioAttivita()}<p class="aiuto" id="pCalSel">Ogni quadratino è un giorno: più è scuro, più hai camminato.</p>
-        ${ult.length ? ult.map(u => `<div class="uscita"><b>${esc(new Date(u.inizio).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }))}</b><span>${esc(u.area || '')} · ${oreTesto(u.minuti / 60).replace(' minuti', ' min')} · ${kmBreve(u.metri / 1000)}${u.case ? ' · ' + (u.case === 1 ? '1 casa' : u.case + ' case') : ''}${u.metriVol > 50 ? ' · volantini' : ''}</span></div>`).join('') : '<p class="aiuto">Le uscite compaiono qui quando premi "Basta per oggi" alla fine di un giro.</p>'}
+        ${ult.length ? ult.map(u => `<div class="uscita"><div><b>${esc(new Date(u.inizio).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }))}</b><span>${esc(u.area || '')}${u.case ? ' · ' + (u.case === 1 ? '1 casa' : u.case + ' case') : ''}${u.metriVol > 50 ? ' · volantini' : ''}</span></div><span>${oreTesto(u.minuti / 60).replace(' minuti', ' min')} · ${kmBreve(u.metri / 1000)}</span></div>`).join('') : '<p class="aiuto">Le uscite compaiono qui quando premi "Basta per oggi" alla fine di un giro.</p>'}
       </div>
 
       <div class="sezione"><h3 class="gruppo">La tua zona${cfg.zonaNome ? ': ' + esc(cfg.zonaNome) : ''}<span>${Math.round(z.perc * 100)}% vista</span></h3>
@@ -2065,7 +2146,7 @@
         <p class="aiuto">${nDaVer ? (nDaVer === 1 ? '1 notizia da verificare.' : nDaVer + ' notizie da verificare.') : 'Nessuna notizia da verificare.'}</p>
         <div class="riga"><button class="tasto piccolo" id="pNota">${ICO.piu}Notizia</button><button class="tasto piccolo" id="pTacc">${ICO.nota}Apri il taccuino</button></div>
       </div>
-      <p class="versione">Zona · versione ${VERSIONE}</p>`;
+      ${versioneHTML()}`;
     collegaAgenda(c, disegnaPannello);
     $('pProfilo').onclick = apriProfilo;
     $('pCompitoOk').onclick = async () => {
@@ -2074,7 +2155,7 @@
       agenda.set(a.id, a); await DB.put('agenda', a); toast('Aggiunto', 'ok'); disegnaPannello(); pannello();
     };
     $('pCompito').onkeydown = e => { if (e.key === 'Enter') $('pCompitoOk').click(); };
-    c.querySelectorAll('.barra').forEach(g => g.onclick = () => { const d = graf.dati[+g.dataset.i]; $('pGrafSel').textContent = `Settimana dal ${dataBreve(d.a)}: ${kmBreve(d.km)} a piedi.`; });
+    c.querySelectorAll('.barra').forEach(g => g.onclick = () => { const d = graf.dati[+g.dataset.i]; if ($('pGrafSel')) $('pGrafSel').textContent = `Settimana dal ${dataBreve(d.a)}: ${kmBreve(d.km)} a piedi.`; });
     c.querySelectorAll('.cella-cal').forEach(r => r.onclick = () => { const m = +r.dataset.m; $('pCalSel').textContent = `${dataTesto(r.dataset.g)}: ${m ? oreTesto(m / 60) + ' a piedi' : 'nessuna uscita'}.`; });
     c.querySelectorAll('[data-area]').forEach(b => b.onclick = () => { chiudi('fPannello'); const n = b.dataset.area; if (n !== cfg.comune) cambiaComune(n); else { mostraZona(false); } });
     $('pVediZona').onclick = () => { chiudi('fPannello'); mostraZona(true); };
@@ -2096,13 +2177,13 @@
     if (tabTacc === 'note') {
       let lista = [...note.values()].sort((a, b) => b.ts - a.ts);
       const conta = k => lista.filter(n => n.stato === k).length;
-      const filtri = [{ k: '', t: 'Tutte (' + lista.length + ')' }, ...STATI_NOTA.map(k => ({ k, t: k + ' (' + conta(k) + ')' })).filter(o => conta(o.k))];
+      const filtri = lista.length ? [{ k: '', t: 'Tutte · ' + lista.length }, ...STATI_NOTA.map(k => ({ k, t: k + ' · ' + conta(k) })).filter(o => conta(o.k))] : [];
       if (filtroTacc && !STATI_NOTA.includes(filtroTacc)) filtroTacc = '';
       if (filtroTacc) lista = lista.filter(n => n.stato === filtroTacc);
       if (q) lista = lista.filter(n => [n.testo, n.chi, n.indirizzo, n.tipoInfo, n.fonte, n.area].join(' ').toLowerCase().includes(q));
-      c.innerHTML = `<div class="filtri">${filtri.map(f => `<button class="scelta senza-icona" data-f="${esc(f.k)}" aria-pressed="${filtroTacc === f.k}">${esc(f.t)}</button>`).join('')}</div>` +
+      c.innerHTML = (filtri.length ? `<div class="filtri">${filtri.map(f => `<button class="scelta senza-icona" data-f="${esc(f.k)}" aria-pressed="${filtroTacc === f.k}">${esc(f.t)}</button>`).join('')}</div>` : '') +
         (lista.length ? lista.map(n => `<button class="nota-riga" data-n="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 140) || '(senza testo)')}</b><span>${esc([n.chi || n.fonte, n.indirizzo || n.area, dataBreve(n.ts)].filter(Boolean).join(' · '))}</span>${n.stato !== 'Da verificare' ? `<span class="nota-stato">${esc(n.stato)}</span>` : n.verifica ? `<span class="nota-stato attesa">verifica entro ${esc(dataBreve(new Date(n.verifica + 'T12:00')))}</span>` : ''}</button>`).join('')
-          : `<div class="vuoto">${note.size ? 'Nessuna notizia trovata.' : 'Qui segni quello che senti in zona: al bar, dal parrucchiere, dai vicini. Chi vende, chi eredita, chi si trasferisce.'}</div>`);
+          : note.size ? VUOTO(ICO.nota, 'Nessuna notizia trovata', 'Prova con un\'altra parola o togli il filtro.') : VUOTO(ICO.nota, 'Il taccuino è vuoto', 'Qui segni quello che senti in zona: al bar, dal parrucchiere, dai vicini. Chi vende, chi eredita, chi si trasferisce.'));
       c.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filtroTacc = b.dataset.f; disegnaTaccuino(); });
       c.querySelectorAll('[data-n]').forEach(b => b.onclick = () => apriNota(b.dataset.n));
     } else {
@@ -2110,7 +2191,7 @@
       if (q) lista = lista.filter(p => [p.nome, p.ruolo, p.luogo, p.note].join(' ').toLowerCase().includes(q));
       const ris = OB().risentire;
       c.innerHTML = lista.length ? lista.map(p => { const u = p.ultimo || p.ts, tardi = ris && Date.now() - u > ris * 864e5, n = [...note.values()].filter(x => x.personaId === p.id).length; return `<button class="nota-riga" data-p="${p.id}"><b>${esc(p.nome)}</b><span>${esc([p.ruolo, p.luogo].filter(Boolean).join(' · '))}</span><span>${n === 1 ? '1 notizia' : n + ' notizie'} · sentita ${esc(giorniFa(u))}</span>${tardi ? '<span class="nota-stato attesa">da risentire</span>' : ''}</button>`; }).join('')
-        : `<div class="vuoto">${persone.size ? 'Nessuna persona trovata.' : 'Le persone che ti danno notizie: la barista, il giornalaio, l\'amministratore di condominio. L\'app ti ricorda di passare a trovarle.'}</div>`;
+        : persone.size ? VUOTO(ICO.persona, 'Nessuna persona trovata', 'Prova con un\'altra parola.') : VUOTO(ICO.persona, 'Ancora nessuna persona', 'Chi ti dà notizie: la barista, il giornalaio, l\'amministratore di condominio. L\'app ti ricorda di passare a trovarle.');
       c.querySelectorAll('[data-p]').forEach(b => b.onclick = () => apriPersona(b.dataset.p));
     }
   }
@@ -2159,7 +2240,7 @@
     $('nChi').oninput = () => { if ($('nChi').value.trim() && nn.personaId) { nn.personaId = ''; if ($('nPersone')) $('nPersone').querySelectorAll('[data-p]').forEach(x => x.setAttribute('aria-pressed', 'false')); $('nRubrica').hidden = false; } };
     $('nRubrica').onclick = () => $('nRubrica').setAttribute('aria-checked', $('nRubrica').getAttribute('aria-checked') !== 'true');
     if ($('nCase')) $('nCase').querySelectorAll('[data-c]').forEach(b => b.onclick = () => { nn.casaId = nn.casaId === b.dataset.c ? '' : b.dataset.c; $('nCase').querySelectorAll('[data-c]').forEach(x => x.setAttribute('aria-pressed', nn.casaId === x.dataset.c)); });
-    if ($('nElimina')) $('nElimina').onclick = async () => { if (!confirm('Eliminare questa notizia?')) return; await DB.del('note', v.id); note.delete(v.id); chiudi('fNota'); disegnaNote(); dopoTaccuino(); toast('Notizia eliminata'); };
+    if ($('nElimina')) $('nElimina').onclick = async () => { if (!(await chiedi('Eliminare questa notizia?', 'Sparisce dal taccuino e dalla mappa.', 'Elimina', true))) return; await DB.del('note', v.id); note.delete(v.id); chiudi('fNota'); disegnaNote(); dopoTaccuino(); toast('Notizia eliminata', 'ok'); };
     apri('fNota');
     if (!v) setTimeout(() => $('nTesto').focus(), 350);
   }
@@ -2201,7 +2282,7 @@
         <button class="tasto" id="psNota">${ICO.piu}Nuova notizia da ${esc(v.nome)}</button><button class="link pericolo" id="psElimina">Elimina questa persona</button>` : ''}`;
     if ($('psOggi')) $('psOggi').onclick = async () => { v.ultimo = Date.now(); await DB.put('persone', v); toast('Segnato', 'ok'); apriPersona(v.id); dopoTaccuino(); };
     if ($('psNota')) $('psNota').onclick = () => { apriNota(); nn.personaId = v.id; nn.chi = v.nome; nn.fonte = v.fonte || ''; const b = $('nPersone') && $('nPersone').querySelector(`[data-p="${v.id}"]`); if (b) b.setAttribute('aria-pressed', 'true'); $('nRubrica').hidden = true; $('nFonti').querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', nn.fonte === x.dataset.v)); };
-    if ($('psElimina')) $('psElimina').onclick = async () => { if (!confirm('Eliminare ' + v.nome + '? Le sue notizie restano.')) return; await DB.del('persone', v.id); persone.delete(v.id); chiudi('fPersona'); pp = null; dopoTaccuino(); };
+    if ($('psElimina')) $('psElimina').onclick = async () => { if (!(await chiedi('Eliminare ' + v.nome + '?', 'Le sue notizie restano nel taccuino.', 'Elimina', true))) return; await DB.del('persone', v.id); persone.delete(v.id); chiudi('fPersona'); pp = null; dopoTaccuino(); };
     $('personaCorpo').querySelectorAll('[data-n]').forEach(b => b.onclick = () => apriNota(b.dataset.n));
     apri('fPersona');
   }
@@ -2235,27 +2316,29 @@
   // ---------- strati della mappa e legenda ----------
   function apriStrati() {
     const box = $('strati');
-    if (box.classList.contains('aperto')) { box.classList.remove('aperto'); $('tStrati').classList.remove('attivo'); return; }
+    if (box.classList.contains('aperto')) { chiudiStrati(); return; }
     $('tStrati').classList.add('attivo');
+    if (!panChiuso && !box.dataset.pannello) { box.dataset.pannello = '1'; chiudiPannello(true); }
     const voce = (id, t, on) => `<button class="interruttore" id="${id}" role="switch" aria-checked="${on}"><span>${t}</span><span class="leva"></span></button>`;
-    box.innerHTML = `<div class="legenda">
+    box.innerHTML = `<h4>Legenda</h4><div class="legenda">
         <div><i style="background:${BLU}"></i>Case da vedere</div>
         <div><i style="background:${VERDE_SC}"></i>Percorse negli ultimi 3 mesi</div>
         <div><i style="background:${VERDE_CH}"></i>Viste più di 3 mesi fa</div>
         ${S.fase === 'cammino' ? `<div><i style="background:${OCRA}"></i>Prossimi 300 m, con le frecce</div><div><i class="tratteggio" style="border-color:${GRIGIO}"></i>Già fatto oggi</div>` : ''}
         ${cfg.mostraVolantini ? `<div><i class="tratteggio" style="border-color:${ARANCIO}"></i>Volantini (3 mesi)</div>` : ''}
-        ${vistaZona ? `<div><i class="campitura" style="background:rgba(${COL_VISTA},.45)"></i>Parte della zona già vista</div><div><i class="campitura" style="background:rgba(${COL_DAFARE},.45)"></i>Parte della zona da vedere</div><div><i style="background:#17262b;height:5px"></i>Confine della zona</div>` : ''}
-      </div>
+        ${vistaZona ? `<div><i class="campitura" style="background:rgba(${COL_VISTA},.45)"></i>Parte della zona già vista</div><div><i class="campitura" style="background:rgba(${COL_DAFARE},.45)"></i>Parte della zona da vedere</div><div><i style="background:${C.brand};height:5px"></i>Confine della zona</div>` : ''}
+      </div><div class="sep"></div><h4>Strati</h4>
       ${voce('sNote', 'Notizie sulla mappa', cfg.mostraNote !== false)}${voce('sVol', 'Strade con volantini', !!cfg.mostraVolantini)}${voce('sCat', 'Mappa catastale<small>Particelle e fabbricati, da vicino</small>', !!(stratoCatasto && map.hasLayer(stratoCatasto)))}${S.fase === 'home' ? voce('sZona', 'Tutta la zona', vistaZona) : ''}`;
-    box.classList.add('aperto');
+    box.classList.add('aperto'); posizionaTondi();
     $('sNote').onclick = () => { cfg.mostraNote = cfg.mostraNote === false; salvaCfg(); disegnaNote(); box.classList.remove('aperto'); apriStrati(); };
     $('sVol').onclick = () => { cfg.mostraVolantini = !cfg.mostraVolantini; salvaCfg(); disegnaRete(); box.classList.remove('aperto'); apriStrati(); };
     $('sCat').onclick = () => { mostraCatasto(!(stratoCatasto && map.hasLayer(stratoCatasto))); box.classList.remove('aperto'); apriStrati(); };
-    if ($('sZona')) $('sZona').onclick = () => { box.classList.remove('aperto'); mostraZona(!vistaZona); };
+    if ($('sZona')) $('sZona').onclick = () => { chiudiStrati(); mostraZona(!vistaZona); };
   }
+  function chiudiStrati() { const box = $('strati'); box.classList.remove('aperto'); $('tStrati').classList.remove('attivo'); if (box.dataset.pannello) { delete box.dataset.pannello; if (panChiuso) chiudiPannello(false); } }
   $('tStrati').onclick = apriStrati;
   $('tProfilo').onclick = apriProfilo;
-  map.on('movestart', () => { $('strati').classList.remove('aperto'); $('tStrati').classList.remove('attivo'); });
+  map.on('movestart', () => { if ($('strati').classList.contains('aperto')) chiudiStrati(); });
 
   // ---------- profilo dell'agente ----------
   const hashPin = async (id, pin) => { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('zona:' + id + ':' + pin)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); };
@@ -2272,7 +2355,7 @@
     const zR = riepilogoZona(), W = settimanaDati(inizioSettimana(), Date.now() + 864e5);
     $('profiloCorpo').innerHTML = `
       <div class="profilo-testa grande"><div class="avatar">${esc(iniz)}</div><div><b>${esc(pr.nome || 'Il tuo profilo')}</b><span>${esc([pr.agenzia, cfg.zonaNome ? 'Zona ' + cfg.zonaNome : (cfg.comuni.length ? cfg.comuni.length + (cfg.comuni.length === 1 ? ' area' : ' aree') : '')].filter(Boolean).join(' · ') || 'Completa i tuoi dati qui sotto')}</span></div></div>
-      <div class="stats" style="margin-top:14px"><div class="stat"><b>${Math.round(zR.perc * 100)}%</b><span>zona vista</span></div><div class="stat"><b>${zR.nCase}</b><span>case</span></div><div class="stat"><b>${W.ore < 1 ? Math.round(W.ore * 60) + ' min' : esc((Math.round(W.ore * 10) / 10).toString().replace('.', ',')) + ' h'}</b><span>a piedi in settimana</span></div></div>
+      <div class="stats" style="margin-top:14px"><div class="stat"><b>${Math.round(zR.perc * 100)}%</b><span>zona vista</span></div><div class="stat"><b>${zR.nCase}</b><span>case</span></div><div class="stat"><b>${W.ore < 1 ? Math.round(W.ore * 60) + ' min' : esc((Math.round(W.ore * 10) / 10).toString().replace('.', ',')) + ' h'}</b><span>in settimana</span></div></div>
       <div class="sezione"><h3>Indicazioni</h3>
         <button class="voce-menu" id="prTutorial">${ICO.aiuto}<span>Rivedi il tutorial<small>Dove sono le cose, in un minuto</small></span></button>
         <button class="voce-menu" id="prGuida">${ICO.lista}<span>Come si usa<small>Il giro, le case, il taccuino, i colori della mappa</small></span></button>
@@ -2290,7 +2373,7 @@
       <div class="sezione"><h3>Blocco con PIN</h3><p class="aiuto">${mio && mio.pin ? 'L\'app chiede il PIN ogni volta che la apri.' : 'Facoltativo: chi prende il telefono non vede le tue case e le tue notizie.'}</p>
         <button class="tasto piccolo" id="prPin">${mio && mio.pin ? 'Togli il PIN' : 'Metti un PIN'}</button></div>
       <div class="sezione"><h3>Agenti su questo telefono</h3><p class="aiuto">Ognuno ha la sua zona, le sue case e il suo taccuino.</p>
-        ${PROFILI.lista.map(p => `<div class="giro-riga"><span class="num-giro">${esc(((p.nome || '?').trim()[0] || '?').toUpperCase())}</span><div><b>${esc(p.nome || 'Senza nome')}</b><span>${p.id === PID ? 'sei tu, adesso' : p.pin ? 'con PIN' : ''}</span></div>${p.id !== PID ? `<button class="tasto piccolo" style="width:auto;margin:0" data-entra="${p.id}">Entra</button>` : ''}${p.id !== PID && p.id !== 'p0' ? `<button class="togli-giro" data-togli="${p.id}" aria-label="Elimina questo agente">${ICO.cestino}</button>` : ''}</div>`).join('')}
+        ${PROFILI.lista.map(p => `<div class="giro-riga"><span class="num-giro ${p.id === PID ? 'marca' : 'neutro'}">${esc(((p.nome || '?').trim()[0] || '?').toUpperCase())}</span><div><b>${esc(p.nome || 'Senza nome')}</b><span>${p.id === PID ? 'sei tu, adesso' : p.pin ? 'protetto con PIN' : 'senza PIN'}</span></div>${p.id !== PID ? `<button class="tasto piccolo" style="width:auto;margin:0" data-entra="${p.id}">Entra</button>` : ''}${p.id !== PID && p.id !== 'p0' ? `<button class="togli-giro" data-togli="${p.id}" aria-label="Elimina questo agente">${ICO.cestino}</button>` : ''}</div>`).join('')}
         <button class="tasto" id="prNuovo">${ICO.piu}Aggiungi un agente</button></div>`;
     const testo = (id, campo) => $(id).onchange = () => salvaProfilo({ [campo]: $(id).value.trim() });
     testo('prNome', 'nome'); testo('prAg', 'agenzia'); testo('prTel', 'telefono'); testo('prMail', 'email');
@@ -2300,17 +2383,18 @@
     $('prPannello').onclick = () => { chiudi('fProfilo'); apriPannello(); };
     $('prImpost').onclick = () => apriImpost();
     $('prPin').onclick = async () => {
-      if (mio.pin) { if (!confirm('Togliere il PIN?')) return; delete mio.pin; salvaProfili(); apriProfilo(); return; }
-      const a = prompt('Scegli un PIN di 4-8 cifre'); if (!a) return;
+      if (mio.pin) { if (!(await chiedi('Togliere il PIN?', 'Chi prende il telefono potrà aprire le tue case e le tue notizie.', 'Togli il PIN'))) return; delete mio.pin; salvaProfili(); toast('PIN tolto', 'ok'); apriProfilo(); return; }
+      const campoPin = { tipo: 'password', inputmode: 'numeric', max: 8 };
+      const a = await dialogo({ titolo: 'Scegli un PIN', testo: 'Da 4 a 8 cifre. Te lo chiedo ogni volta che apri Zona.', campo: campoPin, ok: 'Avanti', icona: ICO.lucchetto }); if (!a) return;
       if (!/^\d{4,8}$/.test(a)) { toast('Il PIN deve avere da 4 a 8 cifre.', 'errore'); return; }
-      if (prompt('Riscrivi il PIN per conferma') !== a) { toast('I due PIN non sono uguali.', 'errore'); return; }
+      if (await dialogo({ titolo: 'Riscrivi il PIN', testo: 'Per essere sicuri che sia quello giusto.', campo: campoPin, ok: 'Conferma', icona: ICO.lucchetto }) !== a) { toast('I due PIN non sono uguali.', 'errore'); return; }
       mio.pin = await hashPin(PID, a); salvaProfili(); sessionStorage.setItem('zona_sbloccato', PID); toast('PIN impostato', 'ok'); apriProfilo();
     };
     $('profiloCorpo').querySelectorAll('[data-entra]').forEach(b => b.onclick = () => mostraBlocco(b.dataset.entra));
     $('profiloCorpo').querySelectorAll('[data-togli]').forEach(b => b.onclick = () => togliProfilo(b.dataset.togli));
-    $('prNuovo').onclick = () => {
+    $('prNuovo').onclick = async () => {
       if (S.fase === 'cammino') { toast('Finisci prima il giro in corso.', 'errore'); return; }
-      if (!confirm('Aggiungo un nuovo agente su questo telefono? L\'app si riapre vuota per lui; i tuoi dati restano qui.')) return;
+      if (!(await chiedi('Aggiungere un agente?', 'Zona si riapre vuota per il nuovo agente; i tuoi dati restano qui e ci torni dalla schermata "Chi sei?".', 'Aggiungi'))) return;
       const id = 'p' + Date.now().toString(36); PROFILI.lista.push({ id, nome: '' }); PROFILI.attivo = id; salvaProfili();
       sessionStorage.setItem('zona_sbloccato', id); location.reload();
     };
@@ -2318,11 +2402,11 @@
   }
   async function togliProfilo(id) {
     const p = PROFILI.lista.find(x => x.id === id); if (!p || id === PID || id === 'p0') return;
-    if (!confirm('Eliminare ' + (p.nome || 'questo agente') + ' e tutti i suoi dati (case, notizie, strade viste)? Non si può annullare.')) return;
-    if (p.pin) { const x = prompt('PIN di ' + (p.nome || 'questo agente')); if (!x || await hashPin(id, x) !== p.pin) { toast('PIN sbagliato.', 'errore'); return; } }
+    if (!(await dialogo({ titolo: 'Eliminare ' + (p.nome || 'questo agente') + '?', testo: 'Si cancellano tutti i suoi dati: case, notizie, strade viste. Non si può annullare.', ok: 'Elimina tutto', pericolo: true }))) return;
+    if (p.pin) { const x = await dialogo({ titolo: 'PIN di ' + (p.nome || 'questo agente'), campo: { tipo: 'password', inputmode: 'numeric', max: 8 }, ok: 'Elimina', pericolo: true, icona: ICO.lucchetto }); if (!x || await hashPin(id, x) !== p.pin) { toast('PIN sbagliato.', 'errore'); return; } }
     for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.startsWith(id + '_')) localStorage.removeItem(k); }
     try { indexedDB.deleteDatabase('zona-' + id); } catch (e) { }
-    PROFILI.lista = PROFILI.lista.filter(x => x.id !== id); salvaProfili(); toast('Agente eliminato'); apriProfilo();
+    PROFILI.lista = PROFILI.lista.filter(x => x.id !== id); salvaProfili(); toast('Agente eliminato', 'ok'); apriProfilo();
   }
 
   // ---------- blocco: scelta dell'agente e PIN ----------
@@ -2330,7 +2414,7 @@
   function mostraBlocco(scelto) {
     const box = $('blocco'); box.classList.add('aperto');
     const lista = PROFILI.lista, disegnaScelta = () => {
-      box.innerHTML = `<div class="blocco-scheda"><div class="logo-zona">${LOGO}</div><h2>Chi sei?</h2>${lista.map(p => `<button class="tasto${p.id === PID ? ' primario' : ''}" data-chi="${p.id}">${esc(p.nome || 'Agente senza nome')}${p.pin ? ' 🔒' : ''}</button>`).join('')}${scelto ? '<button class="link" id="bloccoAnn">Annulla</button>' : ''}</div>`;
+      box.innerHTML = `<div class="blocco-scheda"><div class="logo-zona">${LOGO}</div><h2>Chi sei?</h2><p>Scegli il tuo profilo per entrare in Zona.</p>${lista.map(p => `<button class="tasto${p.id === PID ? ' primario' : ''}" data-chi="${p.id}">${esc(p.nome || 'Agente senza nome')}${p.pin ? ICO.lucchetto : ''}</button>`).join('')}${scelto ? '<button class="link" id="bloccoAnn">Annulla</button>' : ''}</div>`;
       box.querySelectorAll('[data-chi]').forEach(b => b.onclick = () => chiediPin(b.dataset.chi));
       if ($('bloccoAnn')) $('bloccoAnn').onclick = () => box.classList.remove('aperto');
     };
@@ -2338,8 +2422,8 @@
     const chiediPin = id => {
       const p = lista.find(x => x.id === id); if (!p) return;
       if (!p.pin) return entra(id);
-      box.innerHTML = `<div class="blocco-scheda"><div class="logo-zona">${LOGO}</div><h2>${esc(p.nome || 'Agente')}</h2><p>Scrivi il tuo PIN</p><input class="campo pin" id="pinIn" type="password" inputmode="numeric" autocomplete="off" maxlength="8"><button class="tasto primario" id="pinOk">Entra</button>${lista.length > 1 ? '<button class="link" id="pinAltro">Sono un altro agente</button>' : ''}<p class="aiuto">PIN dimenticato? Serve il backup: reinstallando l'app i dati si perdono.</p></div>`;
-      const prova = async () => { if (await hashPin(id, $('pinIn').value) === p.pin) entra(id); else { $('pinIn').value = ''; toast('PIN sbagliato', 'errore'); vibra(200); } };
+      box.innerHTML = `<div class="blocco-scheda"><div class="logo-zona">${LOGO}</div><h2>${esc(p.nome || (p.id === PID && cfg.profilo && cfg.profilo.nome) || 'Agente')}</h2><p>Scrivi il tuo PIN</p><input class="campo pin" id="pinIn" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN"><button class="tasto primario" id="pinOk">Entra</button>${lista.length > 1 ? '<button class="link" id="pinAltro">Sono un altro agente</button>' : ''}<p class="aiuto">PIN dimenticato? Serve il backup: reinstallando l'app i dati si perdono.</p></div>`;
+      const prova = async () => { if (await hashPin(id, $('pinIn').value) === p.pin) entra(id); else { $('pinIn').value = ''; toast('PIN sbagliato', 'errore'); vibra(200); const sc = box.querySelector('.blocco-scheda'); if (sc && sc.animate) sc.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-10px)' }, { transform: 'translateX(10px)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(0)' }], { duration: 320 }); } };
       $('pinOk').onclick = prova; $('pinIn').onkeydown = e => { if (e.key === 'Enter') prova(); };
       if ($('pinAltro')) $('pinAltro').onclick = disegnaScelta;
       setTimeout(() => $('pinIn').focus(), 100);
@@ -2353,8 +2437,8 @@
     passoB = passo; const c = $('benvCorpo'), pr = Object.assign({ nome: '', agenzia: '', telefono: '' }, cfg.profilo), ob = OB();
     const punti = `<div class="passi">${[1, 2, 3].map(i => `<span class="${i === passo ? 'ora' : i < passo ? 'fatto' : ''}"></span>`).join('')}</div>`;
     if (passo === 1) {
-      c.innerHTML = `${punti}<div class="logo-zona grande">${LOGO}</div><h2 class="benv-titolo">Benvenuto in Zona</h2>
-        <p class="intro">L'app per lavorare la tua zona a piedi, strada per strada: ti guida nei giri, si ricorda dove sei passato, tiene le case che vedi e le notizie che raccogli in giro.</p>
+      c.innerHTML = `${punti}<div class="marca-riga">${LOGO}<div class="marca">Zona<small>Farming immobiliare</small></div></div><h2 class="benv-titolo">Lavora la tua zona, strada per strada</h2>
+        <ul class="vantaggi"><li>${ICO.cammina}<span><b>Giri a piedi guidati</b>Partono da dove sei e passano dalle strade con case che non hai ancora visto.</span></li><li>${ICO.casa}<span><b>Case e notizie in tasca</b>Foto, nota vocale, stato, agenzia e quello che senti in giro.</span></li><li>${ICO.lucchetto}<span><b>Tutto resta sul telefono</b>Nessun account: i dati sono tuoi.</span></li></ul>
         <label class="campo" for="bvNome">Come ti chiami?</label><input class="campo" id="bvNome" value="${esc(pr.nome)}" placeholder="Nome e cognome" autocomplete="name">
         <label class="campo" for="bvAg">Agenzia</label><input class="campo" id="bvAg" value="${esc(pr.agenzia)}" placeholder="Facoltativo">
         <label class="campo" for="bvTel">Il tuo telefono</label><input class="campo" type="tel" id="bvTel" value="${esc(pr.telefono)}" placeholder="Facoltativo: va in fondo alle schede che condividi">`;
@@ -2365,7 +2449,7 @@
         <p class="intro">La zona è il territorio che lavori: uno o più comuni, oppure un quartiere se lavori in città. Puoi aggiungere altre aree quando vuoi.</p>
         <label class="campo" for="bvZona">Nome della zona</label><input class="campo" id="bvZona" value="${esc(cfg.zonaNome)}" placeholder="Per esempio Franciacorta">
         <h3 class="gruppo">Le aree della zona<span>${cfg.comuni.length}</span></h3>
-        <div id="bvAree">${cfg.comuni.map(n => `<div class="giro-riga"><span class="num-giro">${ICO.ok}</span><div><b>${esc(n)}</b><span>${tipoArea(n)}</span></div><button class="togli-giro" data-tolgo="${esc(n)}" aria-label="Togli ${esc(n)}">${ICO.x}</button></div>`).join('') || '<p class="aiuto">Ancora nessuna: aggiungi la prima qui sotto.</p>'}</div>
+        <div id="bvAree">${cfg.comuni.map(n => `<div class="giro-riga"><span class="num-giro marca">${ICO.mappa}</span><div><b>${esc(n)}</b><span>${tipoArea(n)}</span></div><button class="togli-giro" data-tolgo="${esc(n)}" aria-label="Togli ${esc(n)}">${ICO.x}</button></div>`).join('') || '<p class="aiuto">Ancora nessuna: aggiungi la prima qui sotto.</p>'}</div>
         <button class="tasto" id="bvQui">${ICO.posizione}Il posto dove sono adesso</button><div class="log" id="bvLog"></div>
         <label class="campo" for="bvComune">Un comune</label><div class="riga"><input class="campo" id="bvComune" placeholder="Nome ufficiale del comune" autocomplete="off" style="flex:2"><button class="tasto piccolo" id="bvAggiungi" style="margin-top:0">${ICO.piu}</button></div>
         <label class="campo" for="bvCitta">Un quartiere di una città</label><div class="riga"><input class="campo" id="bvCitta" placeholder="La città" autocomplete="off" style="flex:2"><button class="tasto piccolo" id="bvCercaQ" style="margin-top:0">Cerca</button></div><div id="bvQuart"></div>
@@ -2374,11 +2458,12 @@
       $('bvZona').onchange = () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); };
       c.querySelectorAll('[data-tolgo]').forEach(b => b.onclick = () => { const n = b.dataset.tolgo; if (n === cfg.comune && G) { toast('È l\'area aperta adesso: la togli dalle impostazioni.', 'errore'); return; } cfg.comuni = cfg.comuni.filter(x => x !== n); salvaCfg(); apriBenvenuto(2); });
       $('bvQui').onclick = () => comuneDaPosizione('bvLog', aggiunta);
-      $('bvAggiungi').onclick = () => { const n = $('bvComune').value.replace(/\s+/g, ' ').trim(); if (n) aggiunta(n); };
+      $('bvAggiungi').onclick = () => { const n = $('bvComune').value.replace(/\s+/g, ' ').trim(); if (n) aggiunta(n); else $('bvComune').focus(); };
+      $('bvComune').onkeydown = e => { if (e.key === 'Enter') $('bvAggiungi').click(); };
       $('bvCercaQ').onclick = () => cercaQuartieri($('bvCitta').value.trim(), $('bvQuart'), aggiunta);
       $('bvDisegna').onclick = () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); iniziaDisegno(nome => { if (nome) { if (!cfg.comuni.includes(nome)) cfg.comuni.push(nome); salvaCfg(); } apri('fBenvenuto'); apriBenvenuto(2); }); };
       $('benvAvanti').textContent = 'Avanti';
-      $('benvAvanti').onclick = () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); if (!cfg.comuni.length && !confirm('Non hai ancora aggiunto nessuna area. Vai avanti lo stesso?')) return; apriBenvenuto(3); };
+      $('benvAvanti').onclick = async () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); if (!cfg.comuni.length && !(await chiedi('Nessuna area aggiunta', 'Puoi aggiungerla anche dopo, dal pannello in basso. Vuoi andare avanti lo stesso?', 'Vai avanti'))) return; apriBenvenuto(3); };
     } else {
       c.innerHTML = `${punti}<h2 class="benv-titolo">I tuoi obiettivi</h2><p class="intro">Ogni settimana il pannello ti mostra a che punto sei. Trascina il cursore o usa + e −; puoi cambiarli quando vuoi nel profilo.</p>
         <div class="sezione">${selettore('ore', ob.ore, 'Ore a piedi alla settimana')}${selettore('case', ob.case)}${selettore('notizie', ob.notizie)}${selettore('risentire', ob.risentire)}</div>`;
@@ -2402,10 +2487,10 @@
   const PASSI_TUT = [
     { t: 'Zona in un minuto', d: 'Ti mostro dove sono le cose. Puoi rivedere questo tutorial quando vuoi dal tuo profilo.' },
     { sel: '#pannello', apri: true, t: 'Il pannello in basso', d: 'Qui scegli quanto tempo hai: l\'app prepara un giro a piedi sulle strade con case che non hai ancora visto. Trascinalo in giù per vedere più mappa, in su per riaprirlo.' },
-    { t: 'I colori della mappa', d: `<span class="tut-leg"><i style="background:${BLU}"></i>case da vedere</span><span class="tut-leg"><i style="background:${VERDE_SC}"></i>percorse negli ultimi 3 mesi</span><span class="tut-leg"><i style="background:${VERDE_CH}"></i>viste più di 3 mesi fa</span>Durante il giro segui la linea gialla con le frecce.` },
+    { t: 'I colori della mappa', d: `<span class="tut-leg"><i style="background:${BLU}"></i>case da vedere</span><span class="tut-leg"><i style="background:${VERDE_SC}"></i>percorse negli ultimi 3 mesi</span><span class="tut-leg"><i style="background:${VERDE_CH}"></i>viste più di 3 mesi fa</span>Durante il giro segui la linea ambra con le frecce.` },
     { sel: '#tondi', t: 'La barra degli strumenti', d: `<span class="tut-ico">${ICO.casa}Le tue case</span><span class="tut-ico">${svg('<path d="M20.5 3.5 3.8 10.4a.5.5 0 0 0 .05.94l6.65 1.96 1.96 6.65a.5.5 0 0 0 .94.05z"/>', 'stroke-width="1.8"')}Torna dove sei</span><span class="tut-ico">${ICO.strati}Legenda e strati, anche "Tutta la zona"</span><span class="tut-ico">${svg('<rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="3.25"/>', 'stroke-width="1.8"')}Menu: pannello, taccuino, esporta</span>` },
     { sel: '#tProfilo', t: 'Il tuo profilo', d: 'In alto a destra: i tuoi dati, gli obiettivi della settimana, il PIN, gli altri agenti e queste indicazioni.' },
-    { sel: '#bZona', apri: true, t: 'Tutta la zona', d: `Mostra tutte le tue aree insieme: il confine scuro è quello della zona; dentro, <b style="color:#1f6b42">verde</b> la parte già vista e <b style="color:#8a5d00">ocra</b> quella da vedere.` },
+    { sel: '#bZona', apri: true, t: 'Tutta la zona', d: `Mostra tutte le tue aree insieme: il confine scuro è quello della zona; dentro, <b style="color:${C.verdeSc}">verde</b> la parte già vista e <b style="color:${C.ambraSc}">ambra</b> quella da vedere.` },
     { t: 'Durante il giro', d: '"Nuova casa" salva indirizzo, foto, nota vocale e stato. Nella scheda della casa "In vendita?" cerca l\'indirizzo su Immobiliare.it, Idealista e Casa.it, e lì segni agenzia e prezzo. Alla fine premi "Basta per oggi".' }
   ];
   let tut = null;
@@ -2446,11 +2531,13 @@
   window.addEventListener('resize', posizionaTondi);
   try { new ResizeObserver(() => posizionaTondi()).observe($('pannello')); } catch (e) { }
   if (vaBloccata()) mostraBlocco();
+  const togliSplash = () => { const s = $('splash'); if (s && !s.classList.contains('via')) { s.classList.add('via'); setTimeout(() => s.remove(), 500); } };
+  setTimeout(togliSplash, 4000); // in ogni caso, anche se qualcosa va storto
   (async () => {
-    await migraCoda();
-    await caricaTaccuino();
+    try { await migraCoda(); await caricaTaccuino(); } catch (e) { }
     aggiorna(true);
     aggiornaAvatar();
+    setTimeout(togliSplash, 250);
     if (!cfg.profilo || !cfg.profilo.benvenuto) apriBenvenuto(1);
     else if (!LS.get('tutorial12', false)) { const via = () => { if ($('blocco').classList.contains('aperto')) return setTimeout(via, 800); avviaTutorial(); }; setTimeout(via, 1200); }
     if (cfg.comune) await preparaComune(true); else caricaCase();
