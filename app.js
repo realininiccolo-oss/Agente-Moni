@@ -1,9 +1,9 @@
-/* Zona v12 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
+/* Zona v13 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
    case con foto e note vocali, taccuino delle notizie raccolte in zona, pannello dell'attività.
    Tutto resta sul telefono, un profilo per ogni agente. Il collegamento a Google (foglio e cartella Drive) è facoltativo. */
 (() => {
   'use strict';
-  const VERSIONE = 12;
+  const VERSIONE = 13;
   const $ = id => document.getElementById(id);
   // profili: ogni agente ha i suoi dati. Il primo profilo usa i dati delle versioni precedenti (nessun prefisso).
   const PROFILI = (() => { try { const p = JSON.parse(localStorage.getItem('zona_profili')); if (p && p.lista && p.lista.length) return p; } catch (e) { } return { attivo: 'p0', lista: [{ id: 'p0', nome: '' }] }; })();
@@ -68,8 +68,8 @@
 
   // stati delle case: colore e simbolo del segnaposto
   const STATI = [
-    { k: 'Da valutare', c: '#4a5a60', g: '<text x="15" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#4a5a60" font-family="Atkinson Hyperlegible, sans-serif">?</text>' },
-    { k: 'Cartello vendita', c: '#d23a2e', g: '<text x="15" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#d23a2e" font-family="Atkinson Hyperlegible, sans-serif">€</text>' },
+    { k: 'Da valutare', c: '#4a5a60', g: '<text x="15" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#4a5a60" font-family="Inter, sans-serif">?</text>' },
+    { k: 'Cartello vendita', c: '#d23a2e', g: '<text x="15" y="19" text-anchor="middle" font-size="13" font-weight="700" fill="#d23a2e" font-family="Inter, sans-serif">€</text>' },
     { k: 'Cartello affitto', c: '#7b3fb0', g: '<g transform="translate(8 7) scale(.58)" fill="none" stroke="#7b3fb0" stroke-width="3" stroke-linecap="round"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M21 12v2"/></g>' },
     { k: 'Interessante', c: '#2e7d4f', g: '<g transform="translate(8 7) scale(.58)"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" fill="#2e7d4f"/></g>' },
     { k: 'Da ricontattare', c: '#c27c00', g: '<g transform="translate(8.5 7.5) scale(.55)"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z" fill="#c27c00"/></g>' },
@@ -957,6 +957,7 @@
           <label class="campo" for="sAnnLink">Link dell'annuncio</label><input class="campo" type="url" id="sAnnLink" value="${esc(h.annuncio || '')}" placeholder="Incolla il link" autocomplete="off">
           <button class="tasto verde piccolo" id="sAnnSalva">${ICO.ok}Salva</button></div>`}
       </div>
+      <div class="sezione"><h3 class="gruppo">Dati della casa<span>fonti pubbliche</span></h3><div id="sDati"></div></div>
       ${notizieCasa(h).length ? `<div class="sezione"><h3>Notizie su questa casa</h3>${notizieCasa(h).map(n => `<button class="nota-riga" data-nota="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 120))}</b><span>${esc([n.chi, dataBreve(n.ts), n.stato].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
       ${h.remota && (h.photos || []).length ? `<p><a class="link" target="_blank" rel="noopener" href="${esc(h.photos[0])}">Apri le foto</a></p>` : ''}
       ${h.telefono ? `<a class="tasto verde" href="tel:${esc(h.telefono.replace(/[^\d+]/g, ''))}">${ICO.telefono}Chiama ${esc(h.telefono)}</a>` : ''}
@@ -1001,7 +1002,9 @@
       $('sElimina').onclick = async () => { if (!confirm('Eliminare questa casa dal telefono?' + (h.sync === 'ok' ? ' Nel foglio Google resta.' : ''))) return; await DB.del('case', h.id); case_.delete(h.id); if (marcatori.has(h.id)) lCase.removeLayer(marcatori.get(h.id)); marcatori.delete(h.id); contaCase(); chiudi('fScheda'); toast('Casa eliminata'); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
     }
     $('tfScheda').textContent = h.stato || 'Casa';
+    schedaAperta = h.id; disegnaDati(h);
     apri('fScheda');
+    cercaDati(h);
   }
   async function cambiaStato(h, stato) {
     const prima = h.stato; h.stato = stato; marcatore(h);
@@ -1021,7 +1024,7 @@
   const fileDa = (dataUrl, nome) => { const [t, b] = dataUrl.split(','), mime = (t.match(/data:(.*?);/) || [])[1] || 'image/jpeg', bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], nome, { type: mime }); };
   const notizieCasa = h => [...note.values()].filter(n => n.casaId === h.id).sort((a, b) => b.ts - a.ts);
   const firma = () => { const p = cfg.profilo || {}; return p.nome ? '— ' + [p.nome, p.agenzia, p.telefono].filter(Boolean).join(' · ') : ''; };
-  const testoCasa = h => [h.address || 'Casa', [h.stato, h.tipo].filter(Boolean).join(' · '), h.agenzia ? 'Agenzia: ' + h.agenzia : '', h.prezzo ? 'In vendita a ' + prezzoTesto(h.prezzo) : '', h.annuncio || '', h.telefono ? 'Tel. ' + h.telefono : '', h.note || '', h.lat !== '' && h.lat != null ? 'Mappa: https://maps.google.com/?q=' + h.lat + ',' + h.lng : '', firma()].filter(Boolean).join('\n');
+  const testoCasa = h => [h.address || 'Casa', [h.stato, h.tipo].filter(Boolean).join(' · '), h.agenzia ? 'Agenzia: ' + h.agenzia : '', h.prezzo ? 'In vendita a ' + prezzoTesto(h.prezzo) : '', h.annuncio || '', (() => { const [f, p, sb, cat, r, sup, cl] = catastoCSV(h); return [f || p ? 'Catasto: foglio ' + f + ' particella ' + p + (sb ? ' sub ' + sb : '') : '', cat ? 'Categoria ' + cat + (r ? ', rendita € ' + r : '') : '', sup ? sup + ' m²' : '', cl ? 'Classe energetica ' + cl : ''].filter(Boolean).join(' · '); })(), h.telefono ? 'Tel. ' + h.telefono : '', h.note || '', h.lat !== '' && h.lat != null ? 'Mappa: https://maps.google.com/?q=' + h.lat + ',' + h.lng : '', firma()].filter(Boolean).join('\n');
   async function condividiCasa(h) {
     const testo = testoCasa(h);
     try {
@@ -1039,10 +1042,179 @@
   function esportaCSV(lista, comune) {
     if (!lista.length) { toast('Non ci sono case da esportare.', 'errore'); return; }
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
-    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Agenzia', 'Prezzo annuncio', 'Annuncio', 'Telefono', 'Richiamare il', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
-    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.agenzia, h.prezzo || '', h.annuncio || '', h.telefono, h.richiamo ? new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT') : '', h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
+    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Agenzia', 'Prezzo annuncio', 'Annuncio', 'Foglio', 'Particella', 'Sub', 'Categoria', 'Rendita', 'Superficie m²', 'Classe energetica', 'Telefono', 'Richiamare il', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
+    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.agenzia, h.prezzo || '', h.annuncio || '', ...catastoCSV(h), h.telefono, h.richiamo ? new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT') : '', h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
     condividiFile(new Blob(['﻿' + righe.join('\r\n')], { type: 'text/csv' }), 'case-' + (comune || 'tutte').replace(/\s+/g, '-') + '-' + new Date().toISOString().slice(0, 10) + '.csv');
   }
+
+  // ---------- dati della casa da fonti pubbliche e gratuite ----------
+  // Catasto (mappa dell'Agenzia delle Entrate, WMS libero): foglio e particella dal punto della casa.
+  // Certificati energetici (APE) di Regione Lombardia (open data CENED+2): classe, anno, superficie.
+  // Edificio su OpenStreetMap: tipo, piani, anno. Rendita, categoria e quotazioni OMI le scrive l'agente (visura, OMI).
+  const WMS_CAT = 'https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php';
+  const CENED = 'https://www.dati.lombardia.it/resource/bbky-sde5.json';
+  const LINK_GEOPORTALE = 'https://geoportale.cartografia.agenziaentrate.gov.it/';
+  const LINK_OMI = 'https://www1.agenziaentrate.gov.it/servizi/geopoi_omi/index.php';
+  const LINK_VISURA = 'https://sister.agenziaentrate.gov.it/CitizenIspezioni/visCondizioniUtilizzo.jsp';
+  const CATEGORIE = ['A/1', 'A/2', 'A/3', 'A/4', 'A/5', 'A/6', 'A/7', 'A/8', 'A/9', 'A/10', 'A/11', 'B', 'C/1', 'C/2', 'C/3', 'C/4', 'C/5', 'C/6', 'C/7', 'D', 'D/5', 'E'];
+  // coefficienti: valore ai fini dell'imposta di registro e base imponibile IMU (rendita rivalutata del 5%)
+  function coefficienti(cat) {
+    const g = (cat || '')[0];
+    const registro = cat === 'A/10' || g === 'D' ? 60 : cat === 'C/1' || g === 'E' ? 40.8 : g === 'B' ? 140 : 120;
+    const imu = cat === 'A/10' || cat === 'D/5' ? 80 : g === 'D' ? 65 : cat === 'C/1' ? 55 : g === 'B' || /^C\/[345]$/.test(cat) ? 140 : g === 'E' ? 0 : 160;
+    const abitativa = g === 'A' && cat !== 'A/10';
+    return { registro, imu, abitativa };
+  }
+  const euro = n => '€ ' + Math.round(n).toLocaleString('it-IT');
+  const conTempo = (p, ms) => Promise.race([p, new Promise((_, ko) => setTimeout(() => ko(new Error('nessuna risposta')), ms))]);
+  // risposta del catasto (tabella HTML): campi chiave → valore
+  function campiTabella(html) {
+    const out = {};
+    try {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('table').forEach(t => {
+        const righe = [...t.querySelectorAll('tr')].map(tr => [...tr.children].map(c => ({ h: c.tagName === 'TH', t: c.textContent.replace(/\s+/g, ' ').trim() })));
+        righe.forEach(r => { if (r.length === 2 && r[0].h && !r[1].h) out[r[0].t] = r[1].t; });
+        const testa = righe.find(r => r.length > 1 && r.every(c => c.h));
+        if (testa) { const dati = righe[righe.indexOf(testa) + 1]; if (dati) testa.forEach((c, i) => { if (dati[i] && !(c.t in out)) out[c.t] = dati[i].t; }); }
+      });
+    } catch (e) { }
+    return out;
+  }
+  function leggiParticella(html) {
+    const f = campiTabella(html), trova = re => { const k = Object.keys(f).find(x => re.test(x)); return k ? f[k] : ''; };
+    let rif = trova(/nationalCadastralReference/i) || trova(/localId/i) || ((html.match(/([A-Z]\d{3}[A-Z]?_[0-9A-Z]{4,7}\.[0-9A-Z]+)/) || [])[1] || '');
+    const etichetta = trova(/^label$|etichetta/i);
+    const m = rif.match(/([A-Z]\d{3})[A-Z]?_([0-9A-Z]{4,7})\.([0-9A-Z]+)/);
+    if (!m && !etichetta) return null;
+    const fo = m ? m[2] : '', foglio = fo ? String(parseInt(fo.slice(0, 4), 10) || fo) : '';
+    return { codice: m ? m[1] : '', foglio, allegato: fo.length > 4 ? fo.slice(4).replace(/^0+$/, '') : '', particella: (m ? m[3] : etichetta).replace(/^0+(?=\d)/, ''), rif: rif || etichetta };
+  }
+  async function particellaDa(lat, lon) {
+    let errore = null;
+    for (const crs of ['EPSG:4258', 'EPSG:4326']) {
+      const d = 0.00025, q = new URLSearchParams({ SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetFeatureInfo', LAYERS: 'CP.CadastralParcel', QUERY_LAYERS: 'CP.CadastralParcel', STYLES: '', CRS: crs, BBOX: [lat - d, lon - d, lat + d, lon + d].join(','), WIDTH: '101', HEIGHT: '101', I: '50', J: '50', INFO_FORMAT: 'text/html', FORMAT: 'image/png' });
+      try {
+        const r = await conTempo(fetch(WMS_CAT + '?' + q), 15000);
+        if (!r.ok) { errore = new Error('catasto: errore ' + r.status); continue; }
+        const p = leggiParticella(await r.text()); if (p) return p;
+        errore = new Error('nessuna particella in questo punto');
+      } catch (e) { errore = e; }
+    }
+    throw errore || new Error('catasto non raggiungibile');
+  }
+  const nucleoVia = via => String(via || '').replace(/^(via|viale|vicolo|vic\.|piazza|p\.zza|piazzale|corso|c\.so|largo|strada|str\.|località|loc\.|contrada|traversa|borgo|salita)\s+/i, '').trim();
+  async function apeDa(address, comune) {
+    const { via, paese } = viaDi(address, comune), civ = (String(address || '').split(',')[0].match(/\s(\d+)\s*[a-z]?(\/\d+)?$/i) || [])[1] || '';
+    const nucleo = nucleoVia(via); if (!nucleo || !paese) return null;
+    const sql = s => s.toUpperCase().replace(/'/g, "''");
+    const prova = async params => { const r = await conTempo(fetch(CENED + '?' + new URLSearchParams(params)), 15000); if (!r.ok) throw new Error('certificati: errore ' + r.status); return r.json(); };
+    let righe;
+    try { righe = await prova({ $where: `upper(comune)='${sql(paese)}' AND upper(indirizzo) like '%${sql(nucleo)}%'`, $order: 'data_ins DESC', $limit: '60' }); }
+    catch (e) { righe = await prova({ $q: nucleo + ' ' + paese, $limit: '60' }); }
+    const v = (r, k) => r[k] != null ? r[k] : r[k.toUpperCase()];
+    const tutte = (Array.isArray(righe) ? righe : []).map(r => ({
+      cod: v(r, 'cod_ape') || '', data: String(v(r, 'data_ins') || '').slice(0, 10), indirizzo: v(r, 'indirizzo') || '', comune: v(r, 'comune') || '',
+      piano: v(r, 'piano') || '', interno: v(r, 'interno') || '', anno: v(r, 'anno_costruzione') || '', sup: +v(r, 'superf_utile_riscaldata') || 0,
+      classe: v(r, 'classe_energetica') || '', ep: +v(r, 'ep_gl_nren') || 0, cat: v(r, 'comune_catastale') || ''
+    })).filter(r => r.indirizzo && (!r.comune || r.comune.toUpperCase() === paese.toUpperCase() || !/[a-z]/i.test(paese)));
+    const stesso = civ ? tutte.filter(r => new RegExp('(^|[^0-9])' + civ + '([^0-9]|$)').test(r.indirizzo.replace(/^[^0-9]*/, ' '))) : [];
+    return { civico: civ, via: nucleo, n: tutte.length, righe: (stesso.length ? stesso : []).slice(0, 8), altre: stesso.length ? 0 : Math.min(tutte.length, 60) };
+  }
+  async function edificioOSM(lat, lon) {
+    const j = await conTempo(Planner.overpass(`[out:json][timeout:20];way(around:25,${(+lat).toFixed(6)},${(+lon).toFixed(6)})["building"];out tags center 6;`, () => { }, 1), 25000);
+    let best = null, bd = Infinity;
+    (j.elements || []).forEach(e => { const c = e.center; if (!c) return; const d = dist([lat, lon], [c.lat, c.lon]); if (d < bd) { bd = d; best = e; } });
+    if (!best) return null;
+    const t = best.tags || {}, TIPO = { house: 'casa', detached: 'casa singola', semidetached_house: 'bifamiliare', terrace: 'casa a schiera', apartments: 'condominio', residential: 'residenziale', farm: 'cascina', villa: 'villa', yes: '' };
+    return { tipo: TIPO[t.building] != null ? TIPO[t.building] : t.building, piani: t['building:levels'] || '', anno: t.start_date || t['construction_date'] || '', alloggi: t['building:flats'] || '', nome: t.name || '', distanza: Math.round(bd) };
+  }
+  const datiInCorso = new Set();
+  async function cercaDati(h, forza) {
+    if (h.lat === '' || h.lat == null || datiInCorso.has(h.id)) return;
+    if (!forza && h.dati && Date.now() - h.dati.ts < 30 * 864e5) return;
+    if (!navigator.onLine) return;
+    datiInCorso.add(h.id); aggiornaSchedaDi(h);
+    const d = { ts: Date.now() };
+    const [cat, ape, osm] = await Promise.allSettled([particellaDa(+h.lat, +h.lng), apeDa(h.address, h.comune), edificioOSM(+h.lat, +h.lng)]);
+    if (cat.status === 'fulfilled') d.catasto = cat.value; else d.catastoErr = cat.reason && cat.reason.message || 'non raggiungibile';
+    if (ape.status === 'fulfilled') d.ape = ape.value; else d.apeErr = ape.reason && ape.reason.message || 'non raggiungibile';
+    if (osm.status === 'fulfilled') d.osm = osm.value; else d.osmErr = osm.reason && osm.reason.message || 'non raggiungibile';
+    if (d.catasto && d.ape && d.ape.righe.length) d.ape.righe.forEach(r => { r.stessaParticella = !!(r.cat && new RegExp('(^|\\D)' + d.catasto.particella + '(\\D|$)').test(r.cat)); });
+    const ape1 = d.ape && d.ape.righe[0];
+    if (ape1 && !h.superficie && ape1.sup) h.superficieDa = ape1.sup;
+    h.dati = d; datiInCorso.delete(h.id);
+    if (!h.remota) { try { await DB.put('case', h); } catch (e) { } }
+    aggiornaSchedaDi(h);
+  }
+  const aggiornaSchedaDi = h => { if ($('fScheda').classList.contains('aperto') && schedaAperta === h.id) disegnaDati(h); };
+  let schedaAperta = null;
+  const COL_CLASSE = { A4: '#0a7d3a', A3: '#0a7d3a', A2: '#2e9a45', A1: '#4fb14a', A: '#4fb14a', B: '#9bc53d', C: '#d9d31f', D: '#f2b40c', E: '#ee8a18', F: '#e4561e', G: '#c92a1f' };
+  const pillClasse = c => { const k = String(c || '').toUpperCase().replace(/\+/g, ''); return c ? `<span class="classe" style="background:${COL_CLASSE[k] || COL_CLASSE[k[0]] || '#6b7a80'}">${esc(c)}</span>` : ''; };
+  function disegnaDati(h) {
+    const box = $('sDati'); if (!box) return;
+    const d = h.dati || {}, carica = datiInCorso.has(h.id), cf = coefficienti(h.categoria || 'A/2');
+    const cat = h.catMan && (h.catMan.foglio || h.catMan.particella) ? Object.assign({}, d.catasto || {}, h.catMan, { manuale: true }) : d.catasto;
+    const rendita = +h.rendita || 0, sup = +h.superficie || +h.superficieDa || 0, omiMin = +h.omiMin || 0, omiMax = +h.omiMax || 0;
+    const riga = (k, v, fonte) => `<div class="dato"><span>${k}</span><b>${v}</b>${fonte ? `<small>${fonte}</small>` : ''}</div>`;
+    let html = '';
+    // catasto
+    html += `<div class="dati-gruppo"><h4>${ICO.mappa}Catasto</h4>` +
+      (cat && (cat.foglio || cat.particella) ? riga('Foglio e particella', `${cat.foglio ? 'Foglio ' + esc(cat.foglio) + (cat.allegato ? ' all. ' + esc(cat.allegato) : '') : ''}${cat.particella ? (cat.foglio ? ' · ' : '') + 'Particella ' + esc(cat.particella) : ''}${h.sub ? ' · Sub ' + esc(h.sub) : ''}`, cat.manuale ? 'scritti da te' : 'mappa catastale, Agenzia delle Entrate' + (cat.codice ? ' · comune ' + esc(cat.codice) : '')) :
+        carica ? '<p class="aiuto">Cerco la particella sulla mappa catastale…</p>' : `<p class="aiuto">${d.catastoErr ? 'Mappa catastale non raggiungibile adesso (' + esc(d.catastoErr) + ').' : 'Particella non ancora cercata.'} Puoi vederla sulla mappa: strati → "Mappa catastale".</p>`) +
+      (h.categoria || rendita ? riga('Categoria e rendita', `${esc(h.categoria || '—')}${rendita ? ' · rendita ' + euro(rendita).replace('€ ', '€ ') : ''}`, 'dalla visura') : '') +
+      (rendita ? (cf.abitativa ? riga('Valore catastale', `${euro(rendita * 1.05 * 110)} prima casa<br>${euro(rendita * 1.05 * 120)} altre abitazioni`, 'rendita × 1,05 × 110 / 120 (imposta di registro)') : riga('Valore catastale', euro(rendita * 1.05 * cf.registro), 'rendita × 1,05 × ' + String(cf.registro).replace('.', ',')))
+        + (cf.imu ? riga('Base imponibile IMU', euro(rendita * 1.05 * cf.imu), 'rendita × 1,05 × ' + cf.imu) : '') : '') +
+      `<div class="dati-link"><a target="_blank" rel="noopener" href="${LINK_VISURA}">Visura catastale</a><a target="_blank" rel="noopener" href="${LINK_GEOPORTALE}">Geoportale catastale</a></div></div>`;
+    // edificio
+    const o = d.osm;
+    html += `<div class="dati-gruppo"><h4>${ICO.casa}Edificio</h4>` +
+      (o && (o.tipo || o.piani || o.anno || o.alloggi) ? [o.tipo ? riga('Tipo', esc(o.tipo)) : '', o.piani ? riga('Piani fuori terra', esc(o.piani)) : '', o.alloggi ? riga('Appartamenti', esc(o.alloggi)) : '', o.anno ? riga('Costruito', esc(o.anno)) : ''].join('') + '<small class="fonte">OpenStreetMap</small>' :
+        carica ? '<p class="aiuto">Cerco l\'edificio…</p>' : `<p class="aiuto">${d.osmErr ? 'OpenStreetMap non raggiungibile adesso.' : o === null ? 'Su OpenStreetMap non ci sono dettagli di questo edificio.' : 'Non ancora cercato.'}</p>`) + '</div>';
+    // certificati energetici
+    const a = d.ape;
+    html += `<div class="dati-gruppo"><h4>${svg('<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>')}Certificati energetici (APE)</h4>` +
+      (a && a.righe.length ? a.righe.map(r => `<div class="ape"><div>${pillClasse(r.classe)}</div><div><b>${esc(r.indirizzo)}${r.piano ? ' · piano ' + esc(r.piano) : ''}${r.interno ? ' · int. ' + esc(r.interno) : ''}</b><span>${[r.anno ? 'costruito ' + esc(r.anno) : '', r.sup ? Math.round(r.sup) + ' m² riscaldati' : '', r.ep ? Math.round(r.ep) + ' kWh/m² anno' : '', r.data ? 'APE del ' + esc(new Date(r.data + 'T12:00').toLocaleDateString('it-IT', { month: 'short', year: 'numeric' })) : ''].filter(Boolean).join(' · ')}${r.stessaParticella ? ' · <b>stessa particella</b>' : ''}</span></div></div>`).join('') + '<small class="fonte">Regione Lombardia, open data CENED+2</small>' :
+        carica ? '<p class="aiuto">Cerco i certificati energetici…</p>' :
+        a ? `<p class="aiuto">${a.civico ? 'Nessun certificato per il numero ' + esc(a.civico) + '. ' : 'Aggiungi il numero civico all\'indirizzo per trovare il certificato. '}${a.altre ? a.altre + (a.altre >= 60 ? '+' : '') + ' certificati in via ' + esc(a.via) + '.' : ''}</p>` :
+        `<p class="aiuto">${d.apeErr ? 'Archivio dei certificati non raggiungibile adesso. Per ora c\'è solo quello della Lombardia.' : 'Non ancora cercati.'}</p>`) + '</div>';
+    // valore di mercato indicativo
+    html += `<div class="dati-gruppo"><h4>${ICO.grafico}Valore di mercato indicativo</h4>` +
+      (sup && omiMin && omiMax ? riga('Con le quotazioni OMI', `${euro(sup * omiMin)} – ${euro(sup * omiMax)}`, `${Math.round(sup)} m² × ${omiMin.toLocaleString('it-IT')}–${omiMax.toLocaleString('it-IT')} €/m²`) + (h.prezzo ? riga('Prezzo richiesto', `${esc(prezzoTesto(h.prezzo))} · ${Math.round(h.prezzo / sup).toLocaleString('it-IT')} €/m²`, h.prezzo > sup * omiMax ? 'sopra le quotazioni OMI' : h.prezzo < sup * omiMin ? 'sotto le quotazioni OMI' : 'dentro le quotazioni OMI') : '') :
+        `<p class="aiuto">${sup ? 'Superficie ' + Math.round(sup) + ' m²' + (h.superficie ? '' : ' (dal certificato energetico)') + '. ' : ''}Scrivi le quotazioni OMI della zona (min e max €/m²) per avere una forchetta.</p>`) +
+      `<div class="dati-link"><a target="_blank" rel="noopener" href="${LINK_OMI}">Quotazioni OMI</a></div></div>`;
+    html += `<button class="link" id="sDatiApri">${h.categoria || rendita || h.omiMin ? 'Cambia rendita, categoria, OMI' : 'Scrivi rendita, categoria, superficie, OMI'}</button>
+      <div id="sDatiForm" hidden>
+        <div class="riga" style="gap:10px"><div><label class="campo" for="dCat">Categoria</label><select class="campo" id="dCat"><option value="">—</option>${CATEGORIE.map(c => `<option${h.categoria === c ? ' selected' : ''}>${c}</option>`).join('')}</select></div><div><label class="campo" for="dRend">Rendita (€)</label><input class="campo" id="dRend" inputmode="decimal" value="${h.rendita ? esc(String(h.rendita).replace('.', ',')) : ''}" placeholder="dalla visura"></div></div>
+        <div class="riga" style="gap:10px"><div><label class="campo" for="dFoglio">Foglio</label><input class="campo" id="dFoglio" inputmode="numeric" value="${esc((h.catMan && h.catMan.foglio) || '')}" placeholder="${esc((d.catasto && d.catasto.foglio) || '')}"></div><div><label class="campo" for="dPart">Particella</label><input class="campo" id="dPart" value="${esc((h.catMan && h.catMan.particella) || '')}" placeholder="${esc((d.catasto && d.catasto.particella) || '')}"></div><div><label class="campo" for="dSub">Sub</label><input class="campo" id="dSub" inputmode="numeric" value="${esc(h.sub || '')}"></div></div>
+        <label class="campo" for="dSup">Superficie (m²)</label><input class="campo" id="dSup" inputmode="decimal" value="${h.superficie ? esc(String(h.superficie)) : ''}" placeholder="${h.superficieDa ? Math.round(h.superficieDa) + ' dal certificato' : ''}">
+        <div class="riga" style="gap:10px"><div><label class="campo" for="dOmiMin">OMI min €/m²</label><input class="campo" id="dOmiMin" inputmode="numeric" value="${h.omiMin || ''}"></div><div><label class="campo" for="dOmiMax">OMI max €/m²</label><input class="campo" id="dOmiMax" inputmode="numeric" value="${h.omiMax || ''}"></div></div>
+        <button class="tasto verde piccolo" id="dSalva">${ICO.ok}Salva</button></div>
+      <button class="link" id="sDatiAggiorna" ${carica ? 'disabled' : ''}>${carica ? 'Cerco…' : d.ts ? 'Cerca di nuovo (ultimo controllo ' + esc(giorniFa(d.ts)) + ')' : 'Cerca i dati della casa'}</button>`;
+    box.innerHTML = html;
+    const num = v => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return isFinite(n) && n > 0 ? n : ''; };
+    $('sDatiApri').onclick = () => { $('sDatiForm').hidden = !$('sDatiForm').hidden; };
+    $('sDatiAggiorna').onclick = () => cercaDati(h, true);
+    $('dSalva').onclick = async () => {
+      h.categoria = $('dCat').value; h.rendita = num($('dRend').value.replace(/\.(?=\d{3}\b)/g, '')); h.sub = $('dSub').value.trim();
+      const fo = $('dFoglio').value.trim(), pa = $('dPart').value.trim(); h.catMan = fo || pa ? { foglio: fo, particella: pa } : null;
+      h.superficie = num($('dSup').value); h.omiMin = num($('dOmiMin').value); h.omiMax = num($('dOmiMax').value);
+      if (h.omiMin && h.omiMax && h.omiMin > h.omiMax) [h.omiMin, h.omiMax] = [h.omiMax, h.omiMin];
+      try { await DB.put('case', h); toast('Dati salvati', 'ok'); } catch (e) { toast('Non riesco a salvare: ' + e.message, 'errore'); }
+      disegnaDati(h);
+    };
+  }
+  // strato della mappa catastale (immagini WMS: particelle, fabbricati e numeri)
+  let stratoCatasto = null, erroriCatasto = 0;
+  function mostraCatasto(on) {
+    if (on && !stratoCatasto) {
+      stratoCatasto = L.tileLayer.wms(WMS_CAT, { layers: 'CP.CadastralParcel,fabbricati,codice_plla', styles: '', format: 'image/png', transparent: true, version: '1.3.0', crs: L.CRS.EPSG4326, minZoom: 16, maxZoom: 21, maxNativeZoom: 20, opacity: .9, pane: 'catasto', attribution: 'Catasto © Agenzia delle Entrate' });
+      stratoCatasto.on('tileerror', () => { if (++erroriCatasto === 4) toast('La mappa catastale non risponde adesso.', 'errore', 5000); });
+      stratoCatasto.on('tileload', () => { erroriCatasto = 0; });
+    }
+    if (on) { stratoCatasto.addTo(map); if (map.getZoom() < 16) toast('Avvicinati per vedere le particelle (zoom).', '', 4000); } else if (stratoCatasto) map.removeLayer(stratoCatasto);
+  }
+  map.createPane('catasto').style.zIndex = 400;
 
   // ---------- è già in vendita? ricerca sui portali dall'indirizzo ----------
   // I portali non danno i loro annunci ad altre app: l'app apre la ricerca giusta e l'agente segna quello che trova.
@@ -1059,6 +1231,11 @@
     return 'https://www.google.com/search?q=' + encodeURIComponent(q);
   }
   const portaliHTML = (address, comune) => PORTALI.map(p => `<a class="portale" target="_blank" rel="noopener" href="${esc(linkPortale(p, address, comune))}">${svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}${esc(p.n)}</a>`).join('');
+  function catastoCSV(h) {
+    const c = h.catMan && (h.catMan.foglio || h.catMan.particella) ? h.catMan : (h.dati && h.dati.catasto) || {};
+    const a = h.dati && h.dati.ape && h.dati.ape.righe[0];
+    return [c.foglio || '', c.particella || '', h.sub || '', h.categoria || '', h.rendita ? String(h.rendita).replace('.', ',') : '', h.superficie || (h.superficieDa ? Math.round(h.superficieDa) : ''), a ? a.classe : ''];
+  }
   const leggiPrezzo = t => { t = String(t || '').trim(); if (!t) return ''; let n = +t.replace(/[^\d]/g, ''); if (!n) return ''; if (/k\b|mila/i.test(t) && n < 10000) n *= 1000; return n; };
   const prezzoTesto = n => n ? '€ ' + Number(n).toLocaleString('it-IT') : '';
 
@@ -1207,6 +1384,8 @@
       foto: nc.foto.slice(), audio: nc.audio, audioSec: nc.audioSec || 0,
       sync: vecchia && vecchia.sync === 'ok' ? 'ok' : conGoogle() ? 'attesa' : 'locale', remote: vecchia ? vecchia.remote : null
     };
+    if (vecchia) ['dati', 'categoria', 'rendita', 'sub', 'catMan', 'superficie', 'superficieDa', 'omiMin', 'omiMax'].forEach(k => { if (vecchia[k] != null) h[k] = vecchia[k]; });
+    if (vecchia && (vecchia.address !== h.address || vecchia.lat !== h.lat || vecchia.lng !== h.lng)) { h.dati = null; h.superficieDa = ''; }
     h.annuncioTs = vecchia && vecchia.prezzo === h.prezzo && (vecchia.annuncio || '') === h.annuncio ? vecchia.annuncioTs || '' : (h.prezzo || h.annuncio ? Date.now() : '');
     try { h.mini = h.foto[0] ? await riduci(h.foto[0], 200, 0.7) : ''; } catch (e) { h.mini = ''; }
     try { await DB.put('case', h); } catch (e) { toast('Memoria del telefono piena: libera spazio e riprova.', 'errore', 6000); return; }
@@ -1214,6 +1393,7 @@
     if (vecchia && h.sync === 'ok' && conGoogle()) api('updateHouse', { id: h.id, stato: h.stato }).catch(() => { });
     nc = null; chiudi('fCasa');
     toast(vecchia ? 'Casa aggiornata' : 'Casa salvata', 'ok');
+    if (!h.dati) setTimeout(() => cercaDati(h), 1500);
     if (vecchia) { if ($('fCase').classList.contains('aperto')) disegnaLista(); }
     svuotaCoda();
   };
@@ -2066,10 +2246,11 @@
         ${cfg.mostraVolantini ? `<div><i class="tratteggio" style="border-color:${ARANCIO}"></i>Volantini (3 mesi)</div>` : ''}
         ${vistaZona ? `<div><i class="campitura" style="background:rgba(${COL_VISTA},.45)"></i>Parte della zona già vista</div><div><i class="campitura" style="background:rgba(${COL_DAFARE},.45)"></i>Parte della zona da vedere</div><div><i style="background:#17262b;height:5px"></i>Confine della zona</div>` : ''}
       </div>
-      ${voce('sNote', 'Notizie sulla mappa', cfg.mostraNote !== false)}${voce('sVol', 'Strade con volantini', !!cfg.mostraVolantini)}${S.fase === 'home' ? voce('sZona', 'Tutta la zona', vistaZona) : ''}`;
+      ${voce('sNote', 'Notizie sulla mappa', cfg.mostraNote !== false)}${voce('sVol', 'Strade con volantini', !!cfg.mostraVolantini)}${voce('sCat', 'Mappa catastale<small>Particelle e fabbricati, da vicino</small>', !!(stratoCatasto && map.hasLayer(stratoCatasto)))}${S.fase === 'home' ? voce('sZona', 'Tutta la zona', vistaZona) : ''}`;
     box.classList.add('aperto');
     $('sNote').onclick = () => { cfg.mostraNote = cfg.mostraNote === false; salvaCfg(); disegnaNote(); box.classList.remove('aperto'); apriStrati(); };
     $('sVol').onclick = () => { cfg.mostraVolantini = !cfg.mostraVolantini; salvaCfg(); disegnaRete(); box.classList.remove('aperto'); apriStrati(); };
+    $('sCat').onclick = () => { mostraCatasto(!(stratoCatasto && map.hasLayer(stratoCatasto))); box.classList.remove('aperto'); apriStrati(); };
     if ($('sZona')) $('sZona').onclick = () => { box.classList.remove('aperto'); mostraZona(!vistaZona); };
   }
   $('tStrati').onclick = apriStrati;

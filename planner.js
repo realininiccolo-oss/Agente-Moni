@@ -704,5 +704,5 @@
     for (let e = 0; e < Gv.m; e++) if (av[e]) { const a = Gv.EU[e], b = Gv.EV[e]; segna(Gn, an, (Gv.R.lat[a] + Gv.R.lat[b]) / 2, (Gv.R.lon[a] + Gv.R.lon[b]) / 2, 8, av[e]); }
   }
 
-  global.Planner = { versione: 6, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, trovaAree, quartieri, confineQuartiere, confineComune, anelliDa, involucro, areaKm2, dentroPoligono, semplifica, segna, segnaTratto, rimappaSegno, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
+  global.Planner = { versione: 7, overpass, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, trovaAree, quartieri, confineQuartiere, confineComune, anelliDa, involucro, areaKm2, dentroPoligono, semplifica, segna, segnaTratto, rimappaSegno, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
 })(typeof window !== 'undefined' ? window : globalThis);

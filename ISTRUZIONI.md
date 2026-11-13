@@ -1,8 +1,19 @@
-# Zona — versione 12
+# Zona — versione 13
 
 L'app per il **farming immobiliare**: l'agente lavora sempre la stessa zona (alcuni comuni, oppure un quartiere in città), la gira a piedi, conosce le case e raccoglie notizie dalle persone del posto. Zona tiene tutto in ordine. Funziona in qualsiasi zona italiana presente su OpenStreetMap; i dati restano sul telefono.
 
-## Cosa c'è di nuovo nella 12
+## Cosa c'è di nuovo nella 13
+- **Dati della casa** nella scheda, cercati da soli la prima volta che si apre (e ricontrollabili con "Cerca di nuovo"):
+  - **Catasto**: foglio e particella dal punto della casa, dalla mappa catastale dell'Agenzia delle Entrate (servizio libero); link a Visura catastale e Geoportale.
+  - **Edificio**: tipo, piani, anno di costruzione se presenti su OpenStreetMap.
+  - **Certificati energetici (APE)** dello stesso indirizzo e civico, dall'open data di Regione Lombardia (CENED+2): classe, piano, anno, m² riscaldati, consumo; "stessa particella" se combaciano col catasto. Solo Lombardia.
+  - **Valore catastale** (prima casa e altre abitazioni) e **base IMU** quando si scrivono categoria e rendita della visura.
+  - **Valore di mercato indicativo**: superficie × quotazioni OMI (min-max €/m², da scrivere), confrontato col prezzo richiesto.
+- **Mappa catastale** come strato della mappa (strati → "Mappa catastale"), visibile da vicino.
+- **Carattere Inter** al posto di Atkinson Hyperlegible: aspetto più professionale, numeri in colonna.
+- Rendita e categoria non si leggono in automatico: servono la visura (gratis per il proprietario, a pagamento per gli altri) o i documenti del cliente.
+
+## Cosa c'era nella 12
 - **Obiettivi con i selettori**: cursore con + e − al posto dei bottoni (ore a piedi da 30 minuti a 40 ore, case 1-100, notizie 1-60, ripasso dalle persone da "mai" a 120 giorni). Tenendo premuto + o − il valore scorre.
 - **Tutta la zona sulla mappa**: confine esterno di tutta la zona spesso e scuro (i confini tra un comune e l'altro restano sottili e tratteggiati); dentro, verde chiaro la parte già vista e ocra chiaro quella da vedere. I confini veri dei comuni arrivano da OpenStreetMap la prima volta che si apre la vista; senza rete si usa un contorno approssimato.
 - **È già in vendita?** Nella scheda della casa e nel modulo "Nuova casa": ricerca dell'indirizzo su Immobiliare.it, Idealista, Casa.it e su tutti i siti (ricerca Google), poi agenzia, prezzo e link dell'annuncio. Una casa con annuncio passa da "Da valutare" a "Cartello vendita". Prezzo e annuncio vanno anche nell'Excel e nella condivisione.
@@ -22,7 +33,7 @@ L'app per il **farming immobiliare**: l'agente lavora sempre la stessa zona (alc
 - **Più agenti sullo stesso telefono** e **PIN** facoltativo (Profilo).
 - **Agenzia sul cartello** nella scheda casa.
 
-## Aggiornare il telefono (da Agente Moni 8, 9, 10 o Zona 11)
+## Aggiornare il telefono (da Agente Moni 8, 9, 10 o Zona 11-12)
 Niente da fare: l'app si aggiorna da sola dal collegamento di GitHub Pages. Aprila, chiudila del tutto e riaprila. Le case, le mappe e le strade viste restano; le strade viste diventano subito il "segno" dei 3 mesi. Al primo avvio compare il benvenuto con la zona già pronta: basta scrivere il nome e premere Avanti.
 
 Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e l'icona nuovi bisogna toglierlo e rimetterlo (Chrome ⋮ → Aggiungi a schermata Home).
@@ -61,6 +72,8 @@ Il collegamento sulla schermata Home continua a funzionare; per vedere il nome e
 - Case: campi nuovi `prezzo` (numero), `annuncio` (link), `annuncioTs`. Aree: `confine` (anelli del comune da OSM, semplificati).
 - Vista zona: griglia (circa 300 mila celle) in cui ogni cella prende lo stato della strada con case più vicina; disegnata su un canvas tagliato sull'unione delle aree. Il bordo esterno si ottiene disegnando i contorni e cancellando l'interno.
 - Annunci dei portali: nessuna lettura automatica (i portali non la permettono a terzi e i loro termini vietano lo sfruttamento commerciale dei contenuti); l'app apre una ricerca Google limitata al sito.
+- Dati casa: `dati` (ts, catasto {codice, foglio, allegato, particella, rif}, ape {civico, via, n, righe}, osm), `categoria`, `rendita`, `sub`, `catMan` (foglio/particella scritti a mano), `superficie`, `superficieDa` (dal certificato), `omiMin`, `omiMax`. Ricerca automatica al massimo ogni 30 giorni.
+- Fonti: WMS `wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php` (GetFeatureInfo su CP.CadastralParcel, EPSG:4258 poi 4326; strato GetMap in EPSG:4326), Socrata `dati.lombardia.it/resource/bbky-sde5.json` ($where su comune e via, riserva $q), Overpass (edificio entro 25 m). Se una fonte non risponde all'app (rete o blocco CORS) la scheda lo dice e restano i link.
 - Il PIN è salvato come impronta SHA-256: tiene lontani i curiosi, non è una cifratura dei dati.
 - Script Google invariato: taccuino, persone e uscite non vanno nel foglio; stanno nel backup.
 - Mappe © OpenStreetMap (licenza ODbL): l'attribuzione resta visibile sulla mappa.
