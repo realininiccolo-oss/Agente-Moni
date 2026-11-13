@@ -1,4 +1,4 @@
-# Agente Moni — versione 9
+# Agente Moni — versione 10
 
 App per agenti immobiliari che girano i paesi a piedi. Funziona in qualsiasi comune italiano presente su OpenStreetMap, senza account e senza configurazione.
 
@@ -9,10 +9,12 @@ App per agenti immobiliari che girano i paesi a piedi. Funziona in qualsiasi com
 - **Da lontano**: propone le zone più vicine con case da vedere e porta al parcheggio con Google Maps.
 - **Schede casa**: indirizzo automatico (anche senza internet), foto, nota vocale, stato, tipo, telefono del cartello con tasto Chiama, note. Avvisa se in quel punto c'è già una casa salvata.
 - **Condivisione**: una casa si manda su WhatsApp con foto e posizione; l'elenco si esporta in Excel; il backup completo serve per cambiare telefono.
+- **Notifiche**: anche con il telefono in tasca avvisa quando mancano 10 minuti, quando il tempo è finito, quando il giro cambia (strada diversa, giro accorciato o allungato) e all'arrivo al parcheggio. Il permesso viene chiesto alla prima partenza; si spengono in Impostazioni → Avvisi.
+- **Promemoria per richiamare**: nella scheda casa si sceglie il giorno; quel giorno l'app lo ricorda (notifica e avviso in alto), e con "Metti il promemoria nel calendario" arriva l'avviso di Google Calendar anche ad app chiusa.
 - **Case isolate**: cascine e case lontane dal paese, da vedere in macchina; si segnano da sole passandoci vicino.
 - **Google (facoltativo)**: con lo script Google già fatto, le case vanno anche nel foglio condiviso e mappa e strade viste passano da un dispositivo all'altro.
 
-## Aggiornare il telefono di mamma (dalla versione 8)
+## Aggiornare il telefono di mamma (dalla versione 8 o 9)
 Tempo: 5 minuti. Lo script Google **non** va toccato.
 
 1. Su GitHub, nel repository: **Add file → Upload files**, trascina tutti i file dello zip (index.html, app.js, planner.js, sw.js, manifest.webmanifest, icon-192.png, icon-512.png, ISTRUZIONI.md) e premi **Commit changes**. Vanno caricati tutti insieme.
@@ -42,6 +44,7 @@ I suoi dati restano sul suo telefono. Per non perderli conviene fare ogni tanto 
 | "Comune non trovato" | scrivi il nome ufficiale completo (per esempio "Paderno Franciacorta", non "Paderno") |
 | Il GPS non si muove | Android: Posizione attiva e precisione elevata; permesso posizione a Chrome |
 | Le strade non diventano verdi | si segnano solo a piedi e con un buon segnale GPS (sotto i 30 m di errore) |
+| Non arrivano le notifiche | Chrome ⋮ → Impostazioni → Impostazioni sito → Notifiche: consenti; poi Impostazioni dell'app → Avvisi |
 | Il microfono non funziona | Chrome ⋮ → Impostazioni → Impostazioni sito → Microfono: consenti |
 
 ## Note tecniche

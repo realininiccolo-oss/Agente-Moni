@@ -272,6 +272,7 @@
   .sceglimappa { position: fixed; z-index: 650; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 10px); background: var(--ocra); color: var(--ardesia); border-radius: 18px; padding: 14px 16px; font-weight: 700; font-size: 18px; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
   .sceglimappa.visibile { display: flex; gap: 10px; align-items: center; } .sceglimappa span { flex: 1; }
   .sceglimappa button { border: 0; background: rgba(23,38,43,.12); border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 16px; }
+  #fScheda { z-index: 950; } #fCasa { z-index: 960; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -319,6 +320,11 @@
     <div class="sezione">
       <h3>Telefono sul cartello</h3>
       <div class="tel"><input class="campo" type="tel" id="telefono" inputmode="tel" placeholder="Facoltativo" autocomplete="off"></div>
+    </div>
+    <div class="sezione">
+      <h3>Da richiamare il</h3>
+      <input class="campo" type="date" id="richiamo" aria-label="Giorno in cui richiamare">
+      <p class="aiuto">Facoltativo. Quel giorno l'app te lo ricorda.</p>
     </div>
     <div class="sezione">
       <h3>Che tipo di casa?</h3>
@@ -372,7 +378,7 @@
   });
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="planner.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="planner.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

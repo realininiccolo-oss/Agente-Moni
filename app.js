@@ -3,7 +3,7 @@
    Il collegamento a Google (foglio e cartella Drive) è facoltativo. */
 (() => {
   'use strict';
-  const VERSIONE = 9;
+  const VERSIONE = 10;
   const $ = id => document.getElementById(id);
   const LS = {
     get: (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -83,6 +83,24 @@
   function toast(msg, tipo = '', ms = 3200) { const t = $('toast'); t.textContent = msg; t.className = tipo; t.style.display = 'block'; clearTimeout(toast._t); toast._t = setTimeout(() => t.style.display = 'none', ms); }
   function parla(testo) { if (!cfg.voce || !('speechSynthesis' in window)) return; try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(testo); u.lang = 'it-IT'; speechSynthesis.speak(u); } catch (e) { } }
   const vibra = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { } };
+  // notifiche del telefono: arrivano anche con lo schermo spento o con un'altra app davanti
+  const notificheOk = () => 'Notification' in window && Notification.permission === 'granted' && cfg.notifiche !== false;
+  async function chiediNotifiche() {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) { } }
+    cfg.notifiche = Notification.permission === 'granted'; salvaCfg();
+    return cfg.notifiche;
+  }
+  async function notifica(titolo, testo, tag = 'giro', sempre = false) {
+    vibra([200, 100, 200]);
+    if (!notificheOk() || (!sempre && document.visibilityState === 'visible')) return false; // con l'app davanti basta l'avviso nell'app
+    const o = { body: testo, tag, renotify: true, icon: 'icon-192.png', badge: 'icon-192.png', vibrate: [200, 100, 200], data: { url: location.href.split('#')[0] } };
+    try {
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.showNotification(titolo, o); else new Notification(titolo, o);
+      return true;
+    } catch (e) { return false; }
+  }
   const pausa = ms => new Promise(r => setTimeout(r, ms));
   const mapsAuto = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=driving`;
   const mapsPiedi = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=walking`;
@@ -395,6 +413,7 @@
 
     if (S.fase === 'home') {
       let html = testa;
+      const rich = daRichiamare(); if (rich.length) html += `<button class="vicina" id="bRichiami" style="width:100%;border:0;text-align:left">${ICO.telefono.replace('<svg', '<svg width="26" height="26"')}<span><b>${rich.length === 1 ? '1 casa da richiamare' : rich.length + ' case da richiamare'}</b><br>${esc(rich[0].address || 'Casa')}${rich.length > 1 ? ' e altre' : ''}</span></button>`;
       if (S.ultima && Date.now() - S.ultima.quando < 14 * 3600e3) html += `<p class="nota-ok">Ultima uscita: ${kmTesto(S.ultima.kmNuovi * 1000)} di strade nuove, ${S.ultima.case === 1 ? '1 casa salvata' : S.ultima.case + ' case salvate'}.</p>`;
       if (anteprima) {
         const a = anteprima, r = a.rotta, lontano = a.meta && !(posizione && dist([posizione.lat, posizione.lng], [a.meta.lat, a.meta.lon]) < 200);
@@ -421,7 +440,7 @@
         box.querySelectorAll('.tempo').forEach(b => b.onclick = () => scegliTempo(+b.dataset.min));
         on('bMappa', iniziaSceltaMappa); on('bAuto', () => { S.fase = 'macchina'; salvaStato(); aggiorna(true); }); on('bCasaQui', () => apriNuovaCasa());
       }
-      on('bComune', apriComuni);
+      on('bComune', apriComuni); on('bRichiami', () => { filtro = '__richiamo'; apriCase(); });
       return;
     }
     if (S.fase === 'verso') {
@@ -516,8 +535,9 @@
     S.fase = 'cammino'; S.meta = null; S.minuti = minuti; S.torna = torna;
     S.auto = { lat: p.lat, lon: p.lon }; S.rotta = null; // la macchina resta qui: serve anche per "Torno alla macchina"
     S.fine = minuti ? Date.now() + minuti * 60e3 : null;
-    S.sessione = { inizio: Date.now(), km0: avanzamento().kmFatti, metri: 0 };
+    S.sessione = { inizio: Date.now(), km0: avanzamento().kmFatti, metri: 0 }; S.avvisi = {};
     salvaStato();
+    if (cfg.notifiche == null) chiediNotifiche();
     if (rotta && rotta.coords.length && dist(rotta.coords[0], [p.lat, p.lon]) < 80) impostaRotta(rotta, true); else ricalcola('inizio');
     segui = true; if (posizione) map.setView([posizione.lat, posizione.lng], 18);
     parla('Si parte. Segui la linea gialla.');
@@ -541,15 +561,19 @@
     }
     const prima = S.rotta;
     impostaRotta(r);
-    if (motivo === 'fuori') { toast('Percorso aggiornato da dove sei', 'ok'); parla('Percorso aggiornato.'); }
-    else if (motivo === 'corto') { toast('Ho accorciato il giro per farti tornare in tempo.', 'ok', 5000); parla('Ho accorciato il giro per farti tornare in tempo.'); }
-    else if (motivo === 'lungo') toast('Hai tempo in più: ho aggiunto altre strade.', 'ok', 5000);
+    if (motivo === 'fuori') { toast('Percorso aggiornato da dove sei', 'ok'); parla('Percorso aggiornato.'); notifica('Percorso aggiornato', 'Hai preso un\'altra strada: il giro riparte da dove sei.'); }
+    else if (motivo === 'corto') { toast('Ho accorciato il giro per farti tornare in tempo.', 'ok', 5000); parla('Ho accorciato il giro per farti tornare in tempo.'); notifica('Giro accorciato', 'Così torni alla macchina in tempo.'); }
+    else if (motivo === 'lungo') { toast('Hai tempo in più: ho aggiunto altre strade.', 'ok', 5000); notifica('Hai tempo in più', 'Ho aggiunto altre strade al giro.'); }
     else if (motivo === 'mano') toast('Percorso ricalcolato: ' + kmTesto(r.kmNuovi * 1000) + ' di case nuove.', 'ok');
     void prima;
   }
   // ogni mezzo minuto: il giro sta nel tempo che resta?
   function controllaTempo() {
-    if (!G || S.fase !== 'cammino' || !S.rotta || S.rotta.ritorno || !S.fine) return;
+    if (!G || S.fase !== 'cammino' || !S.fine) return;
+    const av = S.avvisi || (S.avvisi = {}), mancano = (S.fine - Date.now()) / 60e3;
+    if (S.minuti >= 30 && mancano <= 10 && mancano > 0 && !av.dieci) { av.dieci = 1; salvaStato(); notifica('Mancano 10 minuti', S.torna ? 'Il giro ti sta già riportando alla macchina.' : 'Tra poco finisce il tempo che avevi.'); if (document.visibilityState === 'visible') toast('Mancano 10 minuti.', 'ok'); }
+    if (mancano <= 0 && !av.fine) { av.fine = 1; salvaStato(); notifica('Tempo finito', S.auto ? 'Apri l\'app: ti porto alla macchina.' : 'Il tempo che avevi è finito.'); parla('Il tempo che avevi è finito.'); pannello(); }
+    if (!S.rotta || S.rotta.ritorno) return;
     if (Date.now() - S.calcolo < 3 * 60e3) return;
     const restaGiro = restoOre(S.rotta) * 60, restaTempo = (S.fine - Date.now()) / 60e3;
     if (restaGiro > restaTempo + 6) ricalcola('corto');
@@ -575,6 +599,17 @@
     festa(allaMacchina ? 'Sei alla macchina' : 'Giro finito', `Oggi: ${kmTesto(nuovi * 1000)} di strade nuove, ${caseOggi()} ${caseOggi() === 1 ? 'casa salvata' : 'case salvate'}.` + (S.fine && restoMin > 15 ? ` Hai ancora circa ${oreTesto(restoMin / 60)}.` : ''),
       S.fine && restoMin < 15 ? [{ t: 'Basta per oggi', f: bastaPerOggi }, continua] : [continua, { t: 'Basta per oggi', f: bastaPerOggi }]);
   }
+  // promemoria: case da richiamare oggi o in ritardo (tutte, di ogni comune)
+  const oggiISO = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const daRichiamare = () => [...case_.values()].filter(h => h.richiamo && h.richiamo <= oggiISO()).sort((a, b) => a.richiamo < b.richiamo ? -1 : 1);
+  const dataTesto = iso => new Date(iso + 'T12:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  function controllaRichiami() {
+    const lista = daRichiamare(); if (!lista.length) return;
+    const chiave = oggiISO(); if (LS.get('richiamiAvvisati', '') === chiave) return;
+    LS.set('richiamiAvvisati', chiave);
+    notifica(lista.length === 1 ? 'Da richiamare oggi' : lista.length + ' case da richiamare', lista.slice(0, 3).map(h => (h.address || 'Casa') + (h.telefono ? ' – ' + h.telefono : '')).join('\n'), 'richiami', true);
+  }
+  setInterval(controllaRichiami, 30 * 60e3);
   const caseOggi = () => { const da = S.sessione ? S.sessione.inizio : Date.now(); return [...case_.values()].filter(h => h.comune === cfg.comune && h.ts >= da).length; };
   function bastaPerOggi() {
     const av = avanzamento();
@@ -645,6 +680,7 @@
     $('festa').classList.add('aperto');
     $('festaScheda').querySelectorAll('[data-i]').forEach(el => el.onclick = () => { $('festa').classList.remove('aperto'); bottoni[+el.dataset.i].f(); });
     parla(titolo + '. ' + testo); vibra([80, 60, 80]);
+    notifica(titolo, testo, 'fine');
   }
 
   // ---------- avanzamento lungo il percorso ----------
@@ -684,7 +720,7 @@
     io.setLatLng([lat, lng]); cerchio.setLatLng([lat, lng]).setRadius(acc);
     if (primaVolta) { lIo.addLayer(cerchio); lIo.addLayer(io); if (S.fase === 'cammino') map.setView([lat, lng], 18); else if (!G) map.setView([lat, lng], 13); pannello(); }
     else if (segui && S.fase === 'cammino') map.panTo([lat, lng], { animate: true });
-    if (S.fase === 'verso' && S.meta) { const v = dist([lat, lng], [S.meta.lat, S.meta.lon]) < 180; if (v !== suPosizione.arrivata) { suPosizione.arrivata = v; pannello(); if (v) { vibra([150, 80, 150]); parla('Sei al parcheggio.'); } } }
+    if (S.fase === 'verso' && S.meta) { const v = dist([lat, lng], [S.meta.lat, S.meta.lon]) < 180; if (v !== suPosizione.arrivata) { suPosizione.arrivata = v; pannello(); if (v) { vibra([150, 80, 150]); parla('Sei al parcheggio.'); notifica('Sei al parcheggio', 'Apri l\'app e inizia a camminare.', 'parcheggio'); } } }
     if (S.fase === 'macchina' && G) (R.isolate || []).forEach((s, i) => { if (!S.isolateViste[i] && dist([lat, lng], [s.lat, s.lon]) < 70) { S.isolateViste[i] = true; salvaStato(); toast('Casa isolata vista', 'ok'); aggiorna(false); } });
     if (acc > 30) return;
     const pt = [lat, lng];
@@ -757,7 +793,7 @@
     lCase.clearLayers(); marcatori.clear(); case_.clear();
     try { (await DB.all('case')).forEach(h => case_.set(h.id, h)); } catch (e) { }
     [...case_.values()].forEach(h => marcatore(h));
-    contaCase(); statoInvio();
+    contaCase(); statoInvio(); pannello(); controllaRichiami();
     if (conGoogle() && cfg.comune) {
       const nome = cfg.comune;
       try { (await api('listHouses', { comune: nome })).forEach(h => { if (case_.has(h.id) || nome !== cfg.comune) return; const v = { ...h, remota: true, comune: h.comune || nome }; case_.set(h.id, v); marcatore(v); }); } catch (e) { }
@@ -771,21 +807,24 @@
   $('tCase').onclick = apriCase;
   const casePerComune = () => [...case_.values()].filter(h => h.comune === cfg.comune).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   function disegnaLista() {
-    const tutte = casePerComune();
+    const tutte = filtro === '__richiamo' ? daRichiamare() : casePerComune();
     $('tfCase').textContent = 'Le mie case' + (cfg.comune ? ' a ' + cfg.comune : '');
     const f = $('filtri'); f.innerHTML = '';
+    const nRich = daRichiamare().length;
+    if (nRich) { const b = document.createElement('button'); b.className = 'scelta senza-icona'; b.setAttribute('aria-pressed', filtro === '__richiamo'); b.textContent = 'Da richiamare (' + nRich + ')'; b.onclick = () => { filtro = '__richiamo'; disegnaLista(); }; f.appendChild(b); }
+    else if (filtro === '__richiamo') filtro = '';
     [{ k: '', n: 'Tutte' }, ...STATI.map(s => ({ k: s.k, n: s.k }))].forEach(o => {
-      const n = o.k ? tutte.filter(h => h.stato === o.k).length : tutte.length; if (o.k && !n) return;
+      const n = o.k ? casePerComune().filter(h => h.stato === o.k).length : casePerComune().length; if (o.k && !n) return;
       const b = document.createElement('button'); b.className = 'scelta' + (o.k ? '' : ' senza-icona'); b.setAttribute('aria-pressed', filtro === o.k);
       b.innerHTML = (o.k ? pinSVG(o.k) : '') + esc(o.n) + ' (' + n + ')'; b.onclick = () => { filtro = o.k; disegnaLista(); }; f.appendChild(b);
     });
-    const l = $('listaCase'), vis = tutte.filter(h => !filtro || h.stato === filtro);
+    const l = $('listaCase'), vis = tutte.filter(h => !filtro || filtro === '__richiamo' || h.stato === filtro);
     l.innerHTML = vis.length ? '' : `<div class="vuoto">${tutte.length ? 'Nessuna casa con questo stato.' : 'Non hai ancora salvato case qui. Mentre cammini, premi "Nuova casa".'}</div>`;
     vis.forEach(h => {
       const b = document.createElement('button'); b.className = 'casa-riga';
       const data = h.ts ? new Date(h.ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : '';
       const img = h.mini || fotoDi(h)[0];
-      b.innerHTML = `${pinSVG(h.stato)}<div><b>${esc(h.address || 'Casa senza indirizzo')}</b><span>${esc(h.stato || '')}${h.tipo ? ', ' + esc(h.tipo.toLowerCase()) : ''}${data ? ', ' + data : ''}${h.sync === 'attesa' && conGoogle() ? ', in invio' : ''}</span></div>${img ? `<img src="${img}" alt="">` : ''}`;
+      b.innerHTML = `${pinSVG(h.stato)}<div><b>${esc(h.address || 'Casa senza indirizzo')}</b><span>${esc(h.stato || '')}${h.tipo ? ', ' + esc(h.tipo.toLowerCase()) : ''}${data ? ', ' + data : ''}${h.sync === 'attesa' && conGoogle() ? ', in invio' : ''}${h.richiamo ? ', richiamare ' + new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }) : ''}</span></div>${img ? `<img src="${img}" alt="">` : ''}`;
       b.onclick = () => apriScheda(h.id);
       l.appendChild(b);
     });
@@ -805,6 +844,8 @@
       <div class="scheda-sotto">${esc([h.tipo, data, h.comune].filter(Boolean).join(' · '))}</div>
       ${h.remota && (h.photos || []).length ? `<p><a class="link" target="_blank" rel="noopener" href="${esc(h.photos[0])}">Apri le foto</a></p>` : ''}
       ${h.telefono ? `<a class="tasto verde" href="tel:${esc(h.telefono.replace(/[^\d+]/g, ''))}">${ICO.telefono}Chiama ${esc(h.telefono)}</a>` : ''}
+      ${h.richiamo ? `<div class="vicina" style="margin-top:12px"><span>Da richiamare <b>${esc(dataTesto(h.richiamo))}</b></span><button class="tasto ocra" id="sRichiamato">Fatto</button></div>
+        <a class="tasto piccolo" target="_blank" rel="noopener" href="${calendario(h)}">Metti il promemoria nel calendario</a>` : ''}
       ${h.audio ? `<div class="sezione"><h3>Nota vocale</h3><div class="voce"><div class="ascolta" style="flex:1"><button class="play" id="sPlay" aria-label="Ascolta">${ICO.play}</button><div class="barra-audio"><div id="sBarra"></div></div></div></div></div>` : ''}
       ${h.note ? `<div class="sezione"><h3>Note</h3><p style="white-space:pre-wrap;margin:0">${esc(h.note)}</p></div>` : ''}
       <div class="sezione"><h3>Stato</h3><div class="scelte griglia" id="sStati"></div></div>
@@ -826,6 +867,7 @@
       }
     }
     $('sCondividi').onclick = () => condividiCasa(h);
+    if ($('sRichiamato')) $('sRichiamato').onclick = async () => { h.richiamo = ''; await DB.put('case', h); toast('Promemoria tolto', 'ok'); apriScheda(h.id); pannello(); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
     if (!h.remota) {
       $('sModifica').onclick = () => { chiudi('fScheda'); apriNuovaCasa(h); };
       $('sElimina').onclick = async () => { if (!confirm('Eliminare questa casa dal telefono?' + (h.sync === 'ok' ? ' Nel foglio Google resta.' : ''))) return; await DB.del('case', h.id); case_.delete(h.id); if (marcatori.has(h.id)) lCase.removeLayer(marcatori.get(h.id)); marcatori.delete(h.id); contaCase(); chiudi('fScheda'); toast('Casa eliminata'); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
@@ -841,6 +883,12 @@
       toast('Stato: ' + stato, 'ok');
     } catch (e) { h.stato = prima; marcatore(h); toast('Non riesco a cambiare lo stato: ' + e.message, 'errore', 6000); }
     apriScheda(h.id); if ($('fCase').classList.contains('aperto')) disegnaLista();
+  }
+  // evento nel calendario Google: avvisa anche con l'app chiusa
+  function calendario(h) {
+    const d = h.richiamo.replace(/-/g, ''), d2 = new Date(h.richiamo + 'T12:00'); d2.setDate(d2.getDate() + 1);
+    const fine = d2.getFullYear() + String(d2.getMonth() + 1).padStart(2, '0') + String(d2.getDate()).padStart(2, '0');
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent('Richiamare: ' + (h.address || 'casa')) + '&dates=' + d + '/' + fine + '&details=' + encodeURIComponent(testoCasa(h));
   }
   const fileDa = (dataUrl, nome) => { const [t, b] = dataUrl.split(','), mime = (t.match(/data:(.*?);/) || [])[1] || 'image/jpeg', bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], nome, { type: mime }); };
   const testoCasa = h => [h.address || 'Casa', [h.stato, h.tipo].filter(Boolean).join(' · '), h.telefono ? 'Tel. ' + h.telefono : '', h.note || '', h.lat !== '' && h.lat != null ? 'Mappa: https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].filter(Boolean).join('\n');
@@ -861,19 +909,19 @@
   function esportaCSV(lista, comune) {
     if (!lista.length) { toast('Non ci sono case da esportare.', 'errore'); return; }
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
-    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Telefono', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
-    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.telefono, h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
+    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Telefono', 'Richiamare il', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
+    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.telefono, h.richiamo ? new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT') : '', h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
     condividiFile(new Blob(['﻿' + righe.join('\r\n')], { type: 'text/csv' }), 'case-' + (comune || 'tutte').replace(/\s+/g, '-') + '-' + new Date().toISOString().slice(0, 10) + '.csv');
   }
 
   // ---------- nuova casa / modifica ----------
   let nc = null;
-  const casaModificata = () => nc && !nc.id && (nc.foto.length || nc.audio || $('note').value.trim() || $('telefono').value.trim());
+  const casaModificata = () => nc && !nc.id && (nc.foto.length || nc.audio || $('note').value.trim() || $('telefono').value.trim() || $('richiamo').value);
   function apriNuovaCasa(esistente) {
     if (esistente) nc = { id: esistente.id, pos: esistente.lat !== '' && esistente.lat != null ? { lat: esistente.lat, lng: esistente.lng, acc: esistente.acc || 0 } : null, foto: (esistente.foto || []).slice(), audio: esistente.audio || null, audioSec: esistente.audioSec || 0, stato: esistente.stato || 'Da valutare', tipo: esistente.tipo || '', ts: esistente.ts, sync: esistente.sync };
     else nc = { pos: posizione ? { ...posizione } : null, foto: [], audio: null, stato: 'Da valutare', tipo: '' };
     $('tCasaTitolo').textContent = esistente ? 'Modifica casa' : 'Nuova casa';
-    $('note').value = esistente ? esistente.note || '' : ''; $('telefono').value = esistente ? esistente.telefono || '' : '';
+    $('note').value = esistente ? esistente.note || '' : ''; $('telefono').value = esistente ? esistente.telefono || '' : ''; $('richiamo').value = esistente ? esistente.richiamo || '' : ''; $('richiamo').min = oggiISO();
     $('indirizzo').value = esistente ? esistente.address || '' : '';
     disegnaFoto(); disegnaVoce(); disegnaScelte(); casaVicina();
     apri('fCasa');
@@ -1001,7 +1049,7 @@
     const h = {
       id: nc.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: nc.ts || Date.now(), comune: vecchia ? vecchia.comune : cfg.comune, address,
       lat: p ? +(+p.lat).toFixed(6) : '', lng: p ? +(+p.lng).toFixed(6) : '', acc: p ? p.acc : null,
-      stato: nc.stato, tipo: nc.tipo, note: $('note').value.trim(), telefono: $('telefono').value.trim(),
+      stato: nc.stato === 'Da valutare' && $('richiamo').value ? 'Da ricontattare' : nc.stato, tipo: nc.tipo, note: $('note').value.trim(), telefono: $('telefono').value.trim(), richiamo: $('richiamo').value,
       foto: nc.foto.slice(), audio: nc.audio, audioSec: nc.audioSec || 0,
       sync: vecchia && vecchia.sync === 'ok' ? 'ok' : conGoogle() ? 'attesa' : 'locale', remote: vecchia ? vecchia.remote : null
     };
@@ -1024,7 +1072,7 @@
     if (invioInCorso || !conGoogle()) return; invioInCorso = true;
     try {
       for (const r of [...case_.values()].filter(h => h.sync === 'attesa')) {
-        const house = { id: r.id, ts: r.ts, comune: r.comune, day: '', address: r.address, lat: r.lat, lng: r.lng, acc: r.acc, stato: r.stato, tipo: r.tipo, note: [r.note, r.telefono ? 'Tel. ' + r.telefono : ''].filter(Boolean).join(' – '),
+        const house = { id: r.id, ts: r.ts, comune: r.comune, day: '', address: r.address, lat: r.lat, lng: r.lng, acc: r.acc, stato: r.stato, tipo: r.tipo, note: [r.note, r.telefono ? 'Tel. ' + r.telefono : '', r.richiamo ? 'Richiamare il ' + new Date(r.richiamo + 'T12:00').toLocaleDateString('it-IT') : ''].filter(Boolean).join(' – '),
           photos: (r.foto || []).map(u => ({ b64: u.split(',')[1], mime: 'image/jpeg' })), audio: r.audio instanceof Blob ? { b64: await b64(r.audio), mime: r.audio.type } : null };
         const res = await api('saveHouse', { house });
         r.sync = 'ok'; r.remote = { photos: res.photoUrls || [], audio: res.audioUrl || '' };
@@ -1145,6 +1193,8 @@
       <div class="sezione"><h3>Mappa di ${esc(cfg.comune || '—')}</h3>
         <button class="tasto" id="iAggiorna" ${cfg.comune ? '' : 'disabled'}>${ICO.rifai}Aggiorna la mappa</button><p class="aiuto">Scarica di nuovo strade e case (nuove costruzioni). Le strade già viste restano segnate.</p>
         <button class="tasto pericolo" id="iTogli" ${cfg.comune ? '' : 'disabled'}>${ICO.cestino}Togli questo comune dal telefono</button><p class="aiuto">Le case salvate restano.</p><div class="log" id="iLog"></div></div>
+      <div class="sezione"><h3>Avvisi</h3><button class="interruttore" id="iNotifiche" role="switch" aria-checked="${notificheOk()}"><span>Notifiche sul telefono<small>Tempo che finisce, giro cambiato, arrivo al parcheggio, case da richiamare</small></span><span class="leva"></span></button>
+        <button class="interruttore" id="iVoce" role="switch" aria-checked="${!!cfg.voce}"><span>Indicazioni a voce<small>Il telefono dice dove girare</small></span><span class="leva"></span></button></div>
       <div class="sezione"><h3>Backup</h3><div class="riga"><button class="tasto" id="iBackup">${ICO.salva}Salva backup</button><button class="tasto" id="iRipristina">${ICO.rifai}Ripristina</button></div><p class="aiuto">Un file con tutte le case, le foto, le note e le strade viste. Utile per cambiare telefono.</p></div>
       <div class="sezione"><h3>Collegamento a Google (facoltativo)</h3><p class="aiuto">Serve solo se vuoi le case anche in un foglio Google condiviso. Senza, l'app funziona lo stesso.</p>
         <label class="campo" for="cfgUrl">Indirizzo dello script (finisce con /exec)</label><input class="campo" type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cfg.url)}">
@@ -1153,6 +1203,14 @@
       <p class="versione">Agente Moni · versione ${VERSIONE}</p>`;
     c.querySelectorAll('#iRiv [data-g]').forEach(b => b.onclick = () => { cfg.rivedi = +b.dataset.g; salvaCfg(); apriImpost(); disegnaRete(); pannello(); });
     $('iAggiorna').onclick = aggiornaMappa;
+    $('iNotifiche').onclick = async () => {
+      if (notificheOk()) { cfg.notifiche = false; salvaCfg(); apriImpost(); return; }
+      if (!('Notification' in window)) { toast('Questo telefono non permette le notifiche dal browser.', 'errore', 6000); return; }
+      if (Notification.permission === 'denied') { toast('Le notifiche sono bloccate: Chrome ⋮ → Impostazioni → Impostazioni sito → Notifiche → consenti.', 'errore', 9000); return; }
+      if (await chiediNotifiche()) { notifica('Notifiche attive', 'Ti avviso qui quando serve.', 'prova', true); toast('Notifiche attive', 'ok'); }
+      apriImpost();
+    };
+    $('iVoce').onclick = () => { cfg.voce = !cfg.voce; salvaCfg(); if (cfg.voce) parla('Indicazioni a voce accese.'); apriImpost(); };
     $('iTogli').onclick = async () => {
       if (!confirm('Togliere ' + cfg.comune + ' dal telefono? Le strade viste si perdono, le case restano.')) return;
       const n = cfg.comune; await DB.del('reti', n).catch(() => { }); await DB.del('visti', n).catch(() => { }); localStorage.removeItem('stato4_' + n);
@@ -1192,6 +1250,7 @@
       <p><b>4. Le strade diventano verdi</b> quando ci passi a piedi, anche fuori dal percorso. In macchina non si segna niente.</p>
       <p><b>5. Nuova casa:</b> indirizzo automatico, foto, nota vocale, stato e telefono del cartello. Dalla scheda puoi condividerla su WhatsApp o chiamare.</p>
       <p><b>6. Il tempo:</b> se rallenti, l'app accorcia il giro per farti tornare alla macchina in orario. Se vai veloce, aggiunge strade.</p>
+      <p><b>7. Avvisi:</b> con le notifiche attive il telefono ti avvisa anche in tasca: 10 minuti alla fine, giro cambiato, arrivo al parcheggio. Nella scheda casa puoi mettere il giorno in cui richiamare: quel giorno te lo ricorda.</p>
       <p><b>Colori:</b> blu = da vedere, verde = già vista, giallo = i prossimi 300 m, puntini = solo passaggio.</p>
       <p><b>Consiglio:</b> tieni lo schermo acceso (l'app lo fa da sola) e porta una batteria esterna.</p>`;
     apri('fAiuto');
@@ -1207,5 +1266,5 @@
   })();
   if ('serviceWorker' in navigator && !/[?&]test=1/.test(location.search)) navigator.serviceWorker.register('sw.js').catch(() => { });
   // solo per le prove automatiche
-  if (/[?&]test=1/.test(location.search)) window.__am = { get S() { return S; }, get fuori() { return fuori; }, get G() { return G; }, get visti() { return visti; }, ricalcola, controllaTempo, avanzamento };
+  if (/[?&]test=1/.test(location.search)) window.__am = { get S() { return S; }, get fuori() { return fuori; }, get G() { return G; }, get visti() { return visti; }, ricalcola, controllaTempo, avanzamento, controllaRichiami };
 })();
