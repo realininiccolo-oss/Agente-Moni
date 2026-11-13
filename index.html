@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#17262b">
+<meta name="description" content="Giri a piedi guidati per agenti immobiliari: percorso dal vivo, strade già viste, schede delle case con foto e note vocali.">
 <title>Agente Moni</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
@@ -84,6 +85,7 @@
   .tondi { position: fixed; z-index: 590; right: 12px; display: flex; flex-direction: column; gap: 10px; }
   .tondo { width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--bianco); box-shadow: 0 2px 10px rgba(23,38,43,.25); display: grid; place-items: center; position: relative; }
   .tondo svg { width: 28px; height: 28px; }
+  .tondo .num[hidden] { display: none; }
   .tondo .num { position: absolute; top: -4px; right: -4px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--ardesia); color: #fff; font-size: 14px; font-weight: 700; display: grid; place-items: center; }
   #invio { position: fixed; z-index: 590; left: 12px; display: none; background: var(--ocra-chiaro); color: var(--ocra-scuro); font-weight: 700; font-size: 15px; padding: 8px 12px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
 
@@ -233,6 +235,43 @@
   #festa .scheda svg.grande { width: 86px; height: 86px; }
   #festa h2 { font-size: 26px; margin: 10px 0 6px; }
   #festa p { color: var(--ardesia-2); margin: 0 0 8px; }
+
+  /* ---------- v9 ---------- */
+  .tempi { grid-template-columns: repeat(3, 1fr); }
+  .tempo { font-size: 18px; min-height: 56px; }
+  .tempo:last-child { grid-column: span 3; }
+  .tempo.scelto { outline: 3px solid var(--ocra); outline-offset: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 4px; }
+  .stat { background: var(--nebbia); border-radius: 14px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 21px; line-height: 1.1; }
+  .stat span { font-size: 14px; color: var(--ardesia-2); }
+  .zona { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 2px solid var(--linea); background: var(--bianco); border-radius: 14px; padding: 10px 12px; margin-top: 8px; }
+  .zona > div { flex: 1; min-width: 0; } .zona b { display: block; font-size: 17px; line-height: 1.2; } .zona span { font-size: 15px; color: var(--ardesia-2); }
+  .zona .dist { font-size: 14px; color: var(--ardesia-2); white-space: nowrap; }
+  .interruttore { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: var(--nebbia); border-radius: 14px; padding: 10px 12px; margin-top: 10px; text-align: left; font-size: 17px; font-weight: 700; }
+  .interruttore > span:first-child { flex: 1; } .interruttore small { display: block; font-weight: 400; font-size: 14px; color: var(--ardesia-2); }
+  .leva { width: 52px; height: 30px; border-radius: 15px; background: var(--linea); position: relative; flex: none; transition: background .2s; }
+  .leva::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .2s; }
+  .interruttore[aria-checked="true"] .leva { background: var(--vigna); } .interruttore[aria-checked="true"] .leva::after { left: 25px; }
+  .log { font-size: 15px; color: var(--ardesia-2); white-space: pre-wrap; margin-top: 10px; }
+  .vicina { background: var(--ocra-chiaro); color: var(--ocra-scuro); border-radius: 14px; padding: 10px 12px; margin-top: 12px; font-size: 16px; display: flex; gap: 10px; align-items: center; }
+  .vicina > span { flex: 1; } .vicina button { flex: none; width: auto; margin: 0; min-height: 44px; padding: 8px 14px; font-size: 16px; }
+  .tel { display: flex; gap: 10px; } .tel input { flex: 1; font-size: 20px; }
+  .tel a { flex: none; width: 56px; height: 56px; margin: 0; border-radius: 14px; display: grid; place-items: center; background: var(--vigna); color: #fff; }
+  .tel a svg { width: 26px; height: 26px; }
+  .galleria { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 8px -18px 0; padding: 0 18px 6px; }
+  .galleria img { height: 220px; max-width: 86%; border-radius: 14px; object-fit: cover; scroll-snap-align: start; flex: none; }
+  .scheda-ind { font-size: 24px; font-weight: 700; line-height: 1.2; margin: 14px 0 2px; }
+  .scheda-sotto { color: var(--ardesia-2); font-size: 16px; }
+  .azioni { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .azioni .tasto { margin-top: 0; font-size: 17px; min-height: 54px; }
+  .pericolo { color: var(--cartello) !important; }
+  .intro { font-size: 17px; color: var(--ardesia-2); }
+  .intro ol { padding-left: 22px; margin: 6px 0 4px; } .intro li { margin: 4px 0; }
+  .versione { text-align: center; font-size: 14px; color: var(--ardesia-2); margin-top: 24px; }
+  .sceglimappa { position: fixed; z-index: 650; left: 12px; right: 12px; top: calc(env(safe-area-inset-top) + 10px); background: var(--ocra); color: var(--ardesia); border-radius: 18px; padding: 14px 16px; font-weight: 700; font-size: 18px; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
+  .sceglimappa.visibile { display: flex; gap: 10px; align-items: center; } .sceglimappa span { flex: 1; }
+  .sceglimappa button { border: 0; background: rgba(23,38,43,.12); border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 16px; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -240,6 +279,7 @@
 <div id="map" aria-label="Mappa"></div>
 
 <div id="guida" role="status" aria-live="polite"></div>
+<div class="sceglimappa" id="scegliMappa"><span>Tocca la mappa dove vuoi partire</span><button id="annullaScelta">Annulla</button></div>
 <div id="invio"></div>
 
 <div class="tondi" id="tondi">
@@ -250,10 +290,11 @@
 
 <section id="pannello"><div class="maniglia-zona" id="maniglia" role="button" tabindex="0" aria-expanded="true" aria-label="Apri o chiudi il pannello"><div class="maniglia"></div><div class="maniglia-testo">▲ Tira su per aprire</div></div><div id="pannelloCorpo" aria-live="polite"></div></section>
 
-<!-- Nuova casa -->
+<!-- Nuova casa / modifica -->
 <div class="foglio" id="fCasa" role="dialog" aria-labelledby="tCasaTitolo">
   <div class="foglio-testa"><h2 id="tCasaTitolo">Nuova casa</h2><button class="chiudi" data-chiudi aria-label="Chiudi senza salvare"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo">
+    <div id="casaVicina"></div>
     <div class="sezione" style="margin-top:12px">
       <h3>Indirizzo</h3>
       <div class="indirizzo">
@@ -276,6 +317,10 @@
       <div class="scelte griglia" id="sceltaStato"></div>
     </div>
     <div class="sezione">
+      <h3>Telefono sul cartello</h3>
+      <div class="tel"><input class="campo" type="tel" id="telefono" inputmode="tel" placeholder="Facoltativo" autocomplete="off"></div>
+    </div>
+    <div class="sezione">
       <h3>Che tipo di casa?</h3>
       <div class="scelte" id="sceltaTipo"></div>
     </div>
@@ -287,50 +332,32 @@
   <div class="foglio-piede"><button class="tasto verde" id="salvaCasa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>Salva la casa</button></div>
 </div>
 
-<!-- Le mie case -->
-<div class="foglio" id="fCase" role="dialog" aria-labelledby="tCaseTitolo">
-  <div class="foglio-testa"><h2 id="tCaseTitolo">Le mie case</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-  <div class="foglio-corpo"><div class="filtri" id="filtri"></div><div id="listaCase"></div></div>
+<div class="foglio" id="fScheda" role="dialog" aria-labelledby="tfScheda">
+  <div class="foglio-testa"><h2 id="tfScheda">Casa</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="schedaCorpo"></div>
 </div>
-
-<!-- Menu -->
-<div class="foglio" id="fMenu" role="dialog" aria-labelledby="tMenuTitolo">
-  <div class="foglio-testa"><h2 id="tMenuTitolo">Menu</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+<div class="foglio" id="fCase" role="dialog" aria-labelledby="tfCase">
+  <div class="foglio-testa"><h2 id="tfCase">Le mie case</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo"><div class="filtri" id="filtri"></div><div id="listaCase"></div></div><div class="foglio-piede"><button class="tasto" id="bEsportaLista">Esporta l'elenco (Excel)</button></div>
+</div>
+<div class="foglio" id="fMenu" role="dialog" aria-labelledby="tfMenu">
+  <div class="foglio-testa"><h2 id="tfMenu">Menu</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="menuCorpo"></div>
 </div>
-
-<!-- Tutti i giri -->
-<div class="foglio" id="fGiri" role="dialog" aria-labelledby="tGiriTitolo">
-  <div class="foglio-testa"><h2 id="tGiriTitolo">Scegli i giri</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-  <div class="foglio-corpo" id="giriCorpo"></div>
-  <div class="foglio-piede" id="giriPiede"></div>
-</div>
-
-<!-- Comuni -->
-<div class="foglio" id="fComuni" role="dialog" aria-labelledby="tComuniTitolo">
-  <div class="foglio-testa"><h2 id="tComuniTitolo">Comuni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+<div class="foglio" id="fComuni" role="dialog" aria-labelledby="tfComuni">
+  <div class="foglio-testa"><h2 id="tfComuni">Comuni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="foglio-corpo" id="comuniCorpo"></div>
 </div>
-
-<!-- Impostazioni -->
-<div class="foglio" id="fImpost" role="dialog" aria-labelledby="tImpostTitolo">
-  <div class="foglio-testa"><h2 id="tImpostTitolo">Impostazioni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-  <div class="foglio-corpo">
-    <p class="aiuto">Da compilare una volta sola, poi non serve più toccarle.</p>
-    <label class="campo" for="cfgUrl">Indirizzo dello script Google (finisce con /exec)</label>
-    <input class="campo" type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
-    <label class="campo" for="cfgKey">Chiave segreta</label>
-    <input class="campo" type="password" id="cfgKey">
-    <label class="campo" for="cfgDurata">Durata di ogni giro, in minuti</label>
-    <input class="campo" type="number" id="cfgDurata" min="30" max="180" step="15">
-    <p class="aiuto">Giri più corti sono più facili da incastrare nella giornata. Se la cambi, ricalcola i giri.</p>
-    <button class="tasto primario" id="salvaCfg">Salva e prova il collegamento</button>
-    <button class="tasto" id="calcola">Ricalcola i giri del comune</button>
-    <p class="aiuto">Serve solo se cambi la durata dei giri o se le strade sono cambiate. Dura 1-3 minuti.</p>
-    <div id="registro"></div>
-  </div>
+<div class="foglio" id="fImpost" role="dialog" aria-labelledby="tfImpost">
+  <div class="foglio-testa"><h2 id="tfImpost">Impostazioni</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo" id="impostCorpo"></div>
+</div>
+<div class="foglio" id="fAiuto" role="dialog" aria-labelledby="tfAiuto">
+  <div class="foglio-testa"><h2 id="tfAiuto">Come si usa</h2><button class="chiudi" data-chiudi aria-label="Chiudi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="foglio-corpo intro" id="aiutoCorpo"></div>
 </div>
 
+<input type="file" id="inputBackup" accept=".json,application/json" hidden>
 <div id="festa" role="dialog" aria-live="assertive"><div class="scheda" id="festaScheda"></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -345,7 +372,7 @@
   });
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="planner.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="planner.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

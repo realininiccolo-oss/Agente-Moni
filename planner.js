@@ -1,68 +1,81 @@
-/* planner.js — divide un comune in N giorni e calcola un giro a piedi per giorno.
-   Dati: OpenStreetMap (Overpass). Modello: problema del postino rurale
-   (percorrere ogni strada con case almeno una volta, partendo e tornando al parcheggio). */
+/* planner.js v4 — rete stradale del comune e percorsi a piedi calcolati dal vivo.
+   Dati: OpenStreetMap (Overpass), scaricati una volta per comune e salvati sul telefono.
+   Ogni strada con case è divisa in pezzi da 25 m: un pezzo diventa "visto" quando ci si passa a piedi.
+   Il percorso parte sempre dalla posizione attuale e copre le strade non ancora viste più vicine,
+   nel tempo disponibile, tornando alla macchina (problema del postino rurale, euristico). */
 (function (global) {
   'use strict';
   const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
   const ROAD_RE = '^(primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|pedestrian|service|track|footway|path|steps|cycleway)$';
   const CONNECTOR_ONLY = /^(footway|path|steps|cycleway)$/; // percorribili ma non "da vedere"
   const HOUSE_DIST = 40;   // m: una strada "ha case" se c'è un edificio entro questa distanza
-  const WALK_KMH = 3.0;    // km/h sulle strade con case (si guarda)
+  const WALK_KMH = 3.0;    // km/h sulle strade da guardare
   const FAST_KMH = 4.5;    // km/h su collegamenti e tratti già visti
-  const CLUSTER_GAP = 200; // m: gruppi di case più lontani di così = giri separati (si sposta la macchina)
   const SEG = 25;          // m: lunghezza dei pezzi di strada
   const NOT_HOME = /^(industrial|warehouse|commercial|retail|office|shed|roof|church|chapel|cathedral|ruins|school|kindergarten|university|train_station|carport|garage|garages|barn|stable|cowshed|greenhouse|farm_auxiliary|service|transformer_tower|tower|clock_tower|hangar|supermarket|construction|silo|storage_tank|bunker|toilets|hospital|sports_hall|grandstand|cemetery|parking)$/;
   const MAX_HOUSE_BBOX = 2500; // m²: ingombri più grandi = quasi sempre capannoni
   const STUB = 50;         // m: vicoli ciechi più corti si guardano dall'imbocco
-  const MAX_LINK = 400;    // m: se un gruppo di case dista di più a piedi, ci si va in macchina
-  const MIN_CLUSTER = 300; // m di strade con case: sotto questa soglia = cascina isolata, da vedere in macchina
+  const CLUSTER_GAP = 200; // m: case più vicine di così fanno parte dello stesso gruppo
+  const MIN_CLUSTER = 300; // m di strade con case: sotto = casa isolata, da vedere in macchina
+  const MAX_LINK = 400;    // m: oltre questa distanza a piedi tra due gruppi conviene spostare la macchina
+  const GIORNO0 = 19000;   // i giorni si contano da qui (1/1/2022), 0 = mai visto
 
-  async function overpass(q, log) {
+  const oggi = () => Math.floor(Date.now() / 864e5) - GIORNO0;
+
+  // ---------- scaricamento ----------
+  async function overpass(q, log, giri = 4) {
     let lastErr;
-    for (let round = 0; round < 4; round++) {
+    for (let round = 0; round < giri; round++) {
       for (const url of OVERPASS) {
         try {
-          const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 150000); // server che non risponde: passo al successivo
+          const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 150000);
           const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), signal: ctl.signal }).finally(() => clearTimeout(timer));
           if (r.ok) {
             const j = await r.json();
-            // il server sovraccarico a volte risponde "ok" ma con dati tagliati: in quel caso riprovo
             if (!j.remark || !/error|timeout|out of memory|runtime/i.test(j.remark)) return j;
             lastErr = new Error('Server mappe sovraccarico');
           } else lastErr = new Error('Server mappe: errore ' + r.status);
         } catch (e) { lastErr = e; }
       }
+      if (round === giri - 1) break;
       const wait = 15 * Math.pow(2, round);
       log('Server mappe occupati, riprovo tra ' + wait + ' secondi…');
       await new Promise(r => setTimeout(r, wait * 1000));
     }
-    throw lastErr;
+    throw lastErr || new Error('Server mappe non raggiungibili');
   }
 
-  async function fetchOSM(comune, log) {
+  // nome del comune in cui si trova un punto
+  async function trovaComune(lat, lon) {
+    const j = await overpass(`[out:json][timeout:25];is_in(${(+lat).toFixed(6)},${(+lon).toFixed(6)})->.a;area.a["boundary"="administrative"]["admin_level"="8"];out tags;`, () => { }, 2);
+    const a = (j.elements || []).find(e => e.tags && e.tags.name);
+    return a ? a.tags.name : null;
+  }
+
+  async function scaricaOSM(comune, log) {
     const nome = comune.replace(/"/g, '\\"');
     const area = `area["boundary"="administrative"]["admin_level"="8"]["name"="${nome}"]->.a;`;
+    const extraQ = sel => `[out:json][timeout:180];${sel}(way${'%'}["building"];relation${'%'}["building"];node${'%'}["place"~"^(town|village|suburb|hamlet|neighbourhood)$"];nwr${'%'}["amenity"="parking"];node${'%'}["addr:housenumber"];);out bb;`;
     log('Scarico le strade di ' + comune + '…');
     let roads = await overpass(`[out:json][timeout:180];${area}way(area.a)["highway"~"${ROAD_RE}"];out body;>;out skel qt;`, log);
     if (roads.elements.length) {
-      log('Scarico edifici, frazioni e parcheggi…');
-      const extra = await overpass(`[out:json][timeout:180];${area}(way(area.a)["building"];relation(area.a)["building"];node(area.a)["place"~"^(town|village|suburb|hamlet)$"];nwr(area.a)["amenity"="parking"];);out bb;`, log);
+      log('Scarico case, frazioni e parcheggi…');
+      const extra = await overpass(extraQ(area).replace(/%/g, '(area.a)'), log);
       return { roads, extra };
     }
     // Piano B: la "zona" del comune a volte manca nell'archivio del server anche se il confine esiste.
-    // Scarico il confine, prendo tutto nel riquadro e tengo solo ciò che sta dentro.
     log('Cerco il confine del comune in un altro modo…');
     const rel = await overpass(`[out:json][timeout:120];rel["boundary"="administrative"]["admin_level"="8"]["name"="${nome}"];out geom;`, log);
     const r = rel.elements.find(e => e.type === 'relation' && e.bounds);
-    if (!r) throw new Error('Comune "' + comune + '" non trovato su OpenStreetMap: controlla che il nome sia scritto esattamente come quello ufficiale');
+    if (!r) throw new Error('Comune "' + comune + '" non trovato sulle mappe: controlla che il nome sia scritto come quello ufficiale');
     const segs = [];
     for (const mb of r.members || []) if (mb.type === 'way' && mb.geometry) for (let i = 1; i < mb.geometry.length; i++) segs.push([mb.geometry[i - 1], mb.geometry[i]]);
     const dentro = (lat, lon) => { let c = false; for (const [p, q] of segs) if ((p.lat > lat) !== (q.lat > lat) && lon < (q.lon - p.lon) * (lat - p.lat) / (q.lat - p.lat) + p.lon) c = !c; return c; };
-    const B = r.bounds, bb = `${B.minlat},${B.minlon},${B.maxlat},${B.maxlon}`;
+    const B = r.bounds, bb = `(${B.minlat},${B.minlon},${B.maxlat},${B.maxlon})`;
     log('Scarico le strade di ' + comune + '…');
-    roads = await overpass(`[out:json][timeout:180];way["highway"~"${ROAD_RE}"](${bb});out body;>;out skel qt;`, log);
-    log('Scarico edifici, frazioni e parcheggi…');
-    const extra = await overpass(`[out:json][timeout:180];(way["building"](${bb});relation["building"](${bb});node["place"~"^(town|village|suburb|hamlet)$"](${bb});nwr["amenity"="parking"](${bb}););out bb;`, log);
+    roads = await overpass(`[out:json][timeout:180];way["highway"~"${ROAD_RE}"]${bb};out body;>;out skel qt;`, log);
+    log('Scarico case, frazioni e parcheggi…');
+    const extra = await overpass(extraQ('').replace(/%/g, bb), log);
     const nodi = new Map(); for (const e of roads.elements) if (e.type === 'node') nodi.set(e.id, e);
     const vie = roads.elements.filter(e => e.type === 'way' && e.nodes.some(id => { const n = nodi.get(id); return n && dentro(n.lat, n.lon); }));
     const usati = new Set(vie.flatMap(w => w.nodes));
@@ -72,30 +85,31 @@
     return { roads, extra };
   }
 
-  // ---------- grafo ----------
-  function build(osm) {
+  // ---------- costruzione della rete (da OSM a dati compatti da salvare) ----------
+  function costruisciRete(osm, comune) {
     const idx = new Map(), LAT = [], LON = [];
     for (const el of osm.roads.elements) if (el.type === 'node') { idx.set(el.id, LAT.length); LAT.push(el.lat); LON.push(el.lon); }
+    if (!LAT.length) throw new Error('Nessuna strada trovata');
     const lat0 = LAT.reduce((a, b) => a + b, 0) / LAT.length;
     const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
-    const Xa = LON.map(v => v * kx), Ya = LAT.map(v => v * ky);
+    const X = LON.map(v => v * kx), Y = LAT.map(v => v * ky);
 
     const grid = new Map(), cs = 50, gk = (x, y) => Math.floor(x / cs) + ',' + Math.floor(y / cs);
-    const places = [], parkings = [];
+    const luoghi = [], parcheggi = [], civici = [];
     for (const el of osm.extra.elements) {
       const b = el.bounds;
       const lat = el.lat != null ? el.lat : b ? (b.minlat + b.maxlat) / 2 : el.center && el.center.lat;
       const lon = el.lon != null ? el.lon : b ? (b.minlon + b.maxlon) / 2 : el.center && el.center.lon;
       if (lat == null) continue;
       const t = el.tags || {}, x = lon * kx, y = lat * ky;
+      if (t['addr:housenumber'] && t['addr:street']) civici.push([+lat.toFixed(6), +lon.toFixed(6), t['addr:street'], t['addr:housenumber']]);
       if (t.building) {
-        // solo edifici che possono essere abitazioni: niente capannoni, chiese, tettoie, né ingombri enormi
         if (NOT_HOME.test(t.building) || t.amenity || t.shop || t.industrial) continue;
         if (b && (b.maxlon - b.minlon) * kx * (b.maxlat - b.minlat) * ky > MAX_HOUSE_BBOX) continue;
         const k = gk(x, y); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(x, y);
       }
-      else if (t.place) places.push({ name: t.name || t.place, hamlet: t.place === 'hamlet', x, y });
-      else if (t.amenity === 'parking' && t.access !== 'private') parkings.push({ x, y, lat, lon, name: t.name || '' });
+      else if (t.place) luoghi.push({ nome: t.name || t.place, borgo: t.place === 'hamlet' || t.place === 'neighbourhood', lat: +lat.toFixed(5), lon: +lon.toFixed(5) });
+      else if (t.amenity === 'parking' && t.access !== 'private' && t.access !== 'customers') parcheggi.push({ lat: +lat.toFixed(5), lon: +lon.toFixed(5), nome: t.name || '' });
     }
     const r2 = HOUSE_DIST * HOUSE_DIST;
     function nearHouse(x, y) {
@@ -107,9 +121,9 @@
       return false;
     }
 
-    // ogni tratto OSM viene spezzato in pezzi da ~25 m: così "con case" vale solo dove le case ci sono davvero
-    const EU = [], EV = [], EL = [], ER = [], EN = [], NAMES = [''], nameIdx = new Map([['', 0]]);
-    const GENERIC = { footway: 'sentiero', path: 'sentiero', steps: 'scalinata', cycleway: 'pista ciclabile', track: 'strada sterrata', service: 'stradina', pedestrian: 'zona pedonale', living_street: 'strada senza nome' };
+    // pezzi da ~25 m
+    const EU = [], EV = [], EL = [], ER = [], EN = [], NOMI = [''], nameIdx = new Map([['', 0]]);
+    const GENERIC = { footway: 'sentiero', path: 'sentiero', steps: 'scalinata', cycleway: 'pista ciclabile', track: 'strada sterrata', service: 'stradina', pedestrian: 'zona pedonale' };
     for (const w of osm.roads.elements) {
       if (w.type !== 'way') continue;
       const t = w.tags || {}, hw = t.highway;
@@ -117,29 +131,30 @@
       if (t.access === 'private' || t.access === 'no' || t.foot === 'no') continue;
       const conn = CONNECTOR_ONLY.test(hw);
       const nm = t.name || (t.ref ? 'strada ' + t.ref : '') || GENERIC[hw] || 'strada senza nome';
-      if (!nameIdx.has(nm)) { nameIdx.set(nm, NAMES.length); NAMES.push(nm); }
+      if (!nameIdx.has(nm)) { nameIdx.set(nm, NOMI.length); NOMI.push(nm); }
       const ni = nameIdx.get(nm);
       for (let i = 1; i < w.nodes.length; i++) {
         const a = idx.get(w.nodes[i - 1]), b = idx.get(w.nodes[i]);
         if (a == null || b == null || a === b) continue;
-        const len = Math.hypot(Xa[b] - Xa[a], Ya[b] - Ya[a]), s = Math.max(1, Math.ceil(len / SEG));
+        const len = Math.hypot(X[b] - X[a], Y[b] - Y[a]), s = Math.max(1, Math.ceil(len / SEG));
         let prev = a;
         for (let q = 1; q <= s; q++) {
           let cur = b;
-          if (q < s) { const f = q / s; cur = Xa.length; Xa.push(Xa[a] + (Xa[b] - Xa[a]) * f); Ya.push(Ya[a] + (Ya[b] - Ya[a]) * f); LAT.push(LAT[a] + (LAT[b] - LAT[a]) * f); LON.push(LON[a] + (LON[b] - LON[a]) * f); }
-          const req = !conn && nearHouse((Xa[prev] + Xa[cur]) / 2, (Ya[prev] + Ya[cur]) / 2);
-          EU.push(prev); EV.push(cur); EL.push(len / s); ER.push(req); EN.push(ni);
+          if (q < s) { const f = q / s; cur = X.length; X.push(X[a] + (X[b] - X[a]) * f); Y.push(Y[a] + (Y[b] - Y[a]) * f); LAT.push(LAT[a] + (LAT[b] - LAT[a]) * f); LON.push(LON[a] + (LON[b] - LON[a]) * f); }
+          EU.push(prev); EV.push(cur); EL.push(len / s); ER.push(!conn && nearHouse((X[prev] + X[cur]) / 2, (Y[prev] + Y[cur]) / 2)); EN.push(ni);
           prev = cur;
         }
       }
     }
-    const n = Xa.length, X = Float64Array.from(Xa), Y = Float64Array.from(Ya);
-    const m = EU.length;
-    const deg = new Int32Array(n); for (let e = 0; e < m; e++) { deg[EU[e]]++; deg[EV[e]]++; }
-    const start = new Int32Array(n + 1); for (let i = 0; i < n; i++) start[i + 1] = start[i] + deg[i];
-    const fill = start.slice(0, n), adj = new Int32Array(2 * m);
-    for (let e = 0; e < m; e++) { adj[fill[EU[e]]++] = e; adj[fill[EV[e]]++] = e; }
-
+    let n = X.length, m = EU.length;
+    const csr = (n, m, EU, EV) => {
+      const deg = new Int32Array(n); for (let e = 0; e < m; e++) { deg[EU[e]]++; deg[EV[e]]++; }
+      const start = new Int32Array(n + 1); for (let i = 0; i < n; i++) start[i + 1] = start[i] + deg[i];
+      const fill = start.slice(0, n), adj = new Int32Array(2 * m);
+      for (let e = 0; e < m; e++) { adj[fill[EU[e]]++] = e; adj[fill[EV[e]]++] = e; }
+      return { deg, start, adj };
+    };
+    let { deg, start, adj } = csr(n, m, EU, EV);
     // componente connessa principale
     const comp = new Int32Array(n).fill(-1); let best = -1, bestSize = 0, c = 0;
     for (let s = 0; s < n; s++) {
@@ -149,51 +164,143 @@
       if (size > bestSize) { bestSize = size; best = c; }
       c++;
     }
-    // rami ad albero (vicoli ciechi): si percorrono due volte
+    // rami ad albero (vicoli ciechi)
     const tree = new Uint8Array(m), d2 = deg.slice(), removed = new Uint8Array(m), q = [];
     for (let i = 0; i < n; i++) if (d2[i] === 1) q.push(i);
     while (q.length) {
       const v = q.pop(); if (d2[v] !== 1) continue;
       for (let p = start[v]; p < start[v + 1]; p++) { const e = adj[p]; if (removed[e]) continue; removed[e] = 1; tree[e] = 1; d2[v]--; const u = EU[e] === v ? EV[e] : EU[e]; d2[u]--; if (d2[u] === 1) q.push(u); break; }
     }
-    // vicoli ciechi corti (fino a STUB m dall'incrocio): si guardano dall'imbocco, non serve entrarci
+    // vicoli ciechi corti: si guardano dall'imbocco
     const depth = new Float64Array(n).fill(Infinity), dq = [];
     for (let i = 0; i < n; i++) if (d2[i] >= 2) { depth[i] = 0; dq.push(i); }
     for (let qi = 0; qi < dq.length; qi++) { const v = dq[qi]; for (let p = start[v]; p < start[v + 1]; p++) { const e = adj[p]; if (!tree[e]) continue; const u = EU[e] === v ? EV[e] : EU[e]; if (depth[u] === Infinity) { depth[u] = depth[v] + EL[e]; dq.push(u); } } }
     for (let e = 0; e < m; e++) if (ER[e] && tree[e] && Math.max(depth[EU[e]], depth[EV[e]]) <= STUB) ER[e] = false;
-    // gruppi di case: componenti delle strade richieste unite se distano meno di CLUSTER_GAP.
-    // I gruppi piccoli (cascine isolate) diventano "fermate in macchina".
+    // gruppi di case: i gruppi piccoli (cascine isolate) si vedono in macchina
     const uf = new Int32Array(n); for (let i = 0; i < n; i++) uf[i] = i;
     const f2 = a => { while (uf[a] !== a) { uf[a] = uf[uf[a]]; a = uf[a]; } return a; };
     const un = (a, b) => { a = f2(a); b = f2(b); if (a !== b) uf[a] = b; };
     const reqNodes = new Set();
     for (let e = 0; e < m; e++) if (ER[e] && comp[EU[e]] === best) { un(EU[e], EV[e]); reqNodes.add(EU[e]); reqNodes.add(EV[e]); }
-    const g2 = new Map(), cs2 = CLUSTER_GAP, k2 = (x, y) => Math.floor(x / cs2) + ',' + Math.floor(y / cs2);
+    const g2 = new Map(), k2 = (x, y) => Math.floor(x / CLUSTER_GAP) + ',' + Math.floor(y / CLUSTER_GAP);
     for (const v of reqNodes) { const k = k2(X[v], Y[v]); if (!g2.has(k)) g2.set(k, []); g2.get(k).push(v); }
     for (const v of reqNodes) {
-      const cx = Math.floor(X[v] / cs2), cy = Math.floor(Y[v] / cs2);
+      const cx = Math.floor(X[v] / CLUSTER_GAP), cy = Math.floor(Y[v] / CLUSTER_GAP);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const u of (g2.get((cx + i) + ',' + (cy + j)) || []))
-        if (u !== v && (X[u] - X[v]) ** 2 + (Y[u] - Y[v]) ** 2 < cs2 * cs2) un(u, v);
+        if (u !== v && (X[u] - X[v]) ** 2 + (Y[u] - Y[v]) ** 2 < CLUSTER_GAP * CLUSTER_GAP) un(u, v);
     }
     const clLen = new Map();
     for (let e = 0; e < m; e++) if (ER[e] && comp[EU[e]] === best) { const r = f2(EU[e]); clLen.set(r, (clLen.get(r) || 0) + EL[e]); }
-    const cluster = new Int32Array(m).fill(-1), carStops = [], small = new Map();
+    const small = new Map();
     for (let e = 0; e < m; e++) {
       if (!ER[e]) continue;
       if (comp[EU[e]] !== best) { ER[e] = false; continue; }
       const r = f2(EU[e]);
       if (clLen.get(r) < MIN_CLUSTER) { ER[e] = false; if (!small.has(r)) small.set(r, []); small.get(r).push(e); }
-      else cluster[e] = r;
     }
+    const isolate = [];
     for (const es of small.values()) {
       let sx = 0, sy = 0, sl = 0; for (const e of es) { sx += (X[EU[e]] + X[EV[e]]) / 2 * EL[e]; sy += (Y[EU[e]] + Y[EV[e]]) / 2 * EL[e]; sl += EL[e]; }
-      carStops.push({ x: sx / sl, y: sy / sl, lat: +(sy / sl / ky).toFixed(5), lon: +(sx / sl / kx).toFixed(5), m: Math.round(sl) });
+      isolate.push({ lat: +(sy / sl / ky).toFixed(5), lon: +(sx / sl / kx).toFixed(5), m: Math.round(sl) });
     }
-    return { n, m, X, Y, LAT, LON, kx, ky, EU, EV, EL, ER, EN, NAMES, tree, start, adj, comp, main: best, places, parkings, cluster, carStops };
+    // potatura: solo la rete principale, senza i rami ciechi che non portano a case
+    const keepE = new Uint8Array(m); for (let e = 0; e < m; e++) keepE[e] = comp[EU[e]] === best ? 1 : 0;
+    const d3 = new Int32Array(n); for (let e = 0; e < m; e++) if (keepE[e]) { d3[EU[e]]++; d3[EV[e]]++; }
+    const pq = []; for (let i = 0; i < n; i++) if (d3[i] === 1) pq.push(i);
+    while (pq.length) {
+      const v = pq.pop(); if (d3[v] !== 1) continue;
+      for (let p = start[v]; p < start[v + 1]; p++) {
+        const e = adj[p]; if (!keepE[e]) continue;
+        if (ER[e]) break; // ramo con case: resta
+        keepE[e] = 0; d3[v]--; const u = EU[e] === v ? EV[e] : EU[e]; d3[u]--; if (d3[u] === 1) pq.push(u); break;
+      }
+    }
+    const nuovo = new Int32Array(n).fill(-1), lat = [], lon = [];
+    const eu = [], ev = [], el = [], er = [], en = [];
+    for (let e = 0; e < m; e++) {
+      if (!keepE[e]) continue;
+      for (const v of [EU[e], EV[e]]) if (nuovo[v] < 0) { nuovo[v] = lat.length; lat.push(+LAT[v].toFixed(6)); lon.push(+LON[v].toFixed(6)); }
+      eu.push(nuovo[EU[e]]); ev.push(nuovo[EV[e]]); el.push(Math.round(EL[e] * 10) / 10); er.push(ER[e] ? '1' : '0'); en.push(EN[e]);
+    }
+    if (!er.includes('1')) throw new Error('Le mappe sono arrivate incomplete (nessuna casa trovata). Riprova tra qualche minuto');
+    return { v: 4, id: Date.now().toString(36), comune, creata: new Date().toISOString(), lat, lon, eu, ev, el, er: er.join(''), en, nomi: NOMI, luoghi, parcheggi, isolate, civici };
+  }
+
+  // ---------- rete pronta per i calcoli ----------
+  function prepara(R) {
+    const n = R.lat.length, m = R.eu.length;
+    const lat0 = R.lat.reduce((a, b) => a + b, 0) / n;
+    const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+    const X = new Float64Array(n), Y = new Float64Array(n);
+    for (let i = 0; i < n; i++) { X[i] = R.lon[i] * kx; Y[i] = R.lat[i] * ky; }
+    const EU = Int32Array.from(R.eu), EV = Int32Array.from(R.ev), EL = Float64Array.from(R.el), EN = Int32Array.from(R.en);
+    const ER = new Uint8Array(m); for (let e = 0; e < m; e++) ER[e] = R.er.charCodeAt(e) === 49 ? 1 : 0;
+    const deg = new Int32Array(n); for (let e = 0; e < m; e++) { deg[EU[e]]++; deg[EV[e]]++; }
+    const start = new Int32Array(n + 1); for (let i = 0; i < n; i++) start[i + 1] = start[i] + deg[i];
+    const fill = start.slice(0, n), adj = new Int32Array(2 * m);
+    for (let e = 0; e < m; e++) { adj[fill[EU[e]]++] = e; adj[fill[EV[e]]++] = e; }
+    // griglie: nodi (per agganciare una posizione) e pezzi con case (per segnarli visti)
+    const CS = 60, gN = new Map(), gE = new Map(), key = (x, y) => Math.floor(x / CS) + ',' + Math.floor(y / CS);
+    for (let i = 0; i < n; i++) { const k = key(X[i], Y[i]); let a = gN.get(k); if (!a) gN.set(k, a = []); a.push(i); }
+    for (let e = 0; e < m; e++) if (ER[e]) { const k = key((X[EU[e]] + X[EV[e]]) / 2, (Y[EU[e]] + Y[EV[e]]) / 2); let a = gE.get(k); if (!a) gE.set(k, a = []); a.push(e); }
+    let reqTot = 0; for (let e = 0; e < m; e++) if (ER[e]) reqTot += EL[e];
+    // tratti: pezzi di strada tra due incroci (si sceglie sempre un tratto intero, così non si torna indietro a metà via)
+    const tp = new Int32Array(m); for (let e = 0; e < m; e++) tp[e] = e;
+    const tf = a => { while (tp[a] !== a) { tp[a] = tp[tp[a]]; a = tp[a]; } return a; };
+    for (let v = 0; v < n; v++) if (deg[v] === 2) { const a = tf(adj[start[v]]), b = tf(adj[start[v] + 1]); if (a !== b) tp[a] = b; }
+    const T = new Int32Array(m), tid = new Map(); for (let e = 0; e < m; e++) { const r = tf(e); if (!tid.has(r)) tid.set(r, tid.size); T[e] = tid.get(r); }
+    const nt = tid.size, tStart = new Int32Array(nt + 1); for (let e = 0; e < m; e++) tStart[T[e] + 1]++;
+    for (let i = 0; i < nt; i++) tStart[i + 1] += tStart[i];
+    const tFill = tStart.slice(0, nt), tEdges = new Int32Array(m); for (let e = 0; e < m; e++) tEdges[tFill[T[e]]++] = e;
+    const luoghi = (R.luoghi || []).map(p => ({ ...p, x: p.lon * kx, y: p.lat * ky }));
+    return { R, id: R.id, comune: R.comune, n, m, X, Y, kx, ky, EU, EV, EL, ER, EN, NOMI: R.nomi, start, adj, CS, gN, gE, reqTot, luoghi, T, nt, tStart, tEdges };
+  }
+
+  const xy = (G, lat, lon) => [lon * G.kx, lat * G.ky];
+  function nodoVicino(G, lat, lon, maxM = Infinity) {
+    const [x, y] = xy(G, lat, lon), cx = Math.floor(x / G.CS), cy = Math.floor(y / G.CS);
+    let best = -1, bd = Infinity;
+    const cella = (i, j) => { for (const v of (G.gN.get((cx + i) + ',' + (cy + j)) || [])) { const d = (G.X[v] - x) ** 2 + (G.Y[v] - y) ** 2; if (d < bd) { bd = d; best = v; } } };
+    for (let r = 0; r <= 40; r++) {
+      if (r === 0) cella(0, 0);
+      else for (let i = -r; i <= r; i++) { cella(i, -r); cella(i, r); if (i > -r && i < r) { cella(-r, i); cella(r, i); } }
+      if (best >= 0 && Math.sqrt(bd) <= r * G.CS) break;
+      if (r * G.CS > maxM) break;
+    }
+    if (best < 0 && maxM === Infinity) for (let v = 0; v < G.n; v++) { const d = (G.X[v] - x) ** 2 + (G.Y[v] - y) ** 2; if (d < bd) { bd = d; best = v; } }
+    return Math.sqrt(bd) <= maxM ? best : -1;
+  }
+  const distNodo = (G, v, lat, lon) => { const [x, y] = xy(G, lat, lon); return Math.hypot(G.X[v] - x, G.Y[v] - y); };
+  function distSeg(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    let t = l2 ? ((px - ax) * dx + (py - ay) * dy) / l2 : 0; t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+  }
+
+  // un pezzo è "da vedere" se ha case e non è mai stato visto (o è stato visto più di `rivedi` giorni fa)
+  const daVedereFn = (G, visti, rivedi) => { const o = oggi(); return e => G.ER[e] === 1 && (visti[e] === 0 || (rivedi > 0 && o - visti[e] > rivedi)); };
+
+  // segna come visti i pezzi con case entro `raggio` metri dal punto; restituisce quanti ne ha segnati
+  function copri(G, visti, lat, lon, raggio = 20, giorno = oggi()) {
+    const [x, y] = xy(G, lat, lon), cx = Math.floor(x / G.CS), cy = Math.floor(y / G.CS), o = giorno;
+    let nuovi = 0;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const e of (G.gE.get((cx + i) + ',' + (cy + j)) || [])) {
+      if (visti[e] >= o) continue;
+      const a = G.EU[e], b = G.EV[e];
+      if (distSeg(x, y, G.X[a], G.Y[a], G.X[b], G.Y[b]) <= raggio) { if (visti[e] === 0) nuovi++; visti[e] = o; }
+    }
+    return nuovi;
+  }
+  // stessa cosa lungo il tratto tra due posizioni (riempie i buchi tra un segnale GPS e l'altro)
+  function copriTratto(G, visti, a, b, raggio = 20) {
+    const d = Math.hypot((b[1] - a[1]) * G.kx, (b[0] - a[0]) * G.ky), passi = Math.max(1, Math.ceil(d / 10));
+    let nuovi = 0;
+    for (let i = 1; i <= passi; i++) { const f = i / passi; nuovi += copri(G, visti, a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, raggio); }
+    return nuovi;
   }
 
   // ---------- Dijkstra (heap binario) ----------
-  function dijkstra(G, sources, stopFn, maxDist) {
+  function dijkstra(G, sources, stopFn, maxDist = Infinity) {
     const dist = new Float64Array(G.n).fill(Infinity), pred = new Int32Array(G.n).fill(-1), done = new Uint8Array(G.n);
     const hk = [], hv = [];
     const push = (k, v) => { let i = hk.length; hk.push(k); hv.push(v); while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= hk[i]) break; [hk[p], hk[i]] = [hk[i], hk[p]]; [hv[p], hv[i]] = [hv[i], hv[p]]; i = p; } };
@@ -212,70 +319,42 @@
   }
   function pathEdges(G, pred, to) { const out = []; let v = to; while (pred[v] !== -1) { const e = pred[v]; out.push(e); v = G.EU[e] === v ? G.EV[e] : G.EU[e]; } return out; }
 
-  // ---------- zone bilanciate (diagramma di potenza) ----------
-  function makeZones(G, k, comune) {
-    const R = [];
-    for (let e = 0; e < G.m; e++) if (G.ER[e] && G.comp[G.EU[e]] === G.main)
-      R.push({ e, x: (G.X[G.EU[e]] + G.X[G.EV[e]]) / 2, y: (G.Y[G.EU[e]] + G.Y[G.EV[e]]) / 2, w: G.EL[e] * (G.tree[e] ? 2 : 1) });
-    const total = R.reduce((a, r) => a + r.w, 0), target = total / k;
-    // semi: frazioni (paesi prima dei borghi) con più strade attorno
-    const pl = G.places.map(p => ({ ...p, local: R.reduce((a, r) => a + ((r.x - p.x) ** 2 + (r.y - p.y) ** 2 < 6e5 ? r.w : 0), 0) }))
-      .sort((a, b) => (a.hamlet - b.hamlet) || (b.local - a.local));
-    const seeds = [];
-    for (const p of pl) { if (seeds.length >= k) break; if (seeds.every(s => (s.x - p.x) ** 2 + (s.y - p.y) ** 2 > 4e5)) seeds.push({ x: p.x, y: p.y }); }
-    while (seeds.length < k) { let bx = 0, by = 0, bd = -1; for (const r of R) { const d = Math.min(...seeds.map(s => (s.x - r.x) ** 2 + (s.y - r.y) ** 2)) * r.w; if (d > bd) { bd = d; bx = r.x; by = r.y; } } seeds.push({ x: bx, y: by }); }
-    const wk = new Float64Array(k), z = new Int32Array(R.length);
-    const assign = () => { const load = new Float64Array(k); R.forEach((r, i) => { let b = 0, bv = Infinity; for (let j = 0; j < k; j++) { const v = (seeds[j].x - r.x) ** 2 + (seeds[j].y - r.y) ** 2 - wk[j]; if (v < bv) { bv = v; b = j; } } z[i] = b; load[b] += r.w; }); return load; };
-    let load;
-    for (let it = 0; it < 400; it++) {
-      load = assign();
-      if (it < 15) { const sx = new Float64Array(k), sy = new Float64Array(k); R.forEach((r, i) => { sx[z[i]] += r.x * r.w; sy[z[i]] += r.y * r.w; }); for (let j = 0; j < k; j++) if (load[j] > 0) { seeds[j].x = sx[j] / load[j]; seeds[j].y = sy[j] / load[j]; } continue; }
-      const dev = Math.max(...Array.from(load, l => Math.abs(l - target) / target)); if (dev < 0.04) break;
-      const step = 4e5 * Math.pow(0.992, it - 15);
-      for (let j = 0; j < k; j++) wk[j] += step * (target - load[j]) / target;
-    }
-    const zones = seeds.map((s, j) => ({ j, cx: s.x, cy: s.y, edges: [], names: [] }));
-    R.forEach((r, i) => zones[z[i]].edges.push(r.e));
-    const zoneOf = (x, y) => { let b = 0, bv = Infinity; for (let j = 0; j < k; j++) { const v = (seeds[j].x - x) ** 2 + (seeds[j].y - y) ** 2 - wk[j]; if (v < bv) { bv = v; b = j; } } return b; };
-    for (const p of pl) zones[zoneOf(p.x, p.y)].names.push(p.name);
-    for (const zz of zones) { zz.name = zz.names.length ? zz.names.join(', ') : ''; zz.carStops = []; }
-    for (const c of G.carStops) zones[zoneOf(c.x, c.y)].carStops.push({ lat: c.lat, lon: c.lon, m: c.m });
-    // ordine dei giorni: prima la zona del capoluogo, poi la più vicina
-    let cur = zones.find(zz => zz.names.includes(comune)) || zones[0]; const order = [cur]; const left = new Set(zones.filter(zz => zz !== cur));
-    while (left.size) { let b = null, bd = Infinity; for (const zz of left) { const d = (zz.cx - cur.cx) ** 2 + (zz.cy - cur.cy) ** 2; if (d < bd) { bd = d; b = zz; } } order.push(b); left.delete(b); cur = b; }
-    order.forEach((zz, i) => { if (!zz.name) zz.name = 'Zona ' + (i + 1); });
-    return order;
-  }
-
-  // ---------- giro di una zona (postino rurale euristico) ----------
-  function routeLoop(G, edges, startNode, maxLink = Infinity) {
-    const MU = [], MV = [], ML = [];
-    const MI = [];
+  // ---------- giro (postino rurale) da s a t che percorre tutti i pezzi in `edges` ----------
+  function giroSu(G, edges, s, t, daVedere) {
+    const MU = [], MV = [], ML = [], MI = [];
     const addEdge = e => { MU.push(G.EU[e]); MV.push(G.EV[e]); ML.push(G.EL[e]); MI.push(e); };
-    let reqLen = 0, connLen = 0;
-    // 1) componenti delle strade richieste
+    // 1) componenti delle strade scelte
     const parent = new Map(), find = a => { while (parent.get(a) !== a) { parent.set(a, parent.get(parent.get(a))); a = parent.get(a); } return a; };
     const touch = a => { if (!parent.has(a)) parent.set(a, a); };
-    touch(startNode);
+    touch(s); touch(t);
     for (const e of edges) { touch(G.EU[e]); touch(G.EV[e]); const a = find(G.EU[e]), b = find(G.EV[e]); if (a !== b) parent.set(a, b); }
     const members = new Map();
     for (const v of parent.keys()) { const r = find(v); if (!members.has(r)) members.set(r, []); members.get(r).push(v); }
-    // 2) collego le componenti con l'albero minimo (Prim con Dijkstra multi-sorgente)
-    const inTree = new Set(members.get(find(startNode)));
-    const remaining = new Set([...members.keys()].filter(r => r !== find(startNode)));
-    while (remaining.size) {
-      const res = dijkstra(G, inTree, v => !inTree.has(v) && parent.has(v) && remaining.has(find(v)), maxLink);
-      if (res.last === -1) break; // il resto è troppo lontano a piedi: diventa un altro giro
-      for (const e of pathEdges(G, res.pred, res.last)) { addEdge(e); connLen += G.EL[e]; inTree.add(G.EU[e]); inTree.add(G.EV[e]); }
+    // 2) albero minimo che le collega; il primo collegamento (da dove sei) e l'arrivo non hanno limiti
+    const inTree = new Set(members.get(find(s)));
+    const remaining = new Set([...members.keys()].filter(r => r !== find(s)));
+    const rT = find(t);
+    let primo = true;
+    const collega = (stop, limite) => {
+      const res = dijkstra(G, inTree, stop, limite);
+      if (res.last === -1) return false;
+      for (const e of pathEdges(G, res.pred, res.last)) { addEdge(e); inTree.add(G.EU[e]); inTree.add(G.EV[e]); }
       const r = find(res.last); remaining.delete(r); for (const v of members.get(r)) inTree.add(v);
+      return true;
+    };
+    while (remaining.size) {
+      if (!collega(v => !inTree.has(v) && parent.has(v) && remaining.has(find(v)), primo ? Infinity : MAX_LINK)) break;
+      primo = false;
     }
-    const leftover = [];
-    for (const e of edges) { if (remaining.has(find(G.EU[e]))) leftover.push(e); else { addEdge(e); reqLen += G.EL[e]; } }
-    // 3) nodi dispari -> abbinamento con percorsi minimi (greedy + 2-opt)
+    if (remaining.has(rT)) collega(v => !inTree.has(v) && parent.has(v) && find(v) === rT, Infinity);
+    const usati = [];
+    for (const e of edges) { if (!remaining.has(find(G.EU[e]))) { addEdge(e); usati.push(e); } }
+    // 3) nodi da pareggiare: dispari, con s e t scambiati se il giro non torna al punto di partenza
     const deg = new Map(); for (let i = 0; i < MU.length; i++) { deg.set(MU[i], (deg.get(MU[i]) || 0) + 1); deg.set(MV[i], (deg.get(MV[i]) || 0) + 1); }
-    const odd = [...deg.keys()].filter(v => deg.get(v) % 2 === 1), oddSet = new Set(odd), oi = new Map(odd.map((v, i) => [v, i]));
+    if (s !== t) { deg.set(s, (deg.get(s) || 0) + 1); deg.set(t, (deg.get(t) || 0) + 1); }
+    const odd = [...deg.keys()].filter(v => deg.get(v) % 2 === 1), oddSet = new Set(odd);
     const D = [], P = [];
-    odd.forEach(s => { let found = 0; const res = dijkstra(G, [s], v => oddSet.has(v) && ++found >= odd.length, 3000); D.push(odd.map(t => res.dist[t])); P.push(res.pred); });
+    odd.forEach(src => { let found = 0; const res = dijkstra(G, [src], v => oddSet.has(v) && ++found >= odd.length, 3000); D.push(odd.map(x => res.dist[x])); P.push(res.pred); });
     const pairs = []; for (let i = 0; i < odd.length; i++) for (let j = i + 1; j < odd.length; j++) if (isFinite(D[i][j])) pairs.push([D[i][j], i, j]);
     pairs.sort((a, b) => a[0] - b[0]);
     const mate = new Int32Array(odd.length).fill(-1);
@@ -298,9 +377,9 @@
       if (!isFinite(D[src][dst])) { const res = dijkstra(G, [odd[src]], null, Infinity); P[src] = res.pred; }
       for (const e of pathEdges(G, P[src], odd[dst])) addEdge(e);
     }
-    // 4) circuito euleriano (Hierholzer) dal parcheggio
+    // 4) percorso euleriano (Hierholzer) da s
     const nbr = new Map(); for (let i = 0; i < MU.length; i++) { for (const v of [MU[i], MV[i]]) { if (!nbr.has(v)) nbr.set(v, []); nbr.get(v).push(i); } }
-    const used = new Uint8Array(MU.length), ptr = new Map(), stack = [startNode], estack = [-1], path = [], pathE = [];
+    const used = new Uint8Array(MU.length), ptr = new Map(), stack = [s], estack = [-1], path = [], pathE = [];
     while (stack.length) {
       const v = stack[stack.length - 1], list = nbr.get(v) || []; let p = ptr.get(v) || 0;
       while (p < list.length && used[list[p]]) p++;
@@ -309,100 +388,179 @@
       else { const e = list[p]; used[e] = 1; stack.push(MU[e] === v ? MV[e] : MU[e]); estack.push(e); }
     }
     path.reverse(); pathE.reverse();
-    // per ogni tratto: nome della via e se è la prima volta su una strada con case ("guarda") o solo passaggio
-    const localNames = [], li = new Map(), seen = new Set(), segName = [], look = [];
-    for (let k = 1; k < path.length; k++) {
-      const e = MI[pathE[k]], g = G.EN[e];
-      if (!li.has(g)) { li.set(g, localNames.length); localNames.push(G.NAMES[g]); }
-      segName.push(li.get(g));
-      look.push(G.ER[e] && !seen.has(e) ? '1' : '0'); seen.add(e);
+    const edgesSeq = []; for (let k = 1; k < path.length; k++) edgesSeq.push(MI[pathE[k]]);
+    return { path, edges: edgesSeq, usati };
+  }
+
+  // trasforma una sequenza di nodi/pezzi nel formato usato dall'app (coordinate, nomi, tratti da guardare)
+  function confeziona(G, path, edges, daVedere) {
+    const localNames = [], li = new Map(), seen = new Set(), n = [], lk = [];
+    let tot = 0, look = 0;
+    for (let k = 0; k < edges.length; k++) {
+      const e = edges[k], g = G.EN[e];
+      if (!li.has(g)) { li.set(g, localNames.length); localNames.push(G.NOMI[g] || 'strada senza nome'); }
+      n.push(li.get(g));
+      const guarda = daVedere(e) && !seen.has(e); seen.add(e);
+      lk.push(guarda ? '1' : '0'); tot += G.EL[e]; if (guarda) look += G.EL[e];
     }
     const perVia = new Map();
-    for (let k = 0; k < segName.length; k++) if (look[k] === '1') { const nm = localNames[segName[k]]; perVia.set(nm, (perVia.get(nm) || 0) + ML[pathE[k + 1]]); }
+    for (let k = 0; k < edges.length; k++) if (lk[k] === '1') { const nm = localNames[n[k]]; perVia.set(nm, (perVia.get(nm) || 0) + G.EL[edges[k]]); }
     const vie = [...perVia.entries()].sort((a, b) => b[1] - a[1]).map(x => x[0]);
     const via = vie.find(v => !/^(strada senza nome|stradina|sentiero|strada sterrata|scalinata|pista ciclabile|zona pedonale|strada [A-Z]+ ?\d*)$/.test(v)) || vie[0] || '';
-    const total = ML.reduce((a, b) => a + b, 0);
-    const missed = used.reduce((a, u) => a + (u ? 0 : 1), 0);
-    return {
-      coords: path.map(v => [+G.LAT[v].toFixed(5), +G.LON[v].toFixed(5)]),
-      names: localNames, n: segName, lk: look.join(''), via,
-      km: +(total / 1000).toFixed(1), reqKm: +(reqLen / 1000).toFixed(1),
-      ore: +(reqLen / 1000 / WALK_KMH + (total - reqLen) / 1000 / FAST_KMH).toFixed(1), missedEdges: missed,
-      connKm: +(connLen / 1000).toFixed(1), leftover
+    const ore = look / 1000 / WALK_KMH + (tot - look) / 1000 / FAST_KMH;
+    return { coords: path.map(v => [G.R.lat[v], G.R.lon[v]]), nodi: path, pezzi: edges, names: localNames, n, lk: lk.join(''), via, km: tot / 1000, kmNuovi: look / 1000, ore };
+  }
+
+  const NOVE = 1e9;
+  // Percorso dal vivo: parte dal nodo più vicino a `da`, copre le strade da vedere più vicine nel tempo `minuti`,
+  // finisce in `a` (la macchina) oppure, se `a` manca, dove capita dopo l'ultima strada da guardare.
+  function percorso(G, visti, da, opts = {}) {
+    const minuti = opts.minuti || 60, rivedi = opts.rivedi || 0, daVedere = daVedereFn(G, visti, rivedi);
+    const s = nodoVicino(G, da.lat, da.lon);
+    const t = opts.a ? nodoVicino(G, opts.a.lat, opts.a.lon) : s;
+    const libero = !opts.a;
+    const budgetM = minuti / 60 * FAST_KMH * 1000; // metri percorribili al massimo
+    const dS = dijkstra(G, [s], null, budgetM).dist, dT = t === s ? dS : dijkstra(G, [t], null, budgetM).dist;
+    // tratti (da incrocio a incrocio) con case da vedere, dal più vicino
+    const chiave = new Float64Array(G.nt).fill(Infinity);
+    for (let e = 0; e < G.m; e++) {
+      if (!daVedere(e)) continue;
+      const a = G.EU[e], b = G.EV[e];
+      const ds = Math.min(dS[a], dS[b]), dt = Math.min(dT[a], dT[b]);
+      const k = libero ? ds : ds + dt;
+      if (isFinite(k) && k < budgetM && k < chiave[G.T[e]]) chiave[G.T[e]] = k;
+    }
+    const cand = [];
+    for (let t = 0; t < G.nt; t++) if (isFinite(chiave[t])) { let len = 0; for (let i = G.tStart[t]; i < G.tStart[t + 1]; i++) if (daVedere(G.tEdges[i])) len += G.EL[G.tEdges[i]]; cand.push([chiave[t], t, len]); }
+    cand.sort((a, b) => a[0] - b[0]);
+    if (!cand.length) return null;
+    const prova = k => {
+      const sel = [];
+      for (let q = 0; q < k; q++) { const t = cand[q][1]; for (let i = G.tStart[t]; i < G.tStart[t + 1]; i++) if (daVedere(G.tEdges[i])) sel.push(G.tEdges[i]); }
+      const g = giroSu(G, sel, s, t, daVedere);
+      let path = g.path, edges = g.edges;
+      if (libero) { // niente ritorno: tolgo il tratto finale dopo l'ultima strada nuova
+        const viste = new Set(); let ultimo = -1;
+        for (let i = 0; i < edges.length; i++) { if (daVedere(edges[i]) && !viste.has(edges[i])) ultimo = i; viste.add(edges[i]); }
+        if (ultimo >= 0) { edges = edges.slice(0, ultimo + 1); path = path.slice(0, ultimo + 2); }
+      }
+      return confeziona(G, path, edges, daVedere);
     };
-  }
-
-  // nodo della rete principale più vicino a (x,y)
-  function nearestNode(G, x, y, pool) {
-    let sn = -1, sd = Infinity;
-    const it = pool || G.X.keys();
-    for (const i of it) { if (G.comp[i] !== G.main) continue; const d = (G.X[i] - x) ** 2 + (G.Y[i] - y) ** 2; if (d < sd) { sd = d; sn = i; } }
-    return sn;
-  }
-
-  function groupOf(G, es) {
-    let sx = 0, sy = 0, sl = 0; for (const e of es) { const l = G.EL[e]; sx += (G.X[G.EU[e]] + G.X[G.EV[e]]) / 2 * l; sy += (G.Y[G.EU[e]] + G.Y[G.EV[e]]) / 2 * l; sl += l; }
-    return { edges: es, x: sx / sl, y: sy / sl, len: sl };
-  }
-
-  // una giornata = uno o più giri ad anello, uno per gruppo di case (tra un giro e l'altro si sposta la macchina)
-  function routeDay(G, zone) {
-    const groups = new Map();
-    for (const e of zone.edges) { const c = G.cluster[e]; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(e); }
-    const gs = [...groups.values()].map(es => groupOf(G, es)).sort((a, b) => b.len - a.len);
-    // pezzi minuscoli (gruppo tagliato dal confine di zona) -> uniti al gruppo più vicino
-    const queue = gs.filter(g => g.len >= 150 || g === gs[0]);
-    for (const g of gs) if (!queue.includes(g)) { let b = queue[0], bd = Infinity; for (const k of queue) { const d = (k.x - g.x) ** 2 + (k.y - g.y) ** 2; if (d < bd) { bd = d; b = k; } } b.edges.push(...g.edges); }
-    const loops = [], carStops = [];
-    while (queue.length) {
-      const g = queue.shift();
-      if (g.len < MIN_CLUSTER && loops.length) { carStops.push({ lat: +(g.y / G.ky).toFixed(5), lon: +(g.x / G.kx).toFixed(5), m: Math.round(g.len) }); continue; }
-      const pool = new Set(); for (const e of g.edges) { pool.add(G.EU[e]); pool.add(G.EV[e]); }
-      // partenza: parcheggio entro 300 m dal centro del gruppo, altrimenti la strada con case più vicina al centro
-      let park = null, pd = 300 * 300;
-      for (const p of G.parkings) { const d = (p.x - g.x) ** 2 + (p.y - g.y) ** 2; if (d < pd) { pd = d; park = p; } }
-      let s = park ? nearestNode(G, park.x, park.y) : nearestNode(G, g.x, g.y, pool);
-      let r = routeLoop(G, g.edges, s, MAX_LINK);
-      if (r.reqKm === 0) { park = null; s = nearestNode(G, g.x, g.y, pool); r = routeLoop(G, g.edges, s, MAX_LINK); }
-      if (r.reqKm > 0) loops.push({ start: { name: park ? (park.name || 'Parcheggio') : 'Lascia la macchina qui', lat: +G.LAT[s].toFixed(5), lon: +G.LON[s].toFixed(5) }, ...r, leftover: undefined });
-      if (r.leftover.length) queue.push(groupOf(G, r.leftover));
+    // quante strade riesco a fare nel tempo: stima iniziale e poi aggiusto
+    let acc = 0, k0 = 0;
+    for (; k0 < cand.length; k0++) { acc += cand[k0][2]; if (acc / 1000 / WALK_KMH > minuti / 60 * 0.55) break; }
+    k0 = Math.max(1, Math.min(cand.length, k0));
+    let lo = 0, hi = cand.length + 1, best = null, k = k0;
+    for (let it = 0; it < 9 && hi - lo > 1; it++) {
+      const r = prova(k);
+      if (r.ore * 60 <= minuti) { best = !best || r.kmNuovi >= best.kmNuovi ? r : best; lo = k; }
+      else hi = k;
+      if (hi > cand.length) k = Math.min(cand.length, Math.ceil(k * 1.4) + 2);
+      else k = Math.floor((lo + hi) / 2);
+      if (k === lo || k >= hi) break;
     }
-    // ordine dei giri: dal più grande, poi il più vicino
-    loops.sort((a, b) => b.reqKm - a.reqKm);
-    const ord = [loops[0]], left = new Set(loops.slice(1));
-    while (left.size) { const c = ord[ord.length - 1].start; let b = null, bd = Infinity; for (const l of left) { const d = (l.start.lat - c.lat) ** 2 + (l.start.lon - c.lon) ** 2; if (d < bd) { bd = d; b = l; } } ord.push(b); left.delete(b); }
-    return { loops: loops.length ? ord : [], carStops };
+    if (!best) best = prova(1); // anche la strada più vicina sfora: la propongo comunque
+    best.minuti = minuti; best.libero = libero;
+    best.inizio = s; best.fine = t;
+    return best;
   }
 
-  // Piano a giri brevi: il comune viene diviso in tanti giri ad anello da circa `durataMin` minuti.
-  // L'agente sceglie ogni volta quanti e quali farne, in base al tempo che ha.
-  async function plan(comune, durataMin = 75, log = () => {}) {
-    const osm = await fetchOSM(comune, log);
-    log('Costruisco la rete stradale…');
-    const G = build(osm);
-    let w = 0; for (let e = 0; e < G.m; e++) if (G.ER[e] && G.comp[G.EU[e]] === G.main) w += G.EL[e] * (G.tree[e] ? 2 : 1);
-    const stimaOre = w / 1000 * 0.58;                    // ore stimate per tutto il comune (taratura su Cazzago)
-    const k = Math.max(1, Math.round(stimaOre / (durataMin / 60)));
-    log('Divido il comune in circa ' + k + ' giri…');
+  // strada più breve fino a un punto (per tornare alla macchina)
+  function versoPunto(G, visti, da, a, rivedi = 0) {
+    const s = nodoVicino(G, da.lat, da.lon), t = nodoVicino(G, a.lat, a.lon), daVedere = daVedereFn(G, visti, rivedi);
+    const res = dijkstra(G, [s], v => v === t);
+    if (res.last === -1 && s !== t) return null;
+    const edges = pathEdges(G, res.pred, t).reverse(), path = [s];
+    for (const e of edges) { const v = path[path.length - 1]; path.push(G.EU[e] === v ? G.EV[e] : G.EU[e]); }
+    const r = confeziona(G, path, edges, daVedere); r.ritorno = true; r.inizio = s; r.fine = t;
+    return r;
+  }
+
+  // zone con strade ancora da vedere, le più vicine prima (se la posizione è nota)
+  function zoneDaFare(G, visti, pos, rivedi = 0) {
+    const daVedere = daVedereFn(G, visti, rivedi), C = 350, celle = new Map();
+    for (let e = 0; e < G.m; e++) {
+      if (!daVedere(e)) continue;
+      const x = (G.X[G.EU[e]] + G.X[G.EV[e]]) / 2, y = (G.Y[G.EU[e]] + G.Y[G.EV[e]]) / 2, k = Math.floor(x / C) + ',' + Math.floor(y / C);
+      let c = celle.get(k); if (!c) celle.set(k, c = { len: 0, sx: 0, sy: 0, vie: new Map() });
+      c.len += G.EL[e]; c.sx += x * G.EL[e]; c.sy += y * G.EL[e]; c.vie.set(G.EN[e], (c.vie.get(G.EN[e]) || 0) + G.EL[e]);
+    }
+    let lista = [...celle.values()].filter(c => c.len >= 120).map(c => {
+      const x = c.sx / c.len, y = c.sy / c.len;
+      const nomeVia = [...c.vie.entries()].sort((a, b) => b[1] - a[1]).map(v => G.NOMI[v[0]]).find(v => v && !/^(strada senza nome|stradina|sentiero|strada sterrata|scalinata|pista ciclabile|zona pedonale)$/.test(v)) || '';
+      return { lat: y / G.ky, lon: x / G.kx, x, y, km: c.len / 1000, via: nomeVia, frazione: frazione(G, y / G.ky, x / G.kx) };
+    });
+    const dPos = z => pos ? Math.hypot(z.x - pos.lon * G.kx, z.y - pos.lat * G.ky) : 0;
+    lista.forEach(z => { z.distanza = pos ? dPos(z) : null; });
+    lista.sort((a, b) => pos ? a.distanza - b.distanza : b.km - a.km);
+    const scelte = [];
+    for (const z of lista) { if (scelte.every(o => Math.hypot(o.x - z.x, o.y - z.y) > 700)) scelte.push(z); if (scelte.length >= 6) break; }
+    // punto in cui lasciare la macchina: parcheggio vicino, altrimenti la strada da vedere più vicina al centro
+    for (const z of scelte) {
+      let park = null, pd = 300;
+      for (const p of (G.R.parcheggi || [])) { const d = Math.hypot(p.lon * G.kx - z.x, p.lat * G.ky - z.y); if (d < pd) { pd = d; park = p; } }
+      if (park) { z.parcheggio = { lat: park.lat, lon: park.lon, nome: park.nome || 'Parcheggio' }; }
+      else { const v = nodoVicino(G, z.lat, z.lon); z.parcheggio = { lat: G.R.lat[v], lon: G.R.lon[v], nome: '' }; }
+      delete z.x; delete z.y;
+    }
+    return scelte;
+  }
+
+  function frazione(G, lat, lon) {
+    const x = lon * G.kx, y = lat * G.ky; let b = null, bd = Infinity;
+    for (const p of G.luoghi) { const d = Math.hypot(p.x - x, p.y - y) + (p.borgo ? 300 : 0); if (d < bd) { bd = d; b = p.nome; } }
+    return b || G.comune;
+  }
+
+  // indirizzo senza internet: civico più vicino (se c'è nelle mappe) o almeno la via
+  function indirizzoVicino(G, lat, lon) {
+    const [x, y] = xy(G, lat, lon);
+    let civ = null, cd = 30;
+    for (const c of (G.R.civici || [])) { const d = Math.hypot(c[1] * G.kx - x, c[0] * G.ky - y); if (d < cd) { cd = d; civ = c; } }
+    const paese = frazione(G, lat, lon);
+    if (civ) return { via: civ[2] + ' ' + civ[3], paese, esatto: true };
+    let bv = null, bd = 60; const cx = Math.floor(x / G.CS), cy = Math.floor(y / G.CS);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const v of (G.gN.get((cx + i) + ',' + (cy + j)) || []))
+      for (let p = G.start[v]; p < G.start[v + 1]; p++) { const e = G.adj[p], nm = G.NOMI[G.EN[e]]; if (!nm || /^(strada senza nome|stradina|sentiero|strada sterrata|scalinata|pista ciclabile|zona pedonale)$/.test(nm)) continue; const d = distSeg(x, y, G.X[G.EU[e]], G.Y[G.EU[e]], G.X[G.EV[e]], G.Y[G.EV[e]]); if (d < bd) { bd = d; bv = nm; } }
+    return { via: bv || '', paese, esatto: false };
+  }
+
+  // quanto del comune è stato visto
+  function avanzamento(G, visti, rivedi = 0) {
+    const daVedere = daVedereFn(G, visti, rivedi); let fatto = 0;
+    for (let e = 0; e < G.m; e++) if (G.ER[e] && !daVedere(e)) fatto += G.EL[e];
+    return { kmFatti: fatto / 1000, kmTot: G.reqTot / 1000, perc: G.reqTot ? fatto / G.reqTot : 0 };
+  }
+
+  // progressi della versione precedente (giri v3) riportati sulla nuova rete
+  function daV3(G, visti, plan3, stato3) {
+    if (!plan3 || plan3.v !== 3 || !stato3) return 0;
+    let nuovi = 0;
+    for (const g of plan3.giri || []) {
+      const fino = (stato3.fatti || {})[g.id] ? g.coords.length - 1 : Math.min(g.coords.length - 1, (stato3.prog || {})[g.id] || 0);
+      for (let i = 0; i < fino; i++) {
+        if (g.lk && g.lk[i] !== '1') continue;
+        nuovi += copriTratto(G, visti, g.coords[i], g.coords[i + 1], 12);
+      }
+    }
+    return nuovi;
+  }
+  // copertura da una rete vecchia a una nuova (quando le mappe vengono riscaricate)
+  function rimappa(Gv, vistiV, Gn, vistiN) {
+    let n = 0;
+    for (let e = 0; e < Gv.m; e++) if (vistiV[e]) {
+      const a = Gv.EU[e], b = Gv.EV[e], lat = (Gv.R.lat[a] + Gv.R.lat[b]) / 2, lon = (Gv.R.lon[a] + Gv.R.lon[b]) / 2;
+      n += copri(Gn, vistiN, lat, lon, 10, vistiV[e]);
+    }
+    return n;
+  }
+
+  async function scaricaRete(comune, log = () => { }) {
+    const osm = await scaricaOSM(comune, log);
+    log('Preparo la rete stradale…');
     await new Promise(r => setTimeout(r, 0));
-    const zones = makeZones(G, k, comune);
-    const vicino = (lat, lon) => { const x = lon * G.kx, y = lat * G.ky; let b = null, bd = Infinity; for (const p of G.places) { const d = (p.x - x) ** 2 + (p.y - y) ** 2 * 1 + (p.hamlet ? 1e5 : 0); if (d < bd) { bd = d; b = p.name; } } return b || comune; };
-    const giri = [], auto = G.carStops.map(c => ({ lat: c.lat, lon: c.lon, m: c.m }));
-    for (let i = 0; i < zones.length; i++) {
-      if (i % 4 === 0) { log('Calcolo i percorsi… ' + Math.round(100 * i / zones.length) + '%'); await new Promise(r => setTimeout(r, 0)); }
-      const { loops, carStops } = routeDay(G, zones[i]);
-      auto.push(...carStops);
-      for (const l of loops) giri.push({ ...l, frazione: vicino(l.start.lat, l.start.lon) });
-    }
-    // ordine: per frazione (la più grande prima), poi da nord a sud
-    const peso = new Map(); giri.forEach(g => peso.set(g.frazione, (peso.get(g.frazione) || 0) + g.reqKm));
-    giri.sort((a, b) => (peso.get(b.frazione) - peso.get(a.frazione)) || (b.start.lat - a.start.lat));
-    giri.forEach((g, i) => { g.id = 'g' + (i + 1); delete g.missedEdges; delete g.connKm; });
-    auto.forEach(c => { c.frazione = vicino(c.lat, c.lon); });
-    if (!giri.length) throw new Error('Le mappe sono arrivate incomplete (nessuna casa trovata). Riprova tra qualche minuto');
-    log('Fatto: ' + giri.length + ' giri.');
-    return { v: 3, comune, durataMin, created: new Date().toISOString(), walkKmh: WALK_KMH, fastKmh: FAST_KMH, giri, auto };
+    return costruisciRete(osm, comune);
   }
 
-  global.Planner = { versione: 3, plan, fetchOSM, build, makeZones, routeLoop, routeDay };
+  global.Planner = { versione: 4, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
 })(typeof window !== 'undefined' ? window : globalThis);

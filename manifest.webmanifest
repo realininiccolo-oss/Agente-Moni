@@ -1,7 +1,7 @@
 {
   "name": "Agente Moni",
   "short_name": "Agente Moni",
-  "description": "Giri a piedi guidati e schede delle case",
+  "description": "Giri a piedi guidati dal vivo e schede delle case per agenti immobiliari",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
