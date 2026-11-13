@@ -1,9 +1,9 @@
-/* Zona v11 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
+/* Zona v12 — l'app per il farming immobiliare: la propria zona (comuni o quartieri), giri a piedi guidati dal vivo,
    case con foto e note vocali, taccuino delle notizie raccolte in zona, pannello dell'attività.
    Tutto resta sul telefono, un profilo per ogni agente. Il collegamento a Google (foglio e cartella Drive) è facoltativo. */
 (() => {
   'use strict';
-  const VERSIONE = 11;
+  const VERSIONE = 12;
   const $ = id => document.getElementById(id);
   // profili: ogni agente ha i suoi dati. Il primo profilo usa i dati delle versioni precedenti (nessun prefisso).
   const PROFILI = (() => { try { const p = JSON.parse(localStorage.getItem('zona_profili')); if (p && p.lista && p.lista.length) return p; } catch (e) { } return { attivo: 'p0', lista: [{ id: 'p0', nome: '' }] }; })();
@@ -301,7 +301,7 @@
       let b = null;
       for (const n of cfg.comuni) {
         const a = cfg.aree[n]; if (!a || !a.bbox) continue;
-        const bb = L.latLngBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]]); b = b ? b.extend(bb) : bb;
+        const bb = L.latLngBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]]); (confiniDi(n) || []).forEach(r => bb.extend(L.latLngBounds(r))); b = b ? b.extend(bb) : bb;
         L.marker(bb.getCenter(), { icon: L.divIcon({ className: '', html: `<div class="etichetta-area">${esc(n)}</div>`, iconSize: [10, 10], iconAnchor: [5, 5] }), zIndexOffset: 300 }).on('click', () => { if (n !== cfg.comune) cambiaComune(n); else mostraZona(false); }).addTo(lExtra);
       }
       if (centra && b && b.isValid()) map.fitBounds(b, { paddingTopLeft: [20, 30], paddingBottomRight: [70, Math.min(440, altezzaPannello() + 20)] });
@@ -686,12 +686,28 @@
     salvaStato(); salvaVisti(); aggiorna(true); sincronizzaCopertura(true); inviaTraccia();
   }
 
-  function aggiorna(centra) { pannello(); guida(); posizionaTondi(); disegna(centra); }
+  function aggiorna(centra) { pannello(); guida(); posizionaTondi(); aggiornaAvatar(); disegna(centra); }
   function altezzaPannello() { return Math.max(0, Math.round(window.innerHeight - $('pannello').getBoundingClientRect().top)); }
+  // barra delle icone: in fila sopra il pannello; se il pannello è tutto aperto, in alto a sinistra del profilo
   function posizionaTondi() {
-    const h = altezzaPannello(), T = $('tondi'), alto = h + 24 + T.children.length * 66 > window.innerHeight - 10 && !$('guida').classList.contains('visibile');
-    T.classList.toggle('in-alto', alto); T.style.bottom = alto ? '' : (h + 12) + 'px';
-    $('strati').style.bottom = alto ? 'auto' : (h + 12) + 'px'; $('strati').style.top = alto ? 'calc(env(safe-area-inset-top) + 80px)' : ''; $('strati').style.right = alto ? '12px' : ''; $('invio').style.bottom = (h + 12) + 'px'; $('toast').style.bottom = (h + 12) + 'px'; }
+    const h = altezzaPannello(), T = $('tondi'), gu = $('guida'), guidaOn = gu.classList.contains('visibile');
+    const alto = h + 10 + 54 > window.innerHeight - 76;
+    const sottoGuida = guidaOn ? Math.round(gu.getBoundingClientRect().bottom) + 10 : 0;
+    T.classList.toggle('in-alto', alto);
+    T.style.bottom = alto ? '' : (h + 10) + 'px';
+    T.style.top = alto ? (guidaOn ? sottoGuida + 'px' : 'calc(env(safe-area-inset-top) + 12px)') : '';
+    T.style.right = alto && !guidaOn ? '72px' : '';
+    const st = $('strati');
+    st.style.bottom = alto ? 'auto' : (h + 72) + 'px';
+    st.style.top = alto ? (Math.round(T.getBoundingClientRect().bottom) + 8) + 'px' : '';
+    $('invio').style.bottom = (h + 72) + 'px'; $('toast').style.bottom = (alto ? h + 12 : h + 74) + 'px';
+  }
+  function aggiornaAvatar() {
+    const n = ((cfg.profilo && cfg.profilo.nome) || '').trim(), b = $('tProfilo');
+    const ini = n ? n.split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase() : '';
+    b.innerHTML = ini ? `<span>${esc(ini)}</span>` : svg('<circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/>', 'stroke-width="1.7"');
+    b.setAttribute('aria-label', 'Il mio profilo' + (n ? ': ' + n : ''));
+  }
 
   // ---------- pannello trascinabile ----------
   const PAN = $('pannello'), ZONA = $('maniglia'), CORPO = $('pannelloCorpo'), SBIRCIA = 58;
@@ -932,7 +948,15 @@
     c.innerHTML = `${foto.length ? `<div class="galleria">${foto.map((u, i) => `<img src="${u}" alt="Foto ${i + 1}">`).join('')}</div>` : ''}
       <div class="scheda-ind">${esc(h.address || 'Casa senza indirizzo')}</div>
       <div class="scheda-sotto">${esc([h.tipo, data, h.comune].filter(Boolean).join(' · '))}</div>
-      ${h.agenzia ? `<p class="scheda-sotto" style="margin-top:4px">Cartello: <b>${esc(h.agenzia)}</b></p>` : ''}
+      <div class="sezione"><h3 class="gruppo" style="margin-top:0">In vendita?<span>${h.annuncioTs ? 'segnato ' + esc(giorniFa(h.annuncioTs)) : ''}</span></h3>
+        ${h.prezzo || h.annuncio || h.agenzia ? `<div class="annuncio"><div><b>${h.prezzo ? esc(prezzoTesto(h.prezzo)) : h.annuncio ? 'Annuncio trovato' : 'Cartello'}</b><span>${esc(h.agenzia || 'Agenzia non segnata')}</span></div>${h.annuncio ? `<a class="tasto piccolo" target="_blank" rel="noopener" href="${esc(/^https?:/i.test(h.annuncio) ? h.annuncio : 'https://' + h.annuncio)}">Apri l'annuncio</a>` : ''}</div>` : '<p class="aiuto" style="margin-top:0">Non ancora controllato. Cerca l\'indirizzo sui portali:</p>'}
+        <div class="portali">${portaliHTML(h.address, h.comune)}</div>
+        ${h.remota ? '' : `<button class="link" id="sAnnApri">${h.prezzo || h.annuncio ? 'Cambia prezzo o annuncio' : 'Segna agenzia, prezzo e annuncio'}</button>
+        <div id="sAnnForm" hidden><label class="campo" for="sAnnAg">Agenzia</label><input class="campo" id="sAnnAg" list="listaAgenzie" value="${esc(h.agenzia || '')}" autocomplete="off">
+          <label class="campo" for="sAnnPr">Prezzo richiesto</label><input class="campo" id="sAnnPr" inputmode="numeric" placeholder="€" value="${h.prezzo ? esc(Number(h.prezzo).toLocaleString('it-IT')) : ''}" autocomplete="off">
+          <label class="campo" for="sAnnLink">Link dell'annuncio</label><input class="campo" type="url" id="sAnnLink" value="${esc(h.annuncio || '')}" placeholder="Incolla il link" autocomplete="off">
+          <button class="tasto verde piccolo" id="sAnnSalva">${ICO.ok}Salva</button></div>`}
+      </div>
       ${notizieCasa(h).length ? `<div class="sezione"><h3>Notizie su questa casa</h3>${notizieCasa(h).map(n => `<button class="nota-riga" data-nota="${n.id}"><span class="nota-tipo">${esc(n.tipoInfo || 'Notizia')}</span><b>${esc(taglia(n.testo, 120))}</b><span>${esc([n.chi, dataBreve(n.ts), n.stato].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
       ${h.remota && (h.photos || []).length ? `<p><a class="link" target="_blank" rel="noopener" href="${esc(h.photos[0])}">Apri le foto</a></p>` : ''}
       ${h.telefono ? `<a class="tasto verde" href="tel:${esc(h.telefono.replace(/[^\d+]/g, ''))}">${ICO.telefono}Chiama ${esc(h.telefono)}</a>` : ''}
@@ -960,6 +984,15 @@
       }
     }
     $('sCondividi').onclick = () => condividiCasa(h);
+    if ($('sAnnApri')) $('sAnnApri').onclick = () => { $('sAnnForm').hidden = !$('sAnnForm').hidden; $('listaAgenzie').innerHTML = [...new Set(['Privato', ...[...case_.values()].map(x => x.agenzia).filter(Boolean)])].map(a => `<option value="${esc(a)}">`).join(''); if (!$('sAnnForm').hidden) $('sAnnAg').focus(); };
+    if ($('sAnnSalva')) $('sAnnSalva').onclick = async () => {
+      const ag = $('sAnnAg').value.trim(), pr = leggiPrezzo($('sAnnPr').value), li = $('sAnnLink').value.trim();
+      const cambiato = ag !== (h.agenzia || '') || pr !== (h.prezzo || '') || li !== (h.annuncio || '');
+      h.agenzia = ag; h.prezzo = pr; h.annuncio = li; if (cambiato) h.annuncioTs = pr || li ? Date.now() : '';
+      if ((pr || li) && (h.stato === 'Da valutare' || !h.stato)) { h.stato = 'Cartello vendita'; marcatore(h); }
+      try { await DB.put('case', h); toast('Annuncio segnato', 'ok'); } catch (e) { toast('Non riesco a salvare: ' + e.message, 'errore'); }
+      apriScheda(h.id); if ($('fCase').classList.contains('aperto')) disegnaLista();
+    };
     c.querySelectorAll('[data-nota]').forEach(b => b.onclick = () => apriNota(b.dataset.nota));
     $('sNotizia').onclick = () => { apriNota(); nn.casaId = h.id; if (h.lat !== '' && h.lat != null) { nn.lat = h.lat; nn.lng = h.lng; } if (!$('nDove').value) $('nDove').value = h.address || ''; };
     if ($('sRichiamato')) $('sRichiamato').onclick = async () => { h.richiamo = ''; await DB.put('case', h); toast('Promemoria tolto', 'ok'); apriScheda(h.id); pannello(); if ($('fCase').classList.contains('aperto')) disegnaLista(); };
@@ -988,7 +1021,7 @@
   const fileDa = (dataUrl, nome) => { const [t, b] = dataUrl.split(','), mime = (t.match(/data:(.*?);/) || [])[1] || 'image/jpeg', bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new File([u], nome, { type: mime }); };
   const notizieCasa = h => [...note.values()].filter(n => n.casaId === h.id).sort((a, b) => b.ts - a.ts);
   const firma = () => { const p = cfg.profilo || {}; return p.nome ? '— ' + [p.nome, p.agenzia, p.telefono].filter(Boolean).join(' · ') : ''; };
-  const testoCasa = h => [h.address || 'Casa', [h.stato, h.tipo].filter(Boolean).join(' · '), h.agenzia ? 'Cartello: ' + h.agenzia : '', h.telefono ? 'Tel. ' + h.telefono : '', h.note || '', h.lat !== '' && h.lat != null ? 'Mappa: https://maps.google.com/?q=' + h.lat + ',' + h.lng : '', firma()].filter(Boolean).join('\n');
+  const testoCasa = h => [h.address || 'Casa', [h.stato, h.tipo].filter(Boolean).join(' · '), h.agenzia ? 'Agenzia: ' + h.agenzia : '', h.prezzo ? 'In vendita a ' + prezzoTesto(h.prezzo) : '', h.annuncio || '', h.telefono ? 'Tel. ' + h.telefono : '', h.note || '', h.lat !== '' && h.lat != null ? 'Mappa: https://maps.google.com/?q=' + h.lat + ',' + h.lng : '', firma()].filter(Boolean).join('\n');
   async function condividiCasa(h) {
     const testo = testoCasa(h);
     try {
@@ -1006,14 +1039,32 @@
   function esportaCSV(lista, comune) {
     if (!lista.length) { toast('Non ci sono case da esportare.', 'errore'); return; }
     const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
-    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Agenzia sul cartello', 'Telefono', 'Richiamare il', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
-    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.agenzia, h.telefono, h.richiamo ? new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT') : '', h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
+    const righe = [['Data', 'Comune', 'Indirizzo', 'Stato', 'Tipo', 'Agenzia', 'Prezzo annuncio', 'Annuncio', 'Telefono', 'Richiamare il', 'Note', 'Foto', 'Mappa'].map(q).join(';')];
+    lista.forEach(h => righe.push([h.ts ? new Date(h.ts).toLocaleDateString('it-IT') : '', h.comune, h.address, h.stato, h.tipo, h.agenzia, h.prezzo || '', h.annuncio || '', h.telefono, h.richiamo ? new Date(h.richiamo + 'T12:00').toLocaleDateString('it-IT') : '', h.note, fotoDi(h).length || (h.photos || []).length, h.lat !== '' && h.lat != null ? 'https://maps.google.com/?q=' + h.lat + ',' + h.lng : ''].map(q).join(';')));
     condividiFile(new Blob(['﻿' + righe.join('\r\n')], { type: 'text/csv' }), 'case-' + (comune || 'tutte').replace(/\s+/g, '-') + '-' + new Date().toISOString().slice(0, 10) + '.csv');
   }
 
+  // ---------- è già in vendita? ricerca sui portali dall'indirizzo ----------
+  // I portali non danno i loro annunci ad altre app: l'app apre la ricerca giusta e l'agente segna quello che trova.
+  const PORTALI = [{ n: 'Immobiliare.it', s: 'immobiliare.it' }, { n: 'Idealista', s: 'idealista.it' }, { n: 'Casa.it', s: 'casa.it' }, { n: 'Tutti i siti', s: '' }];
+  function viaDi(address, comune) {
+    const parti = String(address || '').split(',').map(x => x.trim()).filter(Boolean);
+    const via = (parti[0] || '').replace(/\s+\d+\s*[a-z]?(\/\d+)?$/i, '').trim();
+    const paese = parti.length > 1 ? parti[parti.length - 1].replace(/^\d{5}\s*/, '') : (comune || '');
+    return { via, paese: paese || comune || '' };
+  }
+  function linkPortale(p, address, comune) {
+    const { via, paese } = viaDi(address, comune);
+    const q = [p.s ? 'site:' + p.s : '', via ? '"' + via + '"' : '', paese, p.s ? 'vendita' : 'casa in vendita'].filter(Boolean).join(' ');
+    return 'https://www.google.com/search?q=' + encodeURIComponent(q);
+  }
+  const portaliHTML = (address, comune) => PORTALI.map(p => `<a class="portale" target="_blank" rel="noopener" href="${esc(linkPortale(p, address, comune))}">${svg('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>')}${esc(p.n)}</a>`).join('');
+  const leggiPrezzo = t => { t = String(t || '').trim(); if (!t) return ''; let n = +t.replace(/[^\d]/g, ''); if (!n) return ''; if (/k\b|mila/i.test(t) && n < 10000) n *= 1000; return n; };
+  const prezzoTesto = n => n ? '€ ' + Number(n).toLocaleString('it-IT') : '';
+
   // ---------- nuova casa / modifica ----------
   let nc = null;
-  const casaModificata = () => nc && !nc.id && (nc.foto.length || nc.audio || $('note').value.trim() || $('telefono').value.trim() || $('richiamo').value || $('agenzia').value.trim());
+  const casaModificata = () => nc && !nc.id && (nc.foto.length || nc.audio || $('note').value.trim() || $('telefono').value.trim() || $('richiamo').value || $('agenzia').value.trim() || $('prezzo').value.trim() || $('annuncio').value.trim());
   function apriNuovaCasa(esistente) {
     if (esistente) nc = { id: esistente.id, pos: esistente.lat !== '' && esistente.lat != null ? { lat: esistente.lat, lng: esistente.lng, acc: esistente.acc || 0 } : null, foto: (esistente.foto || []).slice(), audio: esistente.audio || null, audioSec: esistente.audioSec || 0, stato: esistente.stato || 'Da valutare', tipo: esistente.tipo || '', ts: esistente.ts, sync: esistente.sync };
     else nc = { pos: posizione ? { ...posizione } : null, foto: [], audio: null, stato: 'Da valutare', tipo: '' };
@@ -1021,6 +1072,8 @@
     $('note').value = esistente ? esistente.note || '' : ''; $('telefono').value = esistente ? esistente.telefono || '' : ''; $('richiamo').value = esistente ? esistente.richiamo || '' : ''; $('richiamo').min = oggiISO();
     $('indirizzo').value = esistente ? esistente.address || '' : '';
     $('agenzia').value = esistente ? esistente.agenzia || '' : '';
+    $('prezzo').value = esistente && esistente.prezzo ? Number(esistente.prezzo).toLocaleString('it-IT') : ''; $('annuncio').value = esistente ? esistente.annuncio || '' : '';
+    aggiornaPortali();
     $('listaAgenzie').innerHTML = [...new Set(['Privato', ...[...case_.values()].map(h => h.agenzia).filter(Boolean)])].map(a => `<option value="${esc(a)}">`).join('');
     disegnaFoto(); disegnaVoce(); disegnaScelte(); casaVicina();
     apri('fCasa');
@@ -1053,8 +1106,10 @@
     const paese = iCap >= 0 ? parti[iCap].replace(/^\d{5}\s*/, '').replace(/\s+[A-Z]{2}$/, '') : '';
     return { via, paese };
   }
-  const allarga = () => { const t = $('indirizzo'); t.style.height = 'auto'; t.style.height = t.scrollHeight + 4 + 'px'; };
-  $('indirizzo').addEventListener('input', allarga);
+  const allarga = () => { const t = $('indirizzo'); t.style.height = 'auto'; t.style.height = t.scrollHeight + 4 + 'px'; if (nc) aggiornaPortali(); };
+  $('indirizzo').addEventListener('input', () => { allarga(); aggiornaPortali(); });
+  function aggiornaPortali() { const v = nc && nc.id ? case_.get(nc.id) : null; $('portaliCasa').innerHTML = portaliHTML($('indirizzo').value, v ? v.comune : cfg.comune); }
+  $('prezzo').addEventListener('change', () => { const n = leggiPrezzo($('prezzo').value); $('prezzo').value = n ? Number(n).toLocaleString('it-IT') : ''; });
   $('riprovaIndirizzo').onclick = () => { if (posizione) nc.pos = { ...posizione }; cercaIndirizzo(); casaVicina(); };
 
   function disegnaFoto() {
@@ -1148,10 +1203,11 @@
     const h = {
       id: nc.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: nc.ts || Date.now(), comune: vecchia ? vecchia.comune : cfg.comune, address,
       lat: p ? +(+p.lat).toFixed(6) : '', lng: p ? +(+p.lng).toFixed(6) : '', acc: p ? p.acc : null,
-      stato: nc.stato === 'Da valutare' && $('richiamo').value ? 'Da ricontattare' : nc.stato, tipo: nc.tipo, note: $('note').value.trim(), telefono: $('telefono').value.trim(), richiamo: $('richiamo').value, agenzia: $('agenzia').value.trim(),
+      stato: nc.stato === 'Da valutare' && (leggiPrezzo($('prezzo').value) || $('annuncio').value.trim()) ? 'Cartello vendita' : nc.stato === 'Da valutare' && $('richiamo').value ? 'Da ricontattare' : nc.stato, tipo: nc.tipo, note: $('note').value.trim(), telefono: $('telefono').value.trim(), richiamo: $('richiamo').value, agenzia: $('agenzia').value.trim(), prezzo: leggiPrezzo($('prezzo').value), annuncio: $('annuncio').value.trim(),
       foto: nc.foto.slice(), audio: nc.audio, audioSec: nc.audioSec || 0,
       sync: vecchia && vecchia.sync === 'ok' ? 'ok' : conGoogle() ? 'attesa' : 'locale', remote: vecchia ? vecchia.remote : null
     };
+    h.annuncioTs = vecchia && vecchia.prezzo === h.prezzo && (vecchia.annuncio || '') === h.annuncio ? vecchia.annuncioTs || '' : (h.prezzo || h.annuncio ? Date.now() : '');
     try { h.mini = h.foto[0] ? await riduci(h.foto[0], 200, 0.7) : ''; } catch (e) { h.mini = ''; }
     try { await DB.put('case', h); } catch (e) { toast('Memoria del telefono piena: libera spazio e riprova.', 'errore', 6000); return; }
     case_.set(h.id, h); marcatore(h, !vecchia); contaCase();
@@ -1241,7 +1297,8 @@
     if (conGoogle()) voci.push({ i: ICO.foglio, t: 'Apri il foglio Google', s: 'Tutte le case nel foglio condiviso', f: () => { const u = LS.get('sheetUrl', ''); if (u) window.open(u, '_blank'); else toast('Prova prima il collegamento nelle impostazioni.', 'errore'); } });
     voci.push({ i: ICO.persona, t: 'Profilo' + (nomeAgente() ? ': ' + nomeAgente() : ''), s: 'Dati, obiettivi, PIN, altri agenti', f: apriProfilo });
     voci.push({ i: ICO.ingranaggio, t: 'Impostazioni', s: 'Ripasso delle strade, avvisi, backup, Google', f: () => { chiudi('fMenu'); apriImpost(); } });
-    voci.push({ i: ICO.aiuto, t: 'Come si usa', s: 'Spiegazione in 2 minuti', f: () => { chiudi('fMenu'); apriAiuto(); } });
+    voci.push({ i: ICO.aiuto, t: 'Tutorial', s: 'Dove sono le cose, in un minuto', f: () => { chiudi('fMenu'); setTimeout(avviaTutorial, 300); } });
+    voci.push({ i: ICO.lista, t: 'Come si usa', s: 'Spiegazione in 2 minuti', f: () => { chiudi('fMenu'); apriAiuto(); } });
     c.innerHTML = '';
     voci.forEach(v => { const b = document.createElement('button'); b.className = 'voce-menu'; b.innerHTML = `${v.i}<span>${esc(v.t)}<small>${esc(v.s)}</small></span>`; b.onclick = v.f; c.appendChild(b); });
     apri('fMenu');
@@ -1257,8 +1314,8 @@
   async function cambiaComune(nome) {
     if (S.fase === 'cammino' && !confirm('Interrompo il giro in corso? Le strade viste restano segnate.')) return;
     if (S.fase !== 'home') bastaPerOggi();
-    if (G) await DB.put('visti', recVisti(), cfg.comune).catch(() => { });
-    zonaCache.delete(cfg.comune); zonaCache.delete(nome); vistaZona = false;
+    if (G) { aggiornaStatArea(); await DB.put('visti', recVisti(), cfg.comune).catch(() => { }); }
+    zonaCache.delete(cfg.comune); zonaCache.delete(nome); vistaZona = false; grigliaZona = null; riservaConfini.clear(); if (map.hasLayer(stratoZona)) map.removeLayer(stratoZona);
     cfg.comune = nome; salvaCfg();
     caricamento = null; anteprima = null; zone = null;
     await preparaComune(true);
@@ -1323,11 +1380,13 @@
   }
 
   function apriAiuto() {
-    $('aiutoCorpo').innerHTML = `<p><b>La tua zona.</b> È il territorio che lavori: uno o più comuni, un quartiere o una zona disegnata sulla mappa. La aggiungi e la cambi da Menu → La mia zona. Con "Tutta la zona" la vedi intera.</p>
+    $('aiutoCorpo').innerHTML = `<p><b>La tua zona.</b> È il territorio che lavori: uno o più comuni, un quartiere o una zona disegnata sulla mappa. La aggiungi e la cambi da Menu → La mia zona. Con "Tutta la zona" la vedi intera: il bordo scuro è il confine, dentro il verde è la parte già vista e l'ocra quella da vedere.</p>
+      <p><b>Gli strumenti</b> sono nella barra sopra il pannello: le tue case, torna dove sei, legenda e strati, menu. In alto a destra c'è il tuo profilo, con obiettivi, PIN e questo aiuto.</p>
       <p><b>1. Scegli quanto tempo hai.</b> L'app prepara un giro a piedi sulle strade con case che non hai ancora visto, partendo da dove sei. Se sei lontano, ti propone le zone più vicine e ti porta a parcheggiare.</p>
       <p><b>2. Segui la linea gialla.</b> Le frecce indicano il verso; in alto c'è dove girare. Il pezzo già fatto diventa grigio tratteggiato; la freccia blu sul tuo pallino è la direzione in cui cammini. Se prendi un'altra strada, il giro si aggiorna da solo.</p>
       <p><b>3. Il segno delle strade.</b> Le strade dove passi a piedi restano verde scuro per 3 mesi; poi diventano verde chiaro. Le blu hanno case da vedere. In macchina non si segna niente. Il tasto con i fogli sovrapposti sulla mappa mostra la legenda.</p>
-      <p><b>4. Case:</b> "Nuova casa" salva indirizzo, foto, nota vocale, stato, telefono e agenzia del cartello. Dalla scheda chiami, condividi su WhatsApp o metti il giorno in cui richiamare.</p>
+      <p><b>4. Case:</b> "Nuova casa" salva indirizzo, foto, nota vocale, stato, telefono e agenzia. Dalla scheda chiami, condividi su WhatsApp o metti il giorno in cui richiamare.</p>
+      <p><b>È già in vendita?</b> Nella scheda della casa i tasti Immobiliare.it, Idealista, Casa.it e "Tutti i siti" cercano quell'indirizzo sui portali. Se trovi l'annuncio, segna agenzia, prezzo e link: restano nella scheda, nell'Excel e nella condivisione. I portali non permettono ad altre app di leggere i loro annunci, per questo il controllo lo fai tu con un tocco.</p>
       <p><b>5. Taccuino:</b> quello che senti al bar, dai negozianti, dai vicini (chi vende, chi eredita, chi si trasferisce) va in "Notizia". Le persone che te le danno finiscono nella rubrica della zona e l'app ti ricorda di ripassare da loro.</p>
       <p><b>6. Volantini:</b> durante il giro accendi "Sto lasciando volantini": le strade si segnano e le vedi sulla mappa (strato "Strade con volantini").</p>
       <p><b>7. Il pannello:</b> cose da fare oggi (richiami, notizie da verificare, persone da risentire, promemoria tuoi), la settimana rispetto ai tuoi obiettivi, i chilometri delle ultime settimane, quanto hai visto di ogni area.</p>
@@ -1342,6 +1401,38 @@
   const saluto = () => { const h = new Date().getHours(); return h >= 5 && h < 13 ? 'Buongiorno' : h >= 13 && h < 18 ? 'Buon pomeriggio' : 'Buonasera'; };
   const nomeAgente = () => ((cfg.profilo && cfg.profilo.nome) || '').trim().split(/\s+/)[0] || '';
   const OB = () => Object.assign({ ore: 6, case: 10, notizie: 5, risentire: 30 }, (cfg.profilo && cfg.profilo.obiettivi) || {});
+  // selettori degli obiettivi: cursore con meno/più, valori da min a max
+  const SEL_OB = {
+    ore: { nome: 'Ore a piedi', min: 0.5, max: 40, step: 0.5, fmt: v => oreTesto(v) },
+    case: { nome: 'Case da segnare', min: 1, max: 100, step: 1, fmt: v => v === 1 ? '1 casa' : v + ' case' },
+    notizie: { nome: 'Notizie da raccogliere', min: 1, max: 60, step: 1, fmt: v => v === 1 ? '1 notizia' : v + ' notizie' },
+    risentire: { nome: 'Ripassare dalle persone della zona', min: 0, max: 120, step: 1, fmt: v => v ? (v === 1 ? 'ogni giorno' : 'ogni ' + v + ' giorni') : 'mai' }
+  };
+  function selettore(campo, valore, nome) {
+    const d = SEL_OB[campo], v = Math.min(d.max, Math.max(d.min, valore));
+    return `<div class="selettore" data-campo="${campo}"><div class="sel-testa"><span>${esc(nome || d.nome)}</span><output>${esc(d.fmt(v))}</output></div>
+      <div class="sel-corpo"><button type="button" class="sel-passo" data-d="-1" aria-label="Meno">${svg('<path d="M6 12h12"/>')}</button>
+      <input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${v}" aria-label="${esc(nome || d.nome)}">
+      <button type="button" class="sel-passo" data-d="1" aria-label="Più">${svg('<path d="M12 6v12M6 12h12"/>')}</button></div>
+      <div class="sel-scala"><span>${esc(d.fmt(d.min))}</span><span>${esc(d.fmt(d.max))}</span></div></div>`;
+  }
+  function collegaSelettori(box) {
+    box.querySelectorAll('.selettore').forEach(el => {
+      const campo = el.dataset.campo, d = SEL_OB[campo], r = el.querySelector('input'), out = el.querySelector('output');
+      const pieno = () => r.style.setProperty('--pieno', (100 * (r.value - d.min) / (d.max - d.min)) + '%');
+      const mostra = () => { out.textContent = d.fmt(+r.value); pieno(); };
+      const salva = () => salvaProfilo({ obiettivi: Object.assign({}, OB(), { [campo]: +r.value }) });
+      r.oninput = mostra; r.onchange = salva; pieno();
+      el.querySelectorAll('.sel-passo').forEach(b => {
+        let t = null, n = 0;
+        const passo = () => { const v = Math.min(d.max, Math.max(d.min, Math.round((+r.value + d.step * +b.dataset.d) / d.step) * d.step)); r.value = v; mostra(); };
+        const ferma = () => { if (t) { clearTimeout(t); t = null; salva(); } };
+        b.onpointerdown = e => { e.preventDefault(); n = 0; passo(); const ripeti = () => { n++; passo(); t = setTimeout(ripeti, n > 6 ? 60 : 140); }; t = setTimeout(ripeti, 420); };
+        b.onpointerup = b.onpointerleave = b.onpointercancel = ferma;
+        b.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); passo(); salva(); } };
+      });
+    });
+  }
   const nuovoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const giornoISO = ts => { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   const inizioSettimana = (ts = Date.now()) => { const d = new Date(ts); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.getTime(); };
@@ -1449,16 +1540,132 @@
     if (on && S.fase !== 'home') { toast('Finisci prima il giro in corso.', 'errore'); return; }
     if (on) { toast('Apro tutta la zona…', '', 1800); for (const n of cfg.comuni) if (n !== cfg.comune) { try { await apriArea(n); } catch (e) { } } await statTutte(); }
     vistaZona = on; anteprima = null; zone = null;
+    if (!on) { grigliaZona = null; if (map.hasLayer(stratoZona)) map.removeLayer(stratoZona); }
     caricaMarcatori(); disegnaNote(); disegnaRete(); aggiorna(true);
-    if (!on) disegna(true);
+    if (!on) disegna(true); else caricaConfini();
   }
   function disegnaZona() {
     for (const n of cfg.comuni) {
       if (n === cfg.comune && G) disegnaReteDi(G, visti, passi, volant, lRete, false);
       else { const z = zonaCache.get(n); if (z) disegnaReteDi(z.G, z.v, z.p, z.f, lRete, false); }
-      const a = cfg.aree[n];
-      if (a && a.poly) L.polygon(a.poly, { renderer: tela, pane: 'rete', color: '#17262b', weight: 2, dashArray: '6 6', fillColor: OCRA, fillOpacity: .05, interactive: false }).addTo(lRete);
     }
+    grigliaZona = calcolaGriglia();
+    if (!map.hasLayer(stratoZona)) stratoZona.addTo(map); else stratoZona.ridisegna();
+  }
+
+  // ---------- tutta la zona: confine esterno marcato, dentro due colori (già vista / da vedere) ----------
+  // Ogni punto della zona prende il colore della strada con case più vicina: verde se vista, ocra se da vedere.
+  map.createPane('zonaFondo').style.zIndex = 380;
+  const COL_VISTA = [46, 125, 79], COL_DAFARE = [242, 169, 0], ALFA_ZONA = 0.27;
+  const riservaConfini = new Map();   // involucro dei nodi, finché il confine vero non è scaricato
+  let grigliaZona = null;
+  const reteArea = n => n === cfg.comune && G ? { G, v: visti } : zonaCache.get(n) || null;
+  function confiniDi(n) {
+    const a = cfg.aree[n]; if (!a) return null;
+    if (a.poly && a.poly.length >= 3) return [a.poly];
+    if (a.confine && a.confine.length) return a.confine;
+    if (riservaConfini.has(n)) return riservaConfini.get(n);
+    const z = reteArea(n); if (!z) return null;
+    const pts = [], passo = Math.max(1, Math.floor(z.G.n / 5000));
+    for (let i = 0; i < z.G.n; i += passo) pts.push([z.G.R.lat[i], z.G.R.lon[i]]);
+    const h = Planner.involucro(pts); if (h.length < 3) return null;
+    riservaConfini.set(n, [h]); return [h];
+  }
+  const anelliZona = () => cfg.comuni.flatMap(n => (confiniDi(n) || []).map(a => ({ n, a })));
+  function calcolaGriglia() {
+    const anelli = anelliZona(); if (!anelli.length) return null;
+    let s = 90, w = 180, nn = -90, e = -180;
+    anelli.forEach(({ a }) => a.forEach(p => { if (p[0] < s) s = p[0]; if (p[0] > nn) nn = p[0]; if (p[1] < w) w = p[1]; if (p[1] > e) e = p[1]; }));
+    const kx = 111320 * Math.cos((s + nn) / 2 * Math.PI / 180), ky = 110540;
+    const cs = Math.max(20, Math.sqrt((e - w) * kx * (nn - s) * ky / 300000));
+    const dLon = cs / kx, dLat = cs / ky, W = Math.max(1, Math.ceil((e - w) / dLon) + 2), H = Math.max(1, Math.ceil((nn - s) / dLat) + 2);
+    const w0 = w - dLon, n0 = nn + dLat;
+    const vista = new Float32Array(W * H), fare = new Float32Array(W * H);
+    let mVista = 0, mFare = 0;
+    for (const nome of cfg.comuni) {
+      const z = reteArea(nome); if (!z) continue;
+      const Gx = z.G, da = Planner.daVedereFn(Gx, z.v, cfg.rivedi);
+      for (let ed = 0; ed < Gx.m; ed++) {
+        if (!Gx.ER[ed]) continue;
+        const a = Gx.EU[ed], b = Gx.EV[ed], la1 = Gx.R.lat[a], lo1 = Gx.R.lon[a], la2 = Gx.R.lat[b], lo2 = Gx.R.lon[b];
+        const lung = Gx.EL[ed], k = Math.max(1, Math.ceil(lung / (cs * 0.5))), dafare = da(ed), arr = dafare ? fare : vista, peso = lung / (k + 1);
+        if (dafare) mFare += lung; else mVista += lung;
+        for (let t = 0; t <= k; t++) {
+          const f = t / k, x = Math.floor((lo1 + (lo2 - lo1) * f - w0) / dLon), y = Math.floor((n0 - (la1 + (la2 - la1) * f)) / dLat);
+          if (x >= 0 && x < W && y >= 0 && y < H) arr[y * W + x] += peso;
+        }
+      }
+    }
+    const lab = new Uint8Array(W * H), q = new Int32Array(W * H); let qh = 0, qt = 0;
+    for (let i = 0; i < W * H; i++) if (vista[i] || fare[i]) { lab[i] = vista[i] >= fare[i] ? 1 : 2; q[qt++] = i; }
+    while (qh < qt) {
+      const i = q[qh++], x = i % W, y = (i / W) | 0, l = lab[i];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+        const j = Y * W + X; if (!lab[j]) { lab[j] = l; q[qt++] = j; }
+      }
+    }
+    const img = document.createElement('canvas'); img.width = W; img.height = H;
+    const ctx = img.getContext('2d'), id = ctx.createImageData(W, H);
+    for (let i = 0; i < W * H; i++) { const c = lab[i] === 1 ? COL_VISTA : lab[i] === 2 ? COL_DAFARE : null; if (!c) continue; id.data[i * 4] = c[0]; id.data[i * 4 + 1] = c[1]; id.data[i * 4 + 2] = c[2]; id.data[i * 4 + 3] = 255; }
+    ctx.putImageData(id, 0, 0);
+    return { anelli, img, nord: n0, ovest: w0, sud: n0 - H * dLat, est: w0 + W * dLon, kmVista: mVista / 1000, kmFare: mFare / 1000, semi: qt > 0 && (mVista + mFare) > 0 };
+  }
+  const StratoZona = L.Layer.extend({
+    onAdd(m) {
+      this._c = L.DomUtil.create('canvas', 'strato-zona'); this._c.style.pointerEvents = 'none';
+      this._f = document.createElement('canvas'); this._b = document.createElement('canvas');
+      m.getPane('zonaFondo').appendChild(this._c);
+      m.on('moveend zoomend resize viewreset', this.ridisegna, this); m.on('zoomstart', this._nascondi, this);
+      this.ridisegna();
+    },
+    onRemove(m) { m.off('moveend zoomend resize viewreset', this.ridisegna, this); m.off('zoomstart', this._nascondi, this); this._c.remove(); },
+    _nascondi() { this._c.style.visibility = 'hidden'; },
+    ridisegna() {
+      if (!this._map) return;
+      const m = this._map, sz = m.getSize(), r = window.devicePixelRatio || 1, c = this._c, g = grigliaZona;
+      [c, this._f, this._b].forEach(k => { k.width = Math.round(sz.x * r); k.height = Math.round(sz.y * r); });
+      c.style.width = sz.x + 'px'; c.style.height = sz.y + 'px'; c.style.visibility = 'visible';
+      L.DomUtil.setPosition(c, m.containerPointToLayerPoint([0, 0]));
+      if (!g) return;
+      const percorsi = g.anelli.map(({ a }) => a.map(p => m.latLngToContainerPoint(p)));
+      const anello = (ctx, pts) => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath(); };
+      const ctx = c.getContext('2d'); ctx.setTransform(r, 0, 0, r, 0, 0);
+      // 1. colori dentro la zona (l'unione delle aree fa da maschera)
+      if (g.semi) {
+        const f = this._f.getContext('2d'); f.setTransform(r, 0, 0, r, 0, 0); f.fillStyle = '#000';
+        percorsi.forEach(p => { anello(f, p); f.fill(); });
+        f.globalCompositeOperation = 'source-in'; f.imageSmoothingEnabled = true; f.imageSmoothingQuality = 'high';
+        const no = m.latLngToContainerPoint([g.nord, g.ovest]), se = m.latLngToContainerPoint([g.sud, g.est]);
+        f.drawImage(g.img, no.x, no.y, se.x - no.x, se.y - no.y);
+        f.globalCompositeOperation = 'source-over';
+        ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = ALFA_ZONA; ctx.drawImage(this._f, 0, 0); ctx.restore();
+      }
+      // 2. confini tra un'area e l'altra: sottili, tratteggiati
+      if (percorsi.length > 1) { ctx.save(); ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(23,38,43,.5)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore(); }
+      // 3. confine esterno di tutta la zona: si tolgono le parti interne, restano solo i bordi verso fuori
+      const b = this._b.getContext('2d'); b.setTransform(r, 0, 0, r, 0, 0); b.lineJoin = 'round';
+      b.strokeStyle = 'rgba(255,255,255,.95)'; b.lineWidth = 2 * 7.5; percorsi.forEach(p => { anello(b, p); b.stroke(); });
+      b.strokeStyle = '#17262b'; b.lineWidth = 2 * 5; percorsi.forEach(p => { anello(b, p); b.stroke(); });
+      b.globalCompositeOperation = 'destination-out'; b.fillStyle = '#000'; percorsi.forEach(p => { anello(b, p); b.fill(); }); b.globalCompositeOperation = 'source-over';
+      ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(this._b, 0, 0); ctx.restore();
+      ctx.save(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(23,38,43,.9)'; percorsi.forEach(p => { anello(ctx, p); ctx.stroke(); }); ctx.restore();
+    }
+  });
+  const stratoZona = new StratoZona();
+  // confini veri dei comuni (OpenStreetMap), scaricati una volta e tenuti nelle impostazioni
+  let confiniInCorso = false;
+  async function caricaConfini() {
+    if (confiniInCorso) return; confiniInCorso = true;
+    try {
+      for (const n of cfg.comuni.slice()) {
+        const a = cfg.aree[n] || (cfg.aree[n] = { tipo: 'comune' });
+        if ((a.tipo && a.tipo !== 'comune') || a.poly || (a.confine && a.confine.length)) continue;
+        if (a.confineProvato && Date.now() - a.confineProvato < 6 * 3600e3) continue;
+        try { a.confine = await Planner.confineComune(n); delete a.confineProvato; riservaConfini.delete(n); salvaCfg(); if (vistaZona) { grigliaZona = calcolaGriglia(); stratoZona.ridisegna(); } }
+        catch (e) { a.confineProvato = Date.now(); salvaCfg(); }
+      }
+    } finally { confiniInCorso = false; }
   }
   function caricaMarcatori() { lCase.clearLayers(); marcatori.clear(); [...case_.values()].forEach(h => marcatore(h)); }
   function riepilogoZona() {
@@ -1471,6 +1678,7 @@
     const righe = cfg.comuni.map(n => { const st = statArea(n); return `<button class="zona" data-a="${esc(n)}"><span class="num-giro">${ICO.mappa}</span><div><b>${esc(n)}</b><span>${st ? Math.round(st.perc * 100) + '% viste · ' + nCaseArea(n) + ' case' : tipoArea(n) + ' · mappa da scaricare'}</span></div>${n === cfg.comune ? '<span class="dist">aperta</span>' : ''}</button>`; }).join('');
     box.innerHTML = `<p class="ciao">${esc(cfg.zonaNome || 'La mia zona')}</p><h1>Tutta la zona</h1>
       <div class="avanz-testo"><span><b>${perc}%</b> delle strade con case viste</span><span>${kmBreve(z.fatti)} su ${kmBreve(z.tot)}</span></div><div class="avanz"><div style="width:${perc}%"></div></div>
+      <div class="legenda-zona"><span><i style="background:rgba(${COL_VISTA},.5)"></i>Già vista</span><span><i style="background:rgba(${COL_DAFARE},.55)"></i>Da vedere</span><span><i class="bordo"></i>Confine</span></div>
       ${righe || '<p>Nessuna area nella zona.</p>'}
       <button class="tasto primario" id="bChiudiZona">Torna a ${esc(cfg.comune || 'la mappa')}</button>
       <div class="riga"><button class="link" id="bGestZona">Aggiungi un'area</button><button class="link" id="bPanZ">Pannello</button></div>`;
@@ -1847,7 +2055,8 @@
   // ---------- strati della mappa e legenda ----------
   function apriStrati() {
     const box = $('strati');
-    if (box.classList.contains('aperto')) { box.classList.remove('aperto'); return; }
+    if (box.classList.contains('aperto')) { box.classList.remove('aperto'); $('tStrati').classList.remove('attivo'); return; }
+    $('tStrati').classList.add('attivo');
     const voce = (id, t, on) => `<button class="interruttore" id="${id}" role="switch" aria-checked="${on}"><span>${t}</span><span class="leva"></span></button>`;
     box.innerHTML = `<div class="legenda">
         <div><i style="background:${BLU}"></i>Case da vedere</div>
@@ -1855,6 +2064,7 @@
         <div><i style="background:${VERDE_CH}"></i>Viste più di 3 mesi fa</div>
         ${S.fase === 'cammino' ? `<div><i style="background:${OCRA}"></i>Prossimi 300 m, con le frecce</div><div><i class="tratteggio" style="border-color:${GRIGIO}"></i>Già fatto oggi</div>` : ''}
         ${cfg.mostraVolantini ? `<div><i class="tratteggio" style="border-color:${ARANCIO}"></i>Volantini (3 mesi)</div>` : ''}
+        ${vistaZona ? `<div><i class="campitura" style="background:rgba(${COL_VISTA},.45)"></i>Parte della zona già vista</div><div><i class="campitura" style="background:rgba(${COL_DAFARE},.45)"></i>Parte della zona da vedere</div><div><i style="background:#17262b;height:5px"></i>Confine della zona</div>` : ''}
       </div>
       ${voce('sNote', 'Notizie sulla mappa', cfg.mostraNote !== false)}${voce('sVol', 'Strade con volantini', !!cfg.mostraVolantini)}${S.fase === 'home' ? voce('sZona', 'Tutta la zona', vistaZona) : ''}`;
     box.classList.add('aperto');
@@ -1863,7 +2073,8 @@
     if ($('sZona')) $('sZona').onclick = () => { box.classList.remove('aperto'); mostraZona(!vistaZona); };
   }
   $('tStrati').onclick = apriStrati;
-  map.on('movestart', () => $('strati').classList.remove('aperto'));
+  $('tProfilo').onclick = apriProfilo;
+  map.on('movestart', () => { $('strati').classList.remove('aperto'); $('tStrati').classList.remove('attivo'); });
 
   // ---------- profilo dell'agente ----------
   const hashPin = async (id, pin) => { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('zona:' + id + ':' + pin)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); };
@@ -1871,21 +2082,29 @@
   function salvaProfilo(campi) {
     cfg.profilo = Object.assign({ nome: '', agenzia: '', telefono: '', email: '', obiettivi: {} }, cfg.profilo, campi);
     salvaCfg(); const p = mioProfilo(); if (p) { p.nome = cfg.profilo.nome; salvaProfili(); }
+    try { aggiornaAvatar(); } catch (e) { }
   }
   function apriProfilo() {
     chiudi('fMenu');
     const pr = Object.assign({ nome: '', agenzia: '', telefono: '', email: '' }, cfg.profilo), ob = OB(), mio = mioProfilo();
-    const scelte = (id, valori, att, fmt) => `<div class="scelte" id="${id}">${valori.map(v => `<button class="scelta senza-icona" data-v="${v}" aria-pressed="${att === v}">${fmt(v)}</button>`).join('')}</div>`;
+    const iniz = (pr.nome || '').trim() ? pr.nome.trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase() : '?';
+    const zR = riepilogoZona(), W = settimanaDati(inizioSettimana(), Date.now() + 864e5);
     $('profiloCorpo').innerHTML = `
+      <div class="profilo-testa grande"><div class="avatar">${esc(iniz)}</div><div><b>${esc(pr.nome || 'Il tuo profilo')}</b><span>${esc([pr.agenzia, cfg.zonaNome ? 'Zona ' + cfg.zonaNome : (cfg.comuni.length ? cfg.comuni.length + (cfg.comuni.length === 1 ? ' area' : ' aree') : '')].filter(Boolean).join(' · ') || 'Completa i tuoi dati qui sotto')}</span></div></div>
+      <div class="stats" style="margin-top:14px"><div class="stat"><b>${Math.round(zR.perc * 100)}%</b><span>zona vista</span></div><div class="stat"><b>${zR.nCase}</b><span>case</span></div><div class="stat"><b>${W.ore < 1 ? Math.round(W.ore * 60) + ' min' : esc((Math.round(W.ore * 10) / 10).toString().replace('.', ',')) + ' h'}</b><span>a piedi in settimana</span></div></div>
+      <div class="sezione"><h3>Indicazioni</h3>
+        <button class="voce-menu" id="prTutorial">${ICO.aiuto}<span>Rivedi il tutorial<small>Dove sono le cose, in un minuto</small></span></button>
+        <button class="voce-menu" id="prGuida">${ICO.lista}<span>Come si usa<small>Il giro, le case, il taccuino, i colori della mappa</small></span></button>
+        <button class="voce-menu" id="prPannello">${ICO.grafico}<span>Il mio pannello<small>Da fare oggi, settimana, obiettivi</small></span></button>
+        <button class="voce-menu" id="prImpost">${ICO.ingranaggio}<span>Impostazioni<small>Ripasso delle strade, avvisi, backup, Google</small></span></button>
+      </div>
+      <div class="sezione"><h3>I tuoi dati</h3><p class="aiuto">Restano sul telefono. Telefono e agenzia vanno in fondo alle schede che condividi.</p></div>
       <label class="campo" for="prNome">Nome e cognome</label><input class="campo" id="prNome" value="${esc(pr.nome)}" autocomplete="name">
       <label class="campo" for="prAg">Agenzia</label><input class="campo" id="prAg" value="${esc(pr.agenzia)}" placeholder="Facoltativo">
       <label class="campo" for="prTel">Telefono</label><input class="campo" type="tel" id="prTel" value="${esc(pr.telefono)}" placeholder="Facoltativo: va in fondo alle schede che condividi">
       <label class="campo" for="prMail">Email</label><input class="campo" type="email" id="prMail" value="${esc(pr.email)}" placeholder="Facoltativo">
-      <div class="sezione"><h3>I tuoi obiettivi della settimana</h3>
-        <p class="aiuto">Ore a piedi</p>${scelte('obOre', [2, 4, 6, 8, 12], ob.ore, v => v + ' ore')}
-        <p class="aiuto" style="margin-top:12px">Case da segnare</p>${scelte('obCase', [5, 10, 15, 20, 30], ob.case, v => String(v))}
-        <p class="aiuto" style="margin-top:12px">Notizie da raccogliere</p>${scelte('obNot', [3, 5, 10, 15], ob.notizie, v => String(v))}
-        <p class="aiuto" style="margin-top:12px">Ripassare dalle persone della zona ogni</p>${scelte('obRis', [15, 30, 60, 0], ob.risentire, v => v ? v + ' giorni' : 'Mai')}
+      <div class="sezione"><h3>I tuoi obiettivi della settimana</h3><p class="aiuto">Trascina il cursore o tieni premuto + e −. Il pannello ti mostra a che punto sei.</p>
+        ${selettore('ore', ob.ore, 'Ore a piedi')}${selettore('case', ob.case)}${selettore('notizie', ob.notizie)}${selettore('risentire', ob.risentire)}
       </div>
       <div class="sezione"><h3>Blocco con PIN</h3><p class="aiuto">${mio && mio.pin ? 'L\'app chiede il PIN ogni volta che la apri.' : 'Facoltativo: chi prende il telefono non vede le tue case e le tue notizie.'}</p>
         <button class="tasto piccolo" id="prPin">${mio && mio.pin ? 'Togli il PIN' : 'Metti un PIN'}</button></div>
@@ -1894,8 +2113,11 @@
         <button class="tasto" id="prNuovo">${ICO.piu}Aggiungi un agente</button></div>`;
     const testo = (id, campo) => $(id).onchange = () => salvaProfilo({ [campo]: $(id).value.trim() });
     testo('prNome', 'nome'); testo('prAg', 'agenzia'); testo('prTel', 'telefono'); testo('prMail', 'email');
-    const ob2 = (id, campo) => $(id).querySelectorAll('[data-v]').forEach(b => b.onclick = () => { salvaProfilo({ obiettivi: Object.assign({}, OB(), { [campo]: +b.dataset.v }) }); $(id).querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
-    ob2('obOre', 'ore'); ob2('obCase', 'case'); ob2('obNot', 'notizie'); ob2('obRis', 'risentire');
+    collegaSelettori($('profiloCorpo'));
+    $('prTutorial').onclick = () => { chiudi('fProfilo'); setTimeout(() => avviaTutorial(), 300); };
+    $('prGuida').onclick = () => apriAiuto();
+    $('prPannello').onclick = () => { chiudi('fProfilo'); apriPannello(); };
+    $('prImpost').onclick = () => apriImpost();
     $('prPin').onclick = async () => {
       if (mio.pin) { if (!confirm('Togliere il PIN?')) return; delete mio.pin; salvaProfili(); apriProfilo(); return; }
       const a = prompt('Scegli un PIN di 4-8 cifre'); if (!a) return;
@@ -1977,18 +2199,15 @@
       $('benvAvanti').textContent = 'Avanti';
       $('benvAvanti').onclick = () => { cfg.zonaNome = $('bvZona').value.trim(); salvaCfg(); if (!cfg.comuni.length && !confirm('Non hai ancora aggiunto nessuna area. Vai avanti lo stesso?')) return; apriBenvenuto(3); };
     } else {
-      const scelte = (id, valori, att, fmt) => `<div class="scelte" id="${id}">${valori.map(v => `<button class="scelta senza-icona" data-v="${v}" aria-pressed="${att === v}">${fmt(v)}</button>`).join('')}</div>`;
-      c.innerHTML = `${punti}<h2 class="benv-titolo">I tuoi obiettivi</h2><p class="intro">Ogni settimana il pannello ti mostra a che punto sei. Puoi cambiarli quando vuoi nel profilo.</p>
-        <div class="sezione"><h3>Ore a piedi alla settimana</h3>${scelte('bvOre', [2, 4, 6, 8, 12], ob.ore, v => v + ' ore')}</div>
-        <div class="sezione"><h3>Case da segnare</h3>${scelte('bvCase', [5, 10, 15, 20, 30], ob.case, v => String(v))}</div>
-        <div class="sezione"><h3>Notizie da raccogliere</h3>${scelte('bvNot', [3, 5, 10, 15], ob.notizie, v => String(v))}</div>`;
-      const ob2 = (id, campo) => $(id).querySelectorAll('[data-v]').forEach(b => b.onclick = () => { salvaProfilo({ obiettivi: Object.assign({}, OB(), { [campo]: +b.dataset.v }) }); $(id).querySelectorAll('[data-v]').forEach(x => x.setAttribute('aria-pressed', x === b)); });
-      ob2('bvOre', 'ore'); ob2('bvCase', 'case'); ob2('bvNot', 'notizie');
+      c.innerHTML = `${punti}<h2 class="benv-titolo">I tuoi obiettivi</h2><p class="intro">Ogni settimana il pannello ti mostra a che punto sei. Trascina il cursore o usa + e −; puoi cambiarli quando vuoi nel profilo.</p>
+        <div class="sezione">${selettore('ore', ob.ore, 'Ore a piedi alla settimana')}${selettore('case', ob.case)}${selettore('notizie', ob.notizie)}${selettore('risentire', ob.risentire)}</div>`;
+      collegaSelettori(c);
       $('benvAvanti').textContent = 'Inizia';
       $('benvAvanti').onclick = () => {
         salvaProfilo({ benvenuto: Date.now(), obiettivi: OB() });
         chiudi('fBenvenuto'); toast('Ciao ' + nomeAgente() + ', la tua zona è pronta.', 'ok', 4000);
-        if (!LS.get('aiutoVisto11', false)) { LS.set('aiutoVisto11', true); LS.set('aiutoVisto', true); setTimeout(apriAiuto, 600); }
+        LS.set('aiutoVisto11', true); LS.set('aiutoVisto', true);
+        if (!LS.get('tutorial12', false)) setTimeout(avviaTutorial, 900);
         if (!cfg.comune && cfg.comuni.length) cambiaComune(cfg.comuni[0]); else aggiorna(true);
       };
     }
@@ -1998,6 +2217,50 @@
     apri('fBenvenuto');
   }
 
+  // ---------- tutorial all'apertura: evidenzia le parti vere dell'app, un passo alla volta ----------
+  const PASSI_TUT = [
+    { t: 'Zona in un minuto', d: 'Ti mostro dove sono le cose. Puoi rivedere questo tutorial quando vuoi dal tuo profilo.' },
+    { sel: '#pannello', apri: true, t: 'Il pannello in basso', d: 'Qui scegli quanto tempo hai: l\'app prepara un giro a piedi sulle strade con case che non hai ancora visto. Trascinalo in giù per vedere più mappa, in su per riaprirlo.' },
+    { t: 'I colori della mappa', d: `<span class="tut-leg"><i style="background:${BLU}"></i>case da vedere</span><span class="tut-leg"><i style="background:${VERDE_SC}"></i>percorse negli ultimi 3 mesi</span><span class="tut-leg"><i style="background:${VERDE_CH}"></i>viste più di 3 mesi fa</span>Durante il giro segui la linea gialla con le frecce.` },
+    { sel: '#tondi', t: 'La barra degli strumenti', d: `<span class="tut-ico">${ICO.casa}Le tue case</span><span class="tut-ico">${svg('<path d="M20.5 3.5 3.8 10.4a.5.5 0 0 0 .05.94l6.65 1.96 1.96 6.65a.5.5 0 0 0 .94.05z"/>', 'stroke-width="1.8"')}Torna dove sei</span><span class="tut-ico">${ICO.strati}Legenda e strati, anche "Tutta la zona"</span><span class="tut-ico">${svg('<rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="3.25"/>', 'stroke-width="1.8"')}Menu: pannello, taccuino, esporta</span>` },
+    { sel: '#tProfilo', t: 'Il tuo profilo', d: 'In alto a destra: i tuoi dati, gli obiettivi della settimana, il PIN, gli altri agenti e queste indicazioni.' },
+    { sel: '#bZona', apri: true, t: 'Tutta la zona', d: `Mostra tutte le tue aree insieme: il confine scuro è quello della zona; dentro, <b style="color:#1f6b42">verde</b> la parte già vista e <b style="color:#8a5d00">ocra</b> quella da vedere.` },
+    { t: 'Durante il giro', d: '"Nuova casa" salva indirizzo, foto, nota vocale e stato. Nella scheda della casa "In vendita?" cerca l\'indirizzo su Immobiliare.it, Idealista e Casa.it, e lì segni agenzia e prezzo. Alla fine premi "Basta per oggi".' }
+  ];
+  let tut = null;
+  function avviaTutorial() {
+    if (S.fase === 'cammino') { toast('Il tutorial si apre quando finisci il giro.'); return; }
+    document.querySelectorAll('.foglio.aperto').forEach(f => { if (f.id !== 'fBenvenuto') f.classList.remove('aperto'); });
+    $('strati').classList.remove('aperto');
+    let el = $('tutorial'); if (!el) { el = document.createElement('div'); el.id = 'tutorial'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Tutorial'); document.body.appendChild(el); }
+    tut = { i: 0, el }; LS.set('tutorial12', true); passoTutorial();
+  }
+  function passoTutorial() {
+    if (!tut) return;
+    const passi = PASSI_TUT.filter(p => !p.sel || document.querySelector(p.sel));
+    const i = Math.min(tut.i, passi.length - 1), p = passi[i], el = tut.el, ultimo = i === passi.length - 1;
+    if (p.apri && panChiuso) chiudiPannello(false);
+    el.innerHTML = `<div class="tut-buco"></div><div class="tut-scheda"><div class="tut-passi">${passi.map((_, k) => `<span class="${k === i ? 'ora' : k < i ? 'fatto' : ''}"></span>`).join('')}</div><h2>${esc(p.t)}</h2><div class="tut-testo">${p.d}</div>
+      <div class="tut-tasti">${ultimo ? '' : '<button class="link" id="tutSalta">Salta</button>'}${i ? '<button class="tasto" id="tutIndietro">Indietro</button>' : ''}<button class="tasto primario" id="tutAvanti">${ultimo ? 'Inizia' : 'Avanti'}</button></div></div>`;
+    el.classList.add('aperto');
+    const posiziona = () => {
+      const buco = el.querySelector('.tut-buco'), scheda = el.querySelector('.tut-scheda'); if (!buco) return;
+      const t = p.sel && document.querySelector(p.sel), H = window.innerHeight;
+      if (!t) { buco.style.cssText = 'left:50%;top:42%;width:0;height:0'; scheda.style.cssText = 'top:50%;transform:translateY(-50%)'; return; }
+      const r = t.getBoundingClientRect(), m = 8, top = Math.max(4, r.top - m), bottom = Math.min(H - 4, r.bottom + m);
+      buco.style.cssText = `left:${Math.max(4, r.left - m)}px;top:${top}px;width:${Math.min(window.innerWidth - 8, r.width + 2 * m)}px;height:${bottom - top}px`;
+      if (top > H - bottom) scheda.style.cssText = `bottom:${Math.round(H - top + 12)}px`;
+      else scheda.style.cssText = `top:${Math.round(bottom + 12)}px`;
+    };
+    posiziona(); setTimeout(posiziona, 320); tut.posiziona = posiziona;
+    const fine = () => { el.classList.remove('aperto'); el.innerHTML = ''; tut = null; };
+    $('tutAvanti').onclick = () => { if (ultimo) return fine(); tut.i = i + 1; passoTutorial(); };
+    if ($('tutIndietro')) $('tutIndietro').onclick = () => { tut.i = i - 1; passoTutorial(); };
+    if ($('tutSalta')) $('tutSalta').onclick = fine;
+    $('tutAvanti').focus();
+  }
+  window.addEventListener('resize', () => { if (tut && tut.posiziona) tut.posiziona(); });
+
   // ---------- avvio ----------
   window.addEventListener('resize', posizionaTondi);
   try { new ResizeObserver(() => posizionaTondi()).observe($('pannello')); } catch (e) { }
@@ -2006,7 +2269,9 @@
     await migraCoda();
     await caricaTaccuino();
     aggiorna(true);
+    aggiornaAvatar();
     if (!cfg.profilo || !cfg.profilo.benvenuto) apriBenvenuto(1);
+    else if (!LS.get('tutorial12', false)) { const via = () => { if ($('blocco').classList.contains('aperto')) return setTimeout(via, 800); avviaTutorial(); }; setTimeout(via, 1200); }
     if (cfg.comune) await preparaComune(true); else caricaCase();
     svuotaCoda(); inviaTraccia();
   })();

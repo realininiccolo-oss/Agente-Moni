@@ -81,6 +81,33 @@
     if (!best) throw new Error('Quartiere "' + nome + '" non trovato sulle mappe di ' + citta + ': disegnalo tu sulla mappa');
     return semplifica(best, 8);
   }
+  // confine di un comune: uno o più anelli [[lat, lon], ...] (alcuni comuni hanno pezzi staccati)
+  async function confineComune(nome, log = () => { }) {
+    const c = nome.replace(/"/g, '\\"');
+    const j = await overpass(`[out:json][timeout:90];rel["boundary"="administrative"]["admin_level"="8"]["name"="${c}"];out geom;`, log, 2);
+    return anelliDa(j.elements || []);
+  }
+  function anelliDa(elementi) {
+    let anelli = [];
+    for (const e of elementi) {
+      if (e.type !== 'relation') continue;
+      anelli = anelli.concat(unisciAnelli((e.members || []).filter(m => m.type === 'way' && m.geometry && m.role !== 'inner').map(m => m.geometry.map(p => [p.lat, p.lon]))));
+    }
+    anelli = anelli.filter(a => a.length >= 4).sort((a, b) => areaKm2(b) - areaKm2(a));
+    if (!anelli.length) throw new Error('Confine non trovato');
+    const grande = areaKm2(anelli[0]);
+    return anelli.filter((a, i) => i === 0 || areaKm2(a) > Math.max(0.02, grande * 0.002)).slice(0, 8).map(a => semplifica(a, 10));
+  }
+  // involucro convesso dei punti: confine di riserva finché non arriva quello vero
+  function involucro(pts) {
+    const p = pts.slice().sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+    if (p.length < 3) return p;
+    const cross = (o, a, b) => (a[1] - o[1]) * (b[0] - o[0]) - (a[0] - o[0]) * (b[1] - o[1]);
+    const lo = [], hi = [];
+    for (const q of p) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], q) <= 0) hi.pop(); hi.push(q); }
+    return lo.slice(0, -1).concat(hi.slice(0, -1));
+  }
   // unisce i pezzi di confine in anelli chiusi
   function unisciAnelli(pezzi) {
     const ug = (a, b) => Math.abs(a[0] - b[0]) < 1e-7 && Math.abs(a[1] - b[1]) < 1e-7;
@@ -677,5 +704,5 @@
     for (let e = 0; e < Gv.m; e++) if (av[e]) { const a = Gv.EU[e], b = Gv.EV[e]; segna(Gn, an, (Gv.R.lat[a] + Gv.R.lat[b]) / 2, (Gv.R.lon[a] + Gv.R.lon[b]) / 2, 8, av[e]); }
   }
 
-  global.Planner = { versione: 5, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, trovaAree, quartieri, confineQuartiere, areaKm2, dentroPoligono, semplifica, segna, segnaTratto, rimappaSegno, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
+  global.Planner = { versione: 6, WALK_KMH, FAST_KMH, GIORNO0, oggi, trovaComune, trovaAree, quartieri, confineQuartiere, confineComune, anelliDa, involucro, areaKm2, dentroPoligono, semplifica, segna, segnaTratto, rimappaSegno, scaricaOSM, scaricaRete, costruisciRete, prepara, nodoVicino, distNodo, copri, copriTratto, percorso, versoPunto, zoneDaFare, frazione, indirizzoVicino, avanzamento, daV3, rimappa, daVedereFn };
 })(typeof window !== 'undefined' ? window : globalThis);

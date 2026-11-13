@@ -347,6 +347,67 @@
   .blocco-scheda h2 { margin: 12px 0 6px; font-size: 26px; }
   input.pin { text-align: center; font-size: 30px; letter-spacing: 10px; }
   #fPannello { z-index: 905; } #fTaccuino { z-index: 910; } #fComuni { z-index: 915; } #fPersona { z-index: 930; } #fNota { z-index: 940; } #fProfilo { z-index: 945; } #fBenvenuto { z-index: 970; }
+  /* ---------- v12 ---------- */
+  #fImpost, #fAiuto { z-index: 952; }
+  /* barra degli strumenti sopra il pannello */
+  .barra-icone { position: fixed; z-index: 590; right: 12px; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 18px; background: rgba(255,255,255,.88); -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 1px 2px rgba(23,38,43,.12), 0 6px 18px rgba(23,38,43,.16); border: 1px solid rgba(23,38,43,.06); transition: bottom .2s ease; }
+  .barra-icone .icona { position: relative; width: 46px; height: 42px; border: 0; border-radius: 14px; background: transparent; display: grid; place-items: center; color: var(--ardesia); }
+  .barra-icone .icona + .icona::before { content: ""; position: absolute; left: -1px; top: 11px; bottom: 11px; width: 1px; background: rgba(23,38,43,.12); }
+  .barra-icone .icona svg { width: 23px; height: 23px; }
+  .barra-icone .icona:active, .barra-icone .icona.attivo { background: var(--ardesia); color: #fff; }
+  .barra-icone .icona.attivo::before, .barra-icone .icona.attivo + .icona::before { display: none; }
+  .barra-icone .num { position: absolute; top: 3px; right: 4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--vigna); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; border: 1.5px solid #fff; }
+  .barra-icone .num[hidden] { display: none; }
+  #strati { right: 12px; }
+  .profilo-tondo { position: fixed; z-index: 595; top: calc(env(safe-area-inset-top) + 12px); right: 12px; width: 48px; height: 48px; border-radius: 50%; border: 2px solid #fff; background: var(--vigna); color: #fff; display: grid; place-items: center; padding: 0; box-shadow: 0 1px 2px rgba(23,38,43,.15), 0 6px 18px rgba(23,38,43,.2); font-weight: 700; font-size: 17px; letter-spacing: .5px; }
+  .profilo-tondo svg { width: 24px; height: 24px; }
+  #guida.visibile ~ .profilo-tondo, .sceglimappa.visibile ~ .profilo-tondo { display: none; }
+  .profilo-testa.grande .avatar { width: 64px; height: 64px; font-size: 24px; }
+  .profilo-testa.grande b { font-size: 23px; }
+  /* selettori degli obiettivi */
+  .selettore { background: var(--nebbia); border-radius: 16px; padding: 12px 14px 8px; margin-top: 10px; }
+  .sel-testa { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 16px; font-weight: 700; }
+  .sel-testa output { font-size: 20px; color: var(--vigna); white-space: nowrap; }
+  .sel-corpo { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .sel-passo { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1.5px solid var(--linea); background: #fff; display: grid; place-items: center; touch-action: manipulation; }
+  .sel-passo svg { width: 20px; height: 20px; }
+  .sel-passo:active { background: var(--ardesia); color: #fff; border-color: var(--ardesia); }
+  .selettore input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 36px; background: transparent; margin: 0; --pieno: 50%; }
+  .selettore input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--vigna) var(--pieno), var(--linea) var(--pieno)); }
+  .selettore input[type=range]::-moz-range-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--vigna) var(--pieno), var(--linea) var(--pieno)); }
+  .selettore input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -10px; border-radius: 50%; background: #fff; border: 3px solid var(--vigna); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .selettore input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid var(--vigna); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .sel-scala { display: flex; justify-content: space-between; font-size: 12px; color: var(--ardesia-2); padding: 0 54px; margin-top: -4px; }
+  /* in vendita: ricerca sui portali */
+  .portali { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 4px; }
+  .portale { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 8px 12px; border-radius: 12px; border: 1.5px solid var(--linea); background: #fff; color: var(--lago-scuro); font-weight: 700; font-size: 15px; text-decoration: none; }
+  .portale svg { width: 18px; height: 18px; flex: none; stroke-width: 2; }
+  .portale:active { background: var(--lago-chiaro); }
+  .annuncio { display: flex; align-items: center; gap: 12px; background: var(--cartello-chiaro); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; }
+  .annuncio > div { flex: 1; min-width: 0; } .annuncio b { display: block; font-size: 22px; color: var(--cartello); } .annuncio span { font-size: 15px; color: var(--ardesia-2); }
+  .annuncio .tasto { width: auto; margin: 0; padding: 8px 12px; min-height: 44px; font-size: 15px; }
+  #sAnnForm .tasto { margin-top: 12px; }
+  /* tutta la zona */
+  .legenda i.campitura { height: 16px; border-radius: 4px; }
+  .legenda-zona { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--ardesia-2); margin: 2px 0 6px; }
+  .legenda-zona span { display: inline-flex; align-items: center; gap: 6px; }
+  .legenda-zona i { width: 18px; height: 14px; border-radius: 4px; display: inline-block; }
+  .legenda-zona i.bordo { background: transparent; border: 3px solid var(--ardesia); border-radius: 3px; }
+  /* tutorial */
+  #tutorial { position: fixed; inset: 0; z-index: 2500; display: none; }
+  #tutorial.aperto { display: block; }
+  .tut-buco { position: fixed; border-radius: 18px; box-shadow: 0 0 0 200vmax rgba(15,25,29,.66); transition: all .3s cubic-bezier(.2,.8,.2,1); pointer-events: none; outline: 2px solid rgba(255,255,255,.9); outline-offset: 0; }
+  .tut-buco[style*="width:0"] { outline: none; }
+  .tut-scheda { position: fixed; left: 14px; right: 14px; max-width: 460px; margin: 0 auto; background: #fff; border-radius: 22px; padding: 16px 18px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+  .tut-scheda h2 { margin: 8px 0 6px; font-size: 23px; }
+  .tut-testo { font-size: 17px; color: var(--ardesia-2); line-height: 1.45; }
+  .tut-passi { display: flex; gap: 5px; } .tut-passi span { flex: 1; height: 4px; border-radius: 2px; background: var(--linea); } .tut-passi span.ora { background: var(--ardesia); } .tut-passi span.fatto { background: var(--vigna); }
+  .tut-tasti { display: flex; gap: 10px; align-items: center; margin-top: 12px; } .tut-tasti .tasto { margin: 0; min-height: 50px; font-size: 18px; } .tut-tasti .link { flex: none; width: auto; margin-right: auto; padding-left: 0; }
+  .tut-tasti .tasto:only-child { margin-left: auto; }
+  .tut-leg, .tut-ico { display: flex; align-items: center; gap: 10px; margin: 4px 0; color: var(--ardesia); }
+  .tut-leg i { width: 30px; height: 7px; border-radius: 4px; flex: none; }
+  .tut-ico svg { width: 24px; height: 24px; flex: none; }
+  .tut-leg:last-of-type, .tut-ico:last-of-type { margin-bottom: 8px; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -359,12 +420,13 @@
 <div id="strati" role="dialog" aria-label="Legenda e strati della mappa"></div>
 <div id="invio"></div>
 
-<div class="tondi" id="tondi">
-  <button class="tondo" id="tCase" aria-label="Le mie case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg><span class="num" id="numCase" hidden>0</span></button>
-  <button class="tondo" id="tCentra" aria-label="Centra sulla mia posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
-  <button class="tondo" id="tStrati" aria-label="Legenda e strati della mappa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 8l10 5 10-5z"/><path d="M2 13l10 5 10-5"/></svg></button>
-  <button class="tondo" id="tMenu" aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+<div class="barra-icone" id="tondi" role="toolbar" aria-label="Strumenti della mappa">
+  <button class="icona" id="tCase" aria-label="Le mie case" title="Le mie case"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.8 12 4l8.5 6.8"/><path d="M5.8 9.3V20h12.4V9.3"/><path d="M10 20v-5.2a2 2 0 0 1 4 0V20"/></svg><span class="num" id="numCase" hidden>0</span></button>
+  <button class="icona" id="tCentra" aria-label="Centra sulla mia posizione" title="La mia posizione"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 3.5 3.8 10.4a.5.5 0 0 0 .05.94l6.65 1.96 1.96 6.65a.5.5 0 0 0 .94.05z"/></svg></button>
+  <button class="icona" id="tStrati" aria-label="Legenda e strati della mappa" title="Legenda e strati"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 3 8.2l9 4.7 9-4.7z"/><path d="m3 12.3 9 4.7 9-4.7"/><path d="m3 16.3 9 4.7 9-4.7" opacity=".55"/></svg></button>
+  <button class="icona" id="tMenu" aria-label="Menu" title="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="3.25"/></svg></button>
 </div>
+<button class="profilo-tondo" id="tProfilo" aria-label="Il mio profilo" title="Profilo"></button>
 
 <section id="pannello"><div class="maniglia-zona" id="maniglia" role="button" tabindex="0" aria-expanded="true" aria-label="Apri o chiudi il pannello"><div class="maniglia"></div><div class="maniglia-testo">▲ Tira su per aprire</div></div><div id="pannelloCorpo" aria-live="polite"></div></section>
 
@@ -399,8 +461,16 @@
       <div class="tel"><input class="campo" type="tel" id="telefono" inputmode="tel" placeholder="Facoltativo" autocomplete="off"></div>
     </div>
     <div class="sezione">
-      <h3>Agenzia sul cartello</h3>
+      <h3>È già in vendita?</h3>
+      <p class="aiuto" style="margin:0 0 8px">Cerca questo indirizzo sui portali; se trovi l'annuncio, segna qui agenzia e prezzo.</p>
+      <div class="portali" id="portaliCasa"></div>
+      <label class="campo" for="agenzia">Agenzia (cartello o annuncio)</label>
       <input class="campo" id="agenzia" list="listaAgenzie" placeholder="Facoltativo: chi la vende, o Privato" autocomplete="off"><datalist id="listaAgenzie"></datalist>
+      <div class="riga" style="gap:10px">
+        <div style="flex:1"><label class="campo" for="prezzo">Prezzo richiesto</label><input class="campo" id="prezzo" inputmode="numeric" placeholder="€" autocomplete="off"></div>
+      </div>
+      <label class="campo" for="annuncio">Link dell'annuncio</label>
+      <input class="campo" type="url" id="annuncio" placeholder="Facoltativo: incolla il link" autocomplete="off">
     </div>
     <div class="sezione">
       <h3>Da richiamare il</h3>
@@ -490,7 +560,7 @@
   });
 </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="planner.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="planner.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
